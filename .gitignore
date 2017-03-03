@@ -1,0 +1,9 @@
+*.o
+*.a
+*.elf
+*.img
+*.flash
+*.cmd
+*~
+.depend
+.DS_Store
