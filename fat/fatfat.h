@@ -25,7 +25,7 @@
 
 typedef struct _fatfat_chain_t {
 	unsigned int start;
-  
+
 	struct {
 		unsigned int start;
 		unsigned int size;

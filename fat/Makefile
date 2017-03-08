@@ -5,10 +5,10 @@
 
 CC = gcc
 LD = gcc
-CFLAGS = -c -Wall -I . -O2 -g
-LDFLAGS = -lm
+CFLAGS = -c -Wall -I . -O2 -g -m32
+LDFLAGS = -lm -m32
 
-SRCS = fat.c fatfat.c fatdev.c
+SRCS = fat.c fatfat.c fatdev.c fatio.c
 OBJS = $(SRCS:.c=.o)
 BIN = fat
 
