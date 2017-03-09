@@ -66,6 +66,10 @@ int fatfat_get(fat_info_t *info, unsigned int cluster, unsigned int *next)
 
 	if (cluster == 0xffff)
 		cluster = FAT_EOF;
+	if (cluster == 0xfffffff)
+		cluster = FAT_EOF;
+	if (cluster == 0xffffff8) //TODO more values possible here
+		cluster = FAT_EOF;
 	*next = cluster;
 	return ERR_NONE;
 }
@@ -82,13 +86,30 @@ int fatfat_lookup(fat_info_t *info, fatfat_chain_t *c)
 	unsigned int i = 0;
 	unsigned int next;
 
-	c->areas[0].start = 1026;
-	
+	c->areas[0].start = 0;
+
+	FATDEBUG("fatfat_lookup of cluster %d/%d\n", c->start, info->clusters);
+
 	if (c->start >= info->clusters)
 		return ERR_NOENT;
+	
+	if (c->start == 0) {
+		FATDEBUG("fatfat_lookup of rootdir\n");
+		if (info->type == FAT32) {
+			c->start = info->bsbpb.fat32.BPB_RootClus;
+			FATDEBUG("fatfat_lookup start is %d\n", c->start);
+		} else {
+			c->start = FAT_EOF;
+			c->areas[0].start = info->rootoff;
+			c->areas[0].size  = info->dataoff - info->rootoff;
+			c->areas[1].start = 0;
+			return ERR_NONE;
+		}
+	}
 
-	c->areas[i].start = c->start * info->bsbpb.BPB_SecPerClus;
+	c->areas[i].start = info->dataoff + (c->start - 2) * info->bsbpb.BPB_SecPerClus;
 	c->areas[i].size = info->bsbpb.BPB_SecPerClus;
+	i++;
 
 	for (;;) {
 
@@ -103,13 +124,17 @@ int fatfat_lookup(fat_info_t *info, fatfat_chain_t *c)
 		if (next == c->start + 1)
 			c->areas[i].size += info->bsbpb.BPB_SecPerClus;
 		else {
+
+			c->areas[i].start = info->dataoff + (next - 2) * info->bsbpb.BPB_SecPerClus;
+			c->areas[i].size = info->bsbpb.BPB_SecPerClus;
+			i++;
+
 			if (i == SIZE_CHAIN_AREAS) {
 				c->start = next;
 				break;
 			}
 
-			c->areas[++i].start = next * info->bsbpb.BPB_SecPerClus;
-			c->areas[i].size = info->bsbpb.BPB_SecPerClus;
+			c->areas[i].start = 0;
 		}
 
 		c->start = next;

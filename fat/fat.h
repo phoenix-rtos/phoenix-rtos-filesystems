@@ -20,6 +20,9 @@
 
 #include "types.h"
 
+// #define FATDEBUG(...) printf("DBG: " __VA_ARGS__)
+#define FATDEBUG(...)
+
 
 typedef struct _fat_opt_t {
 	FILE *dev;

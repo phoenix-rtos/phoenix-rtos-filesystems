@@ -144,39 +144,52 @@ static void fat_dumpinfo(fat_info_t *info)
 
 static void fat_dumpdirent(fat_dirent_t *d)
 {
-	printf("name: %.8s.%.3s\n", d->name, d->ext); //TODO first byte can be special
-	printf("attr:");
-	if (d->attr & 0x01)
-		printf(" RO");
-	if (d->attr & 0x02)
-		printf(" HIDDEN");
-	if (d->attr & 0x04)
-		printf(" SYSTEM");
-	if (d->attr & 0x08)
-		printf(" DVL");
-	if (d->attr & 0x10)
-		printf(" DIR");
-	if (d->attr & 0x20)
-		printf(" ARCHIVE");
-	if (d->attr & 0xC0)
-		printf(" ERROR");
-	printf("\n");
-	printf("mtime: %d\n", d->mtime);
-	printf("mdate: %d\n", d->mdate);
-	printf("start cluster: %d\n", d->cluster);
-	printf("size: %d\n", d->size);
+	if (d->attr != 0x0F) {
+		if (d->name[0] == 0xE5) {
+			printf("deleted file\n");
+			return;
+		}
+		printf("name: %c%.7s.%.3s\n", (d->name[0] == 0x05) ? 0xE5 : d->name[0], d->name + 1, d->ext); //TODO first byte can be special
+		printf("attr:");
+		if (d->attr & 0x01)
+			printf(" RO");
+		if (d->attr & 0x02)
+			printf(" HIDDEN");
+		if (d->attr & 0x04)
+			printf(" SYSTEM");
+		if (d->attr & 0x08)
+			printf(" DVL");
+		if (d->attr & 0x10)
+			printf(" DIR");
+		if (d->attr & 0x20)
+			printf(" ARCHIVE");
+		printf("\n");
+		printf("mtime: %d\n", d->mtime);
+		printf("mdate: %d\n", d->mdate);
+		printf("start cluster: %d\n", d->cluster);
+		printf("size: %d\n", d->size);
+	} else {
+		printf("LFN\n");
+	}
 }
 
 
 int fat_list(fat_info_t *info, const char *path, char dump)
 {
 	fatfat_chain_t c;
-	unsigned int i, k;
-	u8 buff[SIZE_SECTOR * 32];
+	unsigned int i, j, k;
+	u8 buff[SIZE_SECTOR * 4];
 	fat_dirent_t d, *tmpd;
 
-	if (fatio_lookup(info, path, &d) < 0)
+	if (fatio_lookup(info, path, &d) < 0) {
+		printf("No such file or directory\n");
 		return ERR_NOENT;
+	}
+
+	if (d.attr & 0x10)
+		printf("Directory %s found:\n", path);
+	else
+		printf("File %s found:\n", path);
 
 	c.start = d.cluster;
 
@@ -194,25 +207,28 @@ int fat_list(fat_info_t *info, const char *path, char dump)
 			if (dump)
 				printf("c.areas[%d].start: %d+%d\n", i, c.areas[i].start, c.areas[i].size);
 
-			if (fatdev_read(info, c.areas[i].start, min(c.areas[i].size, sizeof(buff) / SIZE_SECTOR), (char *)buff))
-				return ERR_PROTO;
+			for (j = 0; j < c.areas[i].size; j += sizeof(buff) / SIZE_SECTOR) {
+				if (fatdev_read(info, c.areas[i].start + j, min(c.areas[i].size - j, sizeof(buff) / SIZE_SECTOR), (char *)buff))
+					return ERR_PROTO;
 
-			if (dump) {
-				if (d.attr & 0x10) {
-					for (tmpd = (fat_dirent_t *) buff; (u8 *) tmpd < sizeof(buff) + buff; tmpd++) {
-						if (tmpd->name[0] == 0)
-							return ERR_NONE;
-						fat_dumpdirent(tmpd);
+				if (dump) {
+					if (d.attr & 0x10) {
+						for (tmpd = (fat_dirent_t *) buff; (u8 *) tmpd < min(sizeof(buff), (c.areas[i].size - j) * SIZE_SECTOR) + buff; tmpd++) {
+							if (tmpd->name[0] == 0) {
+								return ERR_NONE;
+							}
+							fat_dumpdirent(tmpd);
+							printf("\n");
+						}
+						printf("\n");
+					} else {
+						for (k = 0; k < sizeof(buff); k++) {
+							if (!(k % 64))
+								printf("\n");
+							printf("%c", (isalnum(buff[k]) ? buff[k] : '.'));
+						}
 						printf("\n");
 					}
-					printf("\n");
-				} else {
-					for (k = 0; k < sizeof(buff); k++) {
-						if (!(k % 64))
-							printf("\n");
-						printf("%c", (isalnum(buff[k]) ? buff[k] : '.'));
-					}
-					printf("\n");
 				}
 			}
 		}
