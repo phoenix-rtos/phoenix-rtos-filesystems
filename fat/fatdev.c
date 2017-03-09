@@ -36,3 +36,17 @@ int fatdev_read(fat_info_t *info, unsigned long sector, unsigned int cnt, char *
 
 	return ERR_NONE;
 }
+
+
+int fatdev2_read(fat_info_t *info, unsigned long off, unsigned int size, char *buff)
+{
+	FATDEBUG("fatdev_read [%d, %d] %d \n", off, size + off, size);
+	
+	if (fseek(info->dev, info->off + off, SEEK_SET) < 0)
+		return ERR_ARG;
+
+	if (fread(buff, size, 1, info->dev) != 1)
+		return ERR_PROTO;
+	FATDEBUG("fatdev_read [%d, %d] %d OK\n", off, size + off, size);
+	return ERR_NONE;
+}

@@ -42,7 +42,7 @@ int fatio_readsuper(void *opt, fat_info_t **out)
 	info->off = ((fat_opt_t *)opt)->off;
 	info->dev = ((fat_opt_t *)opt)->dev;
 
-	if (fatdev_read(info, 0, 1, (char *)&info->bsbpb) < 0) {
+	if (fatdev2_read(info, 0, SIZE_SECTOR, (char *)&info->bsbpb) < 0) {
 		free(info);
 		return ERR_PROTO;
 	}
@@ -78,18 +78,6 @@ int fatio_readsuper(void *opt, fat_info_t **out)
 	*out = (void *)info;	
 	return ERR_NONE;
 }
-
-
-// static int fatio_read(fat_info_t *info, fatfat_chain_t *c, unsigned long offset, unsigned int size, char *buff)
-// {
-// 	unsigned long areaoff;
-// 	int i;
-// 
-// 	for (i = 0; (i < SIZE_CHAIN_AREAS) && (c->area[i]->size <= cnt); i++)
-// 		cnt -= c->area[i]->size;
-// 
-// 	if (i == SIZE_CHAIN_AREAS)
-// }
 
 
 static void fatio_initname(fat_name_t *n)
@@ -137,9 +125,13 @@ static int fatio_cmpname(const char *path, fat_name_t *n)
 	if (n->len == 0)
 		return 0;
 
-	FATDEBUG("fatio_cmpname %s %.*s\n", path, n->len, n->name + sizeof(n->name) - n->len);
-	if (strncmp(path, n->name + sizeof(n->name) - n->len, n->len) == 0)
-		return n->len;
+	FATDEBUG("fatio_cmpname %s %.*s len %d\n", path, n->len, n->name + sizeof(n->name) - n->len, n->len);
+	if (strncmp(path, n->name + sizeof(n->name) - n->len, n->len) == 0) {
+		if ((path[n->len] == 0) || (path[n->len] == '/'))
+			return n->len;
+		else
+			return 0;
+	}
 	return 0;
 }
 
@@ -147,50 +139,44 @@ static int fatio_cmpname(const char *path, fat_name_t *n)
 static int fatio_lookupone(fat_info_t *info, const char *path, fat_dirent_t *d)
 {
 	fatfat_chain_t c;
-	int i, j, plen;
-	u8 buff[SIZE_SECTOR * 32];
+	int plen;
+	char buff[SIZE_SECTOR * 32];
 	fat_dirent_t *tmpd;
 	fat_name_t name;
+	unsigned int r, ret;
 
 	FATDEBUG("fatio_lookupone path %s\n", path);
 	c.start = d->cluster;
+	c.soff = 0;
+	c.scnt = 0;
 	fatio_initname(&name);
 
-	for (;;) {
-		if (fatfat_lookup(info, &c) < 0)
-			return ERR_NOENT;
+	for (r = 0;;r += ret) {
+		ret = fatio_read(info, d, &c, r, sizeof(buff), buff);
+		FATDEBUG("fatio_lookupone readret is %d\n", ret);
+		if (ret < 0)
+			return ret;
 
-		for (i = 0; i < SIZE_CHAIN_AREAS; i++) {
-			if (!c.areas[i].start)
-				return ERR_NOENT;
-
-			FATDEBUG("fatio_lookupone reading area %d: start %d size %d\n", i, c.areas[i].start, c.areas[i].size);
-
-			for (j = 0; j < c.areas[i].size; j += sizeof(buff) / SIZE_SECTOR) {
-				if (fatdev_read(info, c.areas[i].start + j, min(c.areas[i].size - j, sizeof(buff) / SIZE_SECTOR), (char *)buff))
-					return ERR_PROTO;
-
-				for (tmpd = (fat_dirent_t *) buff; (u8 *) tmpd < min(sizeof(buff), (c.areas[i].size - j) * SIZE_SECTOR) + buff; tmpd++) {
-					if (tmpd->attr == 0x0F) { /* long file name (LFN) data */
-// 						fatio_makename(tmpd, &name);
-						continue;
-					}
-					if (tmpd->name[0] == 0x00) {
-						FATDEBUG("fatio_lookupone end of dir entries\n");
-						return ERR_NOENT;
-					}
-					fatio_makename(tmpd, &name);
-					if ((plen = fatio_cmpname(path, &name)) > 0) {
-						memcpy(d, tmpd, sizeof(*d));
-						FATDEBUG("fatio_lookupone found on cluster %d\n", d->cluster);
-						return plen;
-					}
-					fatio_initname(&name);
-				}
+		for (tmpd = (fat_dirent_t *) buff; (char *) tmpd < ret + buff; tmpd++) {
+			FATDEBUG("fatio_lookupone loop\n");
+			if (tmpd->attr == 0x0F) { /* long file name (LFN) data */
+				fatio_makename(tmpd, &name);
+				continue;
 			}
+			if (tmpd->name[0] == 0x00) {
+				FATDEBUG("fatio_lookupone end of dir entries\n");
+				return ERR_NOENT;
+			}
+			fatio_makename(tmpd, &name);
+			if ((plen = fatio_cmpname(path, &name)) > 0) {
+				memcpy(d, tmpd, sizeof(*d));
+				FATDEBUG("fatio_lookupone found on cluster %d\n", d->cluster);
+				return plen;
+			}
+			fatio_initname(&name);
 		}
 
-		if (c.start == FAT_EOF)
+		if (ret < sizeof(buff))
 			return ERR_NOENT;
 	}
 }
@@ -226,3 +212,82 @@ int fatio_lookup(fat_info_t *info, const char *path, fat_dirent_t *d)
 
 	return ERR_NONE;
 }
+
+
+int fatio_read(fat_info_t *info, fat_dirent_t *d, fatfat_chain_t *c, unsigned int offset, unsigned int size, char * buff)
+{
+	int i;
+	unsigned int r = 0;
+	unsigned int secoff, insecoff, o, tr;
+
+	FATDEBUG("fatio_read begin chain %u+%u\n", c->soff, c->scnt);
+	FATDEBUG("fatio_read cstart is %d\n", c->start);
+	
+
+	insecoff = offset % info->bsbpb.BPB_BytesPerSec;
+	secoff = offset / info->bsbpb.BPB_BytesPerSec;
+
+	if (c->soff > secoff) {
+		c->start = d->cluster;
+		c->soff = 0;
+		c->scnt = 0;
+		FATDEBUG("fatio_read rereading chain\n");
+	}
+	FATDEBUG("fatio_read chain checkskip %d+%d ? %d insecoff %d\n", c->soff, c->scnt, secoff, insecoff);
+	if (c->soff + c->scnt <= secoff) {
+		FATDEBUG("fatio_read chain skip %d\n", secoff - c->soff - c->scnt);
+		if (c->start == FAT_EOF) {
+			FATDEBUG("fatio_read no more data to read\n");
+			return 0;
+		}
+		if (fatfat_lookup(info, c, secoff - c->soff - c->scnt) < 0)
+			return ERR_NOENT;
+	}
+
+	secoff -= c->soff;
+	for (;;) {
+		FATDEBUG("fatio_read cstart is %d\n", c->start);
+		for (i = 0; i < SIZE_CHAIN_AREAS; i++) {
+		FATDEBUG("fatio_read cstart is %d\n", c->start);
+			FATDEBUG("fatio_read chain is [%d, %d] start[%d] %d+%d, secoffs %d read %d\n",
+				 c->areas[i].start * info->bsbpb.BPB_BytesPerSec, (c->areas[i].start + c->areas[i].size) * info->bsbpb.BPB_BytesPerSec,
+				 i, c->areas[i].start, c->areas[i].size,
+				 secoff, r
+				);
+			if (!c->areas[i].start)
+				return r;
+
+			if (c->areas[i].size <= secoff) {
+				secoff -= c->areas[i].size;
+				FATDEBUG("fatio_read skipping chain %d secoff %d->%d\n", i, secoff + c->areas[i].size, secoff);
+				continue;
+			}
+		FATDEBUG("fatio_read cstart is %d\n", c->start);
+			
+			o = (c->areas[i].start + secoff) * info->bsbpb.BPB_BytesPerSec + insecoff;
+			tr = min((c->areas[i].size - secoff) * info->bsbpb.BPB_BytesPerSec - insecoff, size - r);
+			FATDEBUG("size -r is %d\n", size - r);
+			if (fatdev2_read(info, o, tr, (char *)buff)) {
+				FATDEBUG("fatio_read ERR_PROTO\n");
+				return ERR_PROTO;
+			}
+			FATDEBUG("tr is %d\n", tr);
+			insecoff = 0;
+			secoff = 0;
+			r += tr;
+			buff += tr;
+			if (r == size)
+				return size;
+		FATDEBUG("fatio_read cstart is %d\n", c->start);
+		}
+
+		FATDEBUG("fatio_read cstart is %d\n", c->start);
+		if (c->start == FAT_EOF)
+			return r;
+
+		FATDEBUG("fatio_read doing lookup\n");
+		if (fatfat_lookup(info, c, 0) < 0)
+			return ERR_NOENT;
+	}
+}
+

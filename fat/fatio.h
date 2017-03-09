@@ -17,12 +17,16 @@
 #define _MISC_FATIO_H_
 
 #include "fat.h"
+#include "fatfat.h"
 
 
 typedef struct _fat_name_t {
 	char name[12];
 	u8 len;
 } __attribute__((packed)) fat_name_t;
+
+
+extern int fatio_read(fat_info_t *info, fat_dirent_t *d, fatfat_chain_t *c, unsigned int offset, unsigned int size, char * buff);
 
 
 extern int fatio_lookup(fat_info_t *info, const char *path, fat_dirent_t *d);

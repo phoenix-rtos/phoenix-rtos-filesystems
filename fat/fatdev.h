@@ -24,5 +24,6 @@
 
 extern int fatdev_read(fat_info_t *info, unsigned long sector, unsigned int cnt, char *buff);
 
+int fatdev2_read(fat_info_t *info, unsigned long off, unsigned int size, char *buff);
 
 #endif

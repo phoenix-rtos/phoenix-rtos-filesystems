@@ -25,7 +25,8 @@
 
 typedef struct _fatfat_chain_t {
 	unsigned int start;
-
+	unsigned int soff;
+	unsigned int scnt;
 	struct {
 		unsigned int start;
 		unsigned int size;
@@ -39,7 +40,7 @@ extern int fatfat_get(fat_info_t *info, unsigned int cluster, unsigned int *next
 extern int fatfat_set(fat_info_t *info, unsigned int cluster, unsigned int value);
 
 
-extern int fatfat_lookup(fat_info_t *info, fatfat_chain_t *chain);
+extern int fatfat_lookup(fat_info_t *info, fatfat_chain_t *chain, unsigned int skip);
 
 
 #endif

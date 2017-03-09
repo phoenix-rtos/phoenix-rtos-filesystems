@@ -149,7 +149,7 @@ static void fat_dumpdirent(fat_dirent_t *d)
 			printf("deleted file\n");
 			return;
 		}
-		printf("name: %c%.7s.%.3s\n", (d->name[0] == 0x05) ? 0xE5 : d->name[0], d->name + 1, d->ext); //TODO first byte can be special
+		printf("name: %c%.7s.%.3s\n", (d->name[0] == 0x05) ? 0xE5 : d->name[0], d->name + 1, d->ext);
 		printf("attr:");
 		if (d->attr & 0x01)
 			printf(" RO");
@@ -177,8 +177,9 @@ static void fat_dumpdirent(fat_dirent_t *d)
 int fat_list(fat_info_t *info, const char *path, char dump)
 {
 	fatfat_chain_t c;
-	unsigned int i, j, k;
-	u8 buff[SIZE_SECTOR * 4];
+	unsigned int k, r;
+	int ret;
+	char buff[32 * 6];
 	fat_dirent_t d, *tmpd;
 
 	if (fatio_lookup(info, path, &d) < 0) {
@@ -192,51 +193,37 @@ int fat_list(fat_info_t *info, const char *path, char dump)
 		printf("File %s found:\n", path);
 
 	c.start = d.cluster;
+	c.soff = 0;
+	c.scnt = 0;
 
-	for (;;) {
-		if (fatfat_lookup(info, &c) < 0)
-			return ERR_NOENT;
-
-		if (dump)
-			printf("c.start: %d\n", c.start);
-
-		for (i = 0; i < SIZE_CHAIN_AREAS; i++) {
-			if (!c.areas[i].start)
-				break;
-
-			if (dump)
-				printf("c.areas[%d].start: %d+%d\n", i, c.areas[i].start, c.areas[i].size);
-
-			for (j = 0; j < c.areas[i].size; j += sizeof(buff) / SIZE_SECTOR) {
-				if (fatdev_read(info, c.areas[i].start + j, min(c.areas[i].size - j, sizeof(buff) / SIZE_SECTOR), (char *)buff))
-					return ERR_PROTO;
-
-				if (dump) {
-					if (d.attr & 0x10) {
-						for (tmpd = (fat_dirent_t *) buff; (u8 *) tmpd < min(sizeof(buff), (c.areas[i].size - j) * SIZE_SECTOR) + buff; tmpd++) {
-							if (tmpd->name[0] == 0) {
-								return ERR_NONE;
-							}
-							fat_dumpdirent(tmpd);
-							printf("\n");
-						}
-						printf("\n");
-					} else {
-						for (k = 0; k < sizeof(buff); k++) {
-							if (!(k % 64))
-								printf("\n");
-							printf("%c", (isalnum(buff[k]) ? buff[k] : '.'));
-						}
-						printf("\n");
+	for (r = 0; (d.attr & 0x10) || (d.size != r); r += ret) {
+		FATDEBUG("fat chain %u+%u\n", c.soff, c.scnt);
+		ret = fatio_read(info, &d, &c, r, (d.attr & 0x10) ? sizeof(buff) : min(sizeof(buff), d.size - r), buff);
+		FATDEBUG("fat ret %d\n", ret);
+		if (ret < 0)
+			return ret;
+		if (dump) {
+			if (d.attr & 0x10) {
+				for (tmpd = (fat_dirent_t *) buff; (char *) tmpd < ret + buff; tmpd++) {
+					if (tmpd->name[0] == 0) {
+						return ERR_NONE;
 					}
+					fat_dumpdirent(tmpd);
+					printf("\n");
+				}
+			} else {
+				for (k = 0; k < ret; k++) {
+					if (!(k % 64))
+						printf("\n");
+					printf("%c", (isalnum(buff[k]) ? buff[k] : '.'));
 				}
 			}
 		}
-
-		if (c.start == FAT_EOF)
+		if ((d.attr & 0x10) && (ret < sizeof(buff)))
 			break;
+		
 	}
-
+	printf("\n");
 	return ERR_NONE;
 }
 
