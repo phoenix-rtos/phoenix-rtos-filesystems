@@ -64,12 +64,18 @@ int fatfat_get(fat_info_t *info, unsigned int cluster, unsigned int *next)
 		}
 	}
 
-	if (cluster == 0xffff)
-		cluster = FAT_EOF;
-	if (cluster == 0xfffffff)
-		cluster = FAT_EOF;
-	if (cluster == 0xffffff8) //TODO more values possible here
-		cluster = FAT_EOF;
+	if (info->type == FAT32) {
+		if (cluster == 0xfffffff)
+			cluster = FAT_EOF;
+		if (cluster == 0xffffff8)
+			cluster = FAT_EOF;
+	} else if (info->type == FAT16) {
+		if (cluster == 0xffff)
+			cluster = FAT_EOF;
+	} else { /* FAT12 */
+		
+	}
+	//TODO more values possible here
 	*next = cluster;
 	return ERR_NONE;
 }

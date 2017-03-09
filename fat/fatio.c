@@ -20,6 +20,7 @@
 #include <time.h>
 
 #include "fat.h"
+#include "fatio.h"
 #include "fatdev.h"
 #include "fatfat.h"
 
@@ -91,31 +92,54 @@ int fatio_readsuper(void *opt, fat_info_t **out)
 // }
 
 
-static int fatio_cmpname(const char *path, fat_dirent_t *d)
+static void fatio_initname(fat_name_t *n)
 {
-	int n, e, s;
-	
-	for (s = 7; (s > 0) && (d->name[s] == ' '); s--);
-	// TODO what if d->name[s] == ' ' now
-	for (n = 0; n <= s; n++) {
-		if (path[n] != d->name[n])
-			return 0;
+	n->len = 0;
+}
+
+
+static void fatio_makename(fat_dirent_t *d, fat_name_t *n)
+{
+	int s;
+
+	if (d->attr == 0x0F)
+		return; //TODO
+
+	if (d->name[0] == 0xE5) { /* file is deleted */
+		FATDEBUG("fatio_makename deleted file\n");
+		n->len = 0;
+		return;
 	}
+
 	for (s = 2; (s > 0) && (d->ext[s] == ' '); s--);
-	e = 0;
 	if (d->ext[s] != ' ') {
-		if (path[n] != '.')
-			return 0;
-		n++;
-		for (e = 0; e <= s; e++) {
-			if (path[e + n] != d->ext[e])
-				return 0;
-		}
+		FATDEBUG("fatio_makename extension found\n");
+		n->len += s + 1;
+		memcpy(n->name + sizeof(n->name) - n->len, d->ext, s + 1);
+		n->len++;
+		n->name[sizeof(n->name) - n->len] = '.';
 	}
-	if (path[n + e] == '/')
-		return n + e;
-	if (path[n + e] == 0)
-		return n + e;
+
+	for (s = 7; (s > 0) && (d->name[s] == ' '); s--);
+	if (d->name[s] != ' ') {
+		n->len += s + 1;
+		memcpy(n->name + sizeof(n->name) - n->len, d->name, s + 1);
+	}
+	if (n->name[sizeof(n->name) - n->len] == 0x05)
+		n->name[sizeof(n->name) - n->len] = 0xE5;
+
+	FATDEBUG("fatio_makename is %.*s\n", n->len, n->name + sizeof(n->name) - n->len);
+}
+
+
+static int fatio_cmpname(const char *path, fat_name_t *n)
+{
+	if (n->len == 0)
+		return 0;
+
+	FATDEBUG("fatio_cmpname %s %.*s\n", path, n->len, n->name + sizeof(n->name) - n->len);
+	if (strncmp(path, n->name + sizeof(n->name) - n->len, n->len) == 0)
+		return n->len;
 	return 0;
 }
 
@@ -126,9 +150,11 @@ static int fatio_lookupone(fat_info_t *info, const char *path, fat_dirent_t *d)
 	int i, j, plen;
 	u8 buff[SIZE_SECTOR * 32];
 	fat_dirent_t *tmpd;
+	fat_name_t name;
 
 	FATDEBUG("fatio_lookupone path %s\n", path);
 	c.start = d->cluster;
+	fatio_initname(&name);
 
 	for (;;) {
 		if (fatfat_lookup(info, &c) < 0)
@@ -145,19 +171,21 @@ static int fatio_lookupone(fat_info_t *info, const char *path, fat_dirent_t *d)
 					return ERR_PROTO;
 
 				for (tmpd = (fat_dirent_t *) buff; (u8 *) tmpd < min(sizeof(buff), (c.areas[i].size - j) * SIZE_SECTOR) + buff; tmpd++) {
-					if (tmpd->attr == 0x0F) /* long file name (LFN) data */
+					if (tmpd->attr == 0x0F) { /* long file name (LFN) data */
+// 						fatio_makename(tmpd, &name);
 						continue;
-					if (tmpd->name[0] == 0x00)
+					}
+					if (tmpd->name[0] == 0x00) {
+						FATDEBUG("fatio_lookupone end of dir entries\n");
 						return ERR_NOENT;
-					if (tmpd->name[0] == 0xE5) /* file is deleted */
-						continue;
-					if (tmpd->name[0] == 0x05)
-						tmpd->name[0] = 0xE5;
-					if ((plen = fatio_cmpname(path, tmpd)) > 0) {
+					}
+					fatio_makename(tmpd, &name);
+					if ((plen = fatio_cmpname(path, &name)) > 0) {
 						memcpy(d, tmpd, sizeof(*d));
 						FATDEBUG("fatio_lookupone found on cluster %d\n", d->cluster);
 						return plen;
 					}
+					fatio_initname(&name);
 				}
 			}
 		}

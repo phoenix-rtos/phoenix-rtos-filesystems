@@ -19,6 +19,12 @@
 #include "fat.h"
 
 
+typedef struct _fat_name_t {
+	char name[12];
+	u8 len;
+} __attribute__((packed)) fat_name_t;
+
+
 extern int fatio_lookup(fat_info_t *info, const char *path, fat_dirent_t *d);
 
 
