@@ -42,7 +42,7 @@ int fatio_readsuper(void *opt, fat_info_t **out)
 	info->off = ((fat_opt_t *)opt)->off;
 	info->dev = ((fat_opt_t *)opt)->dev;
 
-	if (fatdev2_read(info, 0, SIZE_SECTOR, (char *)&info->bsbpb) < 0) {
+	if (fatdev_read(info, 0, SIZE_SECTOR, (char *)&info->bsbpb) < 0) {
 		free(info);
 		return ERR_PROTO;
 	}
@@ -267,7 +267,7 @@ int fatio_read(fat_info_t *info, fat_dirent_t *d, fatfat_chain_t *c, unsigned in
 			o = (c->areas[i].start + secoff) * info->bsbpb.BPB_BytesPerSec + insecoff;
 			tr = min((c->areas[i].size - secoff) * info->bsbpb.BPB_BytesPerSec - insecoff, size - r);
 			FATDEBUG("size -r is %d\n", size - r);
-			if (fatdev2_read(info, o, tr, (char *)buff)) {
+			if (fatdev_read(info, o, tr, (char *)buff)) {
 				FATDEBUG("fatio_read ERR_PROTO\n");
 				return ERR_PROTO;
 			}

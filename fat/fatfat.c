@@ -40,7 +40,7 @@ int fatfat_get(fat_info_t *info, unsigned int cluster, unsigned int *next)
 
 	bitoff %= 8;
 
-	if (fatdev2_read(info, (info->fatoff + sec) * info->bsbpb.BPB_BytesPerSec, info->bsbpb.BPB_BytesPerSec, sector) < 0)
+	if (fatdev_read(info, (info->fatoff + sec) * info->bsbpb.BPB_BytesPerSec, info->bsbpb.BPB_BytesPerSec, sector) < 0)
 		return 0;
 	
 	if (info->type == FAT32)
@@ -56,7 +56,7 @@ int fatfat_get(fat_info_t *info, unsigned int cluster, unsigned int *next)
 		else {
 			cluster = ((unsigned int)*((u8 *)&sector[secoff])) << 8;
 			
-			if (fatdev2_read(info, (info->fatoff + sec + 1) * info->bsbpb.BPB_BytesPerSec, info->bsbpb.BPB_BytesPerSec, sector) < 0)
+			if (fatdev_read(info, (info->fatoff + sec + 1) * info->bsbpb.BPB_BytesPerSec, info->bsbpb.BPB_BytesPerSec, sector) < 0)
 				return 0;
 
 			cluster |= sector[0];

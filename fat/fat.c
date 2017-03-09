@@ -174,7 +174,7 @@ static void fat_dumpdirent(fat_dirent_t *d)
 }
 
 
-int fat_list(fat_info_t *info, const char *path, char dump)
+int fat_list(fat_info_t *info, const char *path, unsigned int off, unsigned int size, char dump)
 {
 	fatfat_chain_t c;
 	unsigned int k, r;
@@ -187,18 +187,26 @@ int fat_list(fat_info_t *info, const char *path, char dump)
 		return ERR_NOENT;
 	}
 
-	if (d.attr & 0x10)
+	if (d.attr & 0x10) {
 		printf("Directory %s found:\n", path);
-	else
-		printf("File %s found:\n", path);
+	} else {
+		printf("File %s with size %u found:\n", path, d.size);
+		if (size == 0)
+			size = d.size;
+		if (size + off > d.size)
+			size = d.size - off;
+		if (off >= size)
+			return ERR_NONE;
+		r = off;
+	}
 
 	c.start = d.cluster;
 	c.soff = 0;
 	c.scnt = 0;
 
-	for (r = 0; (d.attr & 0x10) || (d.size != r); r += ret) {
+	for (r = 0; (d.attr & 0x10) || (size != r); r += ret) {
 		FATDEBUG("fat chain %u+%u\n", c.soff, c.scnt);
-		ret = fatio_read(info, &d, &c, r, (d.attr & 0x10) ? sizeof(buff) : min(sizeof(buff), d.size - r), buff);
+		ret = fatio_read(info, &d, &c, r + off, (d.attr & 0x10) ? sizeof(buff) : min(sizeof(buff), size - r), buff);
 		FATDEBUG("fat ret %d\n", ret);
 		if (ret < 0)
 			return ret;
@@ -232,11 +240,12 @@ int main(int argc, char *argv[])
 {
 	fat_info_t *info = NULL;
 	int err;
-	unsigned int i;
+	unsigned int i, fo, fs;
+	char *path;
 	clock_t b, e;
 
 	if (argc < 4) {
-		fprintf(stderr, "To few parameters. Usage: fat <file> <offset> {dump|ls|perf|read} [path]\n");
+		fprintf(stderr, "To few parameters. Usage: fat <file> <offset> {dump|ls|perf|read} [path] [file_offset] [file_dump_size]\n");
 		return ERR_ARG;
 	}
 
@@ -250,13 +259,17 @@ int main(int argc, char *argv[])
 	if (!strcmp(argv[3], "dump"))
 		fat_dumpinfo(info);
 
-	else if(!strcmp(argv[3], "ls"))
-		fat_list(info, argv[4], 1);
+	else if(!strcmp(argv[3], "ls")) {
+		path = (argc < 5) ? "/" : argv[4];
+		fo = (argc < 6) ? 0 : atoi(argv[5]);
+		fs = (argc < 7) ? 0 : atoi(argv[6]);
+		fat_list(info, path, fo, fs, 1);
+	}
 
 	else if (!strcmp(argv[3], "perf")) {
 		for (i = 0; i < 64; i++) {
 			printf("dirent[%d]\n", i);
-			fat_list(info, "/", 0);
+			fat_list(info, "/", 0, 0, 0);
 		}
 	}
 
