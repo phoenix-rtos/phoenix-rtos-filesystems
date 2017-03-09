@@ -93,14 +93,28 @@ typedef struct _fat_fsinfo_t {
 
 
 typedef struct _fat_dirent_t {
-	u8  name[8];
-	u8  ext[3];
-	u8  attr;
-	u8  reserved[10];
-	u16 mtime;
-	u16 mdate;
-	u16 cluster;
-	u32 size;
+	union {
+		struct {
+			u8  name[8];
+			u8  ext[3];
+			u8  attr;
+			u8  reserved[10];
+			u16 mtime;
+			u16 mdate;
+			u16 cluster;
+			u32 size;
+		} __attribute__((packed));
+		struct {
+			u8  no;
+			u16 lfn1[5];
+			u8  attr2;
+			u8  type;
+			u8  cksum;
+			u16 lfn2[6];
+			u16 zero;
+			u16 lfn3[2];
+		} __attribute__((packed));
+	};
 } __attribute__((packed)) fat_dirent_t;
 
 

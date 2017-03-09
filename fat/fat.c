@@ -168,9 +168,8 @@ static void fat_dumpdirent(fat_dirent_t *d)
 		printf("mdate: %d\n", d->mdate);
 		printf("start cluster: %d\n", d->cluster);
 		printf("size: %d\n", d->size);
-	} else {
-		printf("LFN\n");
-	}
+	} else
+		printf("LFN no %u\n", d->no);
 }
 
 
