@@ -16,22 +16,11 @@
 #ifndef _MISC_FATFAT_H_
 #define _MISC_FATFAT_H_
 
-#include "fat.h"
 
-#define SIZE_CHAIN_AREAS  8
+#include "fatio.h"
+
 
 #define FAT_EOF 0x0fffffff
-
-
-typedef struct _fatfat_chain_t {
-	unsigned int start;
-	unsigned int soff;
-	unsigned int scnt;
-	struct {
-		unsigned int start;
-		unsigned int size;
-	} areas[SIZE_CHAIN_AREAS];
-} fatfat_chain_t;
 
 
 extern int fatfat_get(fat_info_t *info, unsigned int cluster, unsigned int *next);

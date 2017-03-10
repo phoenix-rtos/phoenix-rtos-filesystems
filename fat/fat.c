@@ -19,9 +19,8 @@
 #include <ctype.h>
 #include <time.h>
 
+
 #include "fat.h"
-#include "fatdev.h"
-#include "fatfat.h"
 #include "fatio.h"
 
 
@@ -187,9 +186,9 @@ int fat_list(fat_info_t *info, const char *path, unsigned int off, unsigned int 
 	}
 
 	if (d.attr & 0x10) {
-		printf("Directory %s found:\n", path);
+		printf("Directory %s found\n", path);
 	} else {
-		printf("File %s with size %u found:\n", path, d.size);
+		printf("File %s with size %u found\n", path, d.size);
 		if (size == 0)
 			size = d.size;
 		if (size + off > d.size)
@@ -204,9 +203,7 @@ int fat_list(fat_info_t *info, const char *path, unsigned int off, unsigned int 
 	c.scnt = 0;
 
 	for (r = 0; (d.attr & 0x10) || (size != r); r += ret) {
-		FATDEBUG("fat chain %u+%u\n", c.soff, c.scnt);
 		ret = fatio_read(info, &d, &c, r + off, (d.attr & 0x10) ? sizeof(buff) : min(sizeof(buff), size - r), buff);
-		FATDEBUG("fat ret %d\n", ret);
 		if (ret < 0)
 			return ret;
 		if (dump) {
@@ -228,7 +225,6 @@ int fat_list(fat_info_t *info, const char *path, unsigned int off, unsigned int 
 		}
 		if ((d.attr & 0x10) && (ret < sizeof(buff)))
 			break;
-		
 	}
 	printf("\n");
 	return ERR_NONE;

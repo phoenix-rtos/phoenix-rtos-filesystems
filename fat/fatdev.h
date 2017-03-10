@@ -16,7 +16,8 @@
 #ifndef _MISC_FATDEV_H_
 #define _MISC_FATDEV_H_
 
-#include "fat.h"
+
+#include "fatio.h"
 
 
 #define SIZE_SECTOR 512

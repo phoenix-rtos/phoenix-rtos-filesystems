@@ -15,7 +15,7 @@
 
 #include <stdio.h>
 
-#include "fat.h"
+
 #include "fatdev.h"
 #include "fatfat.h"
 
@@ -90,8 +90,6 @@ int fatfat_lookup(fat_info_t *info, fatfat_chain_t *c, unsigned int skip)
 	unsigned int i = 0;
 	unsigned int next;
 
-	FATDEBUG("fatfat_lookup of cluster %d/%d\n", c->start, info->clusters);
-
 	c->areas[0].start = 0;
 
 	if (c->start >= info->clusters)
@@ -122,7 +120,6 @@ int fatfat_lookup(fat_info_t *info, fatfat_chain_t *c, unsigned int skip)
 	c->scnt = 0;
 
 	for (;;) {
-
 		if (fatfat_get(info, c->start, &next) < 0)
 			return ERR_ARG;
 
