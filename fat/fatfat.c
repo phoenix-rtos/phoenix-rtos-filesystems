@@ -44,15 +44,15 @@ int fatfat_get(fat_info_t *info, unsigned int cluster, unsigned int *next)
 		return 0;
 	
 	if (info->type == FAT32)
-		cluster = (unsigned int)*((u32 *)&sector[secoff]);
+		cluster = (unsigned int)(((u32 *)&sector)[secoff / sizeof(u32)]);
 
 	else if (info->type == FAT16)
-		cluster = (unsigned int)*((u16 *)&sector[secoff]);
+		cluster = (unsigned int)(((u16 *)&sector)[secoff / sizeof(u16)]);
 
 	/* FAT12 */
 	else {
 		if (secoff != info->bsbpb.BPB_BytesPerSec - 1)
-			cluster = (unsigned int)*((u16 *)&sector[secoff]);
+			cluster = (unsigned int)(((u16 *)&sector)[secoff / sizeof(u16)]);
 		else {
 			cluster = ((unsigned int)*((u8 *)&sector[secoff])) << 8;
 			
