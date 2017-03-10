@@ -170,7 +170,7 @@ static int fatio_cmpname(const char *path, fat_name_t *n)
 			else
 				return 0;
 		}
-		if (path[i] != (n->name[i] & 0x007F))
+		if (tolower(path[i]) != tolower(n->name[i] & 0x007F))
 			return 0;
 	}
 	return 0;
