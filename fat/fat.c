@@ -22,6 +22,7 @@
 
 #include "fat.h"
 #include "fatio.h"
+#include "fatfat.h"
 
 
 #define min(a, b) ({__typeof__(a) _a = (a); \
@@ -143,11 +144,12 @@ static void fat_dumpinfo(fat_info_t *info)
 
 static void fat_dumpdirent(fat_dirent_t *d)
 {
+	int i;
+	if (d->name[0] == 0xE5) {
+		printf("deleted file or directory\n\n");
+		return;
+	}
 	if (d->attr != 0x0F) {
-		if (d->name[0] == 0xE5) {
-			printf("deleted file\n");
-			return;
-		}
 		printf("name: %c%.7s.%.3s\n", (d->name[0] == 0x05) ? 0xE5 : d->name[0], d->name + 1, d->ext);
 		printf("attr:");
 		if (d->attr & 0x01)
@@ -167,8 +169,18 @@ static void fat_dumpdirent(fat_dirent_t *d)
 		printf("mdate: %d\n", d->mdate);
 		printf("start cluster: %d\n", d->cluster);
 		printf("size: %d\n", d->size);
-	} else
-		printf("LFN no %u\n", d->no);
+		printf("\n");
+	} else {
+		printf("lfn %u: ", d->no & 0x1F);
+		for (i = 0; (i < sizeof(d->lfn1) / 2) && (d->lfn1[i] != 0); i++)
+			printf("%c", d->lfn1[i] & 0x007F);
+		for (i = 0; (i < sizeof(d->lfn2) / 2) && (d->lfn2[i] != 0); i++)
+			printf("%c", d->lfn2[i] & 0x007F);
+		for (i = 0; (i < sizeof(d->lfn3) / 2) && (d->lfn3[i] != 0); i++)
+			printf("%c", d->lfn3[i] & 0x007F);
+		printf("\n");
+	}
+	
 }
 
 
@@ -213,7 +225,6 @@ int fat_list(fat_info_t *info, const char *path, unsigned int off, unsigned int 
 						return ERR_NONE;
 					}
 					fat_dumpdirent(tmpd);
-					printf("\n");
 				}
 			} else {
 				for (k = 0; k < ret; k++) {

@@ -31,8 +31,7 @@
 
 
 typedef struct _fat_name_t {
-	char name[12];
-	u8 len;
+	u16 name[128];
 } __attribute__((packed)) fat_name_t;
 
 
@@ -97,56 +96,81 @@ int fatio_readsuper(void *opt, fat_info_t **out)
 		}
 	}
 
-	*out = (void *)info;	
+	*out = (void *)info;
 	return ERR_NONE;
 }
 
 
 static void fatio_initname(fat_name_t *n)
 {
-	n->len = 0;
+	n->name[0] = 0;
 }
 
 
 static void fatio_makename(fat_dirent_t *d, fat_name_t *n)
 {
-	int s;
+	int i, l;
 
-	if (d->attr == 0x0F)
-		return; //TODO
-
-	if (d->name[0] == 0xE5) { /* file is deleted */
-		n->len = 0;
+	if (d->attr == 0x0F) {
+		if (d->no == 0xE5) { /* file is deleted */
+			return;
+		}
+		memcpy(n->name + ((d->no & 0x1F) - 1) * 13,
+		       d->lfn1, sizeof(d->lfn1));
+		memcpy(n->name + ((d->no & 0x1F) - 1) * 13 + sizeof(d->lfn1) / sizeof(d->lfn1[0]),
+		       d->lfn2, sizeof(d->lfn2));
+		memcpy(n->name + ((d->no & 0x1F) - 1) * 13 + (sizeof(d->lfn1) + sizeof(d->lfn2)) / sizeof(d->lfn1[0]),
+		       d->lfn3, sizeof(d->lfn3));
 		return;
 	}
 
-	for (s = 2; (s > 0) && (d->ext[s] == ' '); s--);
-	if (d->ext[s] != ' ') {
-		n->len += s + 1;
-		memcpy(n->name + sizeof(n->name) - n->len, d->ext, s + 1);
-		n->len++;
-		n->name[sizeof(n->name) - n->len] = '.';
+	if (d->name[0] == 0xE5) { /* file is deleted */
+		n->name[0] = 0;
+		return;
 	}
 
-	for (s = 7; (s > 0) && (d->name[s] == ' '); s--);
-	if (d->name[s] != ' ') {
-		n->len += s + 1;
-		memcpy(n->name + sizeof(n->name) - n->len, d->name, s + 1);
+	if (n->name[0] != 0)
+		return;
+
+	for (i = 7; (i > 0) && (d->name[i] == ' '); i--);
+	if (d->name[i] == ' ') {
+		n->name[0] = 0;
+		return;
 	}
-	if (n->name[sizeof(n->name) - n->len] == 0x05)
-		n->name[sizeof(n->name) - n->len] = 0xE5;
+	l = i + 1;
+	for (i = 0; i < l; i++)
+		n->name[i] = d->name[i];
+
+	for (i = 2; (i > 0) && (d->ext[i] == ' '); i--);
+	if (d->ext[i] != ' ') {
+		n->name[l++] = '.';
+		n->name[i + l + 1] = 0;
+		for (; i > 0; i--)
+			n->name[i + l] = d->ext[i];
+		n->name[i + l] = d->ext[i];
+	} else {
+		n->name[i + l] = 0;
+	}
+
+	if (n->name[0] == 0x0005)
+		n->name[0] = 0x00E5;
 }
 
 
 static int fatio_cmpname(const char *path, fat_name_t *n)
 {
-	if (n->len == 0)
+	int i;
+	if (n->name[0] == 0)
 		return 0;
 
-	if (strncmp(path, n->name + sizeof(n->name) - n->len, n->len) == 0) {
-		if ((path[n->len] == 0) || (path[n->len] == '/'))
-			return n->len;
-		else
+	for (i = 0; i < sizeof(n->name) / 2; i++) {
+		if (n->name[i] == 0) {
+			if ((path[i] == 0) || (path[i] == '/'))
+				return i;
+			else
+				return 0;
+		}
+		if (path[i] != (n->name[i] & 0x007F))
 			return 0;
 	}
 	return 0;
