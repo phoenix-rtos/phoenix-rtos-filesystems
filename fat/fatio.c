@@ -31,7 +31,7 @@
 
 
 typedef struct _fat_name_t {
-	u16 name[128];
+	u16 name[256];
 } __attribute__((packed)) fat_name_t;
 
 
@@ -112,9 +112,10 @@ static void fatio_makename(fat_dirent_t *d, fat_name_t *n)
 	int i, l;
 
 	if (d->attr == 0x0F) {
-		if (d->no == 0xE5) { /* file is deleted */
+		if (d->no == 0xE5) /* file is deleted */
 			return;
-		}
+		if (d->no & 0x40) /* first LNF input */
+			*(n->name + ((d->no & 0x1F)) * 13) = 0;
 		memcpy(n->name + ((d->no & 0x1F) - 1) * 13,
 		       d->lfn1, sizeof(d->lfn1));
 		memcpy(n->name + ((d->no & 0x1F) - 1) * 13 + sizeof(d->lfn1) / sizeof(d->lfn1[0]),
