@@ -181,7 +181,7 @@ int fat_list(fat_info_t *info, const char *path, unsigned int off, unsigned int 
 		ret = fatio_read(info, &d, &c, r + off, (d.attr & 0x10) ? sizeof(buff) : min(sizeof(buff), size - r), buff);
 		if (ret < 0)
 			return ret;
-		if (d.attr & 0x10) {
+		if ((d.attr & 0x10) && (dump != 2)) {
 			for (tmpd = (fat_dirent_t *) buff; (char *) tmpd < ret + buff; tmpd++) {
 				if (tmpd->attr == 0x0F) { /* long file name (LFN) data */
 					fatio_makename(tmpd, &name);
@@ -191,7 +191,7 @@ int fat_list(fat_info_t *info, const char *path, unsigned int off, unsigned int 
 					printf("\n");
 					return ERR_NONE;
 				}
-				if (tmpd->name[0] == 0xE5) {
+				if ((tmpd->name[0] == 0xE5) || (tmpd->attr == 0x08)) {
 					fatio_initname(&name);
 					continue;
 				} else if (first)
@@ -247,9 +247,14 @@ int main(int argc, char *argv[])
 
 	else if(!strcmp(argv[3], "ls")) {
 		path = (argc < 5) ? "/" : argv[4];
+		fat_list(info, path, 0, 0, 1);
+	}
+
+	else if(!strcmp(argv[3], "cat")) {
+		path = (argc < 5) ? "/" : argv[4];
 		fo = (argc < 6) ? 0 : atoi(argv[5]);
 		fs = (argc < 7) ? 0 : atoi(argv[6]);
-		fat_list(info, path, fo, fs, 1);
+		fat_list(info, path, fo, fs, 2);
 	}
 
 	else if(!strcmp(argv[3], "test")) {
