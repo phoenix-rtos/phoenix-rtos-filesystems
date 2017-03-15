@@ -84,7 +84,7 @@ int fatfat_set(fat_info_t *info, unsigned int cluster, unsigned int next)
 	return 0;
 }
 
-
+#include <assert.h>
 int fatfat_lookup(fat_info_t *info, fatfat_chain_t *c, unsigned int skip)
 {
 	unsigned int i = 0;
@@ -92,6 +92,7 @@ int fatfat_lookup(fat_info_t *info, fatfat_chain_t *c, unsigned int skip)
 
 	c->areas[0].start = 0;
 
+	assert (c->start != FAT_EOF);
 	if (c->start >= info->clusters)
 		return ERR_NOENT;
 	
@@ -116,6 +117,7 @@ int fatfat_lookup(fat_info_t *info, fatfat_chain_t *c, unsigned int skip)
 
 	c->areas[i].start = info->dataoff + (c->start - 2) * info->bsbpb.BPB_SecPerClus;
 	c->areas[i].size = info->bsbpb.BPB_SecPerClus;
+	c->areas[i + 1].start = 0;
 	c->soff += c->scnt + skip;
 	c->scnt = 0;
 

@@ -5,8 +5,8 @@
 
 CC = gcc
 LD = gcc
-CFLAGS = -c -Wall -I . -O2 -g -m32
-LDFLAGS = -lm -m32
+CFLAGS = -c -Wall -I . -O2 -g -m32 -D_FILE_OFFSET_BITS=64
+LDFLAGS = -lm -m32 -D_FILE_OFFSET_BITS=64
 
 SRCS = fat.c fatfat.c fatdev.c fatio.c
 OBJS = $(SRCS:.c=.o)

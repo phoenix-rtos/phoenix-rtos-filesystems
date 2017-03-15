@@ -30,19 +30,12 @@
 	_a < _b ? _a : _b;})
 
 
-typedef struct _fat_name_t {
-	u16 name[256];
-} __attribute__((packed)) fat_name_t;
-
-
 int fatio_readsuper(void *opt, fat_info_t **out)
 {
 	fat_info_t *info;
 
-	if ((info = (fat_info_t *)malloc(sizeof(fat_info_t))) == NULL) {
-		free(info);
+	if ((info = (fat_info_t *)malloc(sizeof(fat_info_t))) == NULL)
 		return ERR_MEM;
-	}
 
 	info->off = ((fat_opt_t *)opt)->off;
 	info->dev = ((fat_opt_t *)opt)->dev;
@@ -87,27 +80,18 @@ int fatio_readsuper(void *opt, fat_info_t **out)
 			return ERR_PROTO;
 	}
 
-	/* Read FAT32 FSInfo */
-	info->fsinfo = NULL;
-	if (info->type == FAT32) {
-		if ((info->fsinfo = malloc(sizeof(fat_fsinfo_t))) == NULL) {
-			free(info);
-			return ERR_MEM;
-		}
-	}
-
 	*out = (void *)info;
 	return ERR_NONE;
 }
 
 
-static void fatio_initname(fat_name_t *n)
+void fatio_initname(fat_name_t *n)
 {
 	n->name[0] = 0;
 }
 
 
-static void fatio_makename(fat_dirent_t *d, fat_name_t *n)
+void fatio_makename(fat_dirent_t *d, fat_name_t *n)
 {
 	int i, l;
 
@@ -171,8 +155,13 @@ static int fatio_cmpname(const char *path, fat_name_t *n)
 			else
 				return 0;
 		}
-		if (tolower(path[i]) != tolower(n->name[i] & 0x007F))
+		if ((n->name[i] & ~0x007F) == 0) {
+			if (tolower(path[i]) != tolower(n->name[i] & 0x007F))
+				return 0;
+		} else {
+			printf("Usupported character in path detected\n");
 			return 0;
+		}
 	}
 	return 0;
 }
@@ -187,7 +176,7 @@ static int fatio_lookupone(fat_info_t *info, const char *path, fat_dirent_t *d)
 	fat_name_t name;
 	unsigned int r, ret;
 
-	c.start = d->cluster;
+	c.start = ((int) d->clusterL) | (((int) d->clusterH) << 16);
 	c.soff = 0;
 	c.scnt = 0;
 	fatio_initname(&name);
@@ -224,11 +213,11 @@ int fatio_lookup(fat_info_t *info, const char *path, fat_dirent_t *d)
 
 	for (p = 0; path[p] == '/'; p++);
 
-	d->cluster = 0;
-	if (path[p] == 0) {
-		d->attr = 0x10;
+	d->clusterH = 0;
+	d->clusterL = 0;
+	d->attr = 0x10;
+	if (path[p] == 0)
 		return ERR_NONE;
-	}
 
 	for (plen = 0;; p += plen) {
 		for (; path[p] == '/'; p++);
@@ -256,13 +245,15 @@ int fatio_read(fat_info_t *info, fat_dirent_t *d, fatfat_chain_t *c, unsigned in
 	secoff = offset / info->bsbpb.BPB_BytesPerSec;
 
 	if (c->soff > secoff) {
-		c->start = d->cluster;
+		c->start = ((int) d->clusterL) | (((int) d->clusterH) << 16);
 		c->soff = 0;
 		c->scnt = 0;
 	}
 	if (c->soff + c->scnt <= secoff) {
 		if (c->start == FAT_EOF)
 			return 0;
+		if (c->scnt == 0)
+			c->start = ((int) d->clusterL) | (((int) d->clusterH) << 16);
 		if (fatfat_lookup(info, c, secoff - c->soff - c->scnt) < 0)
 			return ERR_NOENT;
 	}

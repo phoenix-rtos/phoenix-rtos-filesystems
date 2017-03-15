@@ -35,7 +35,7 @@ int fat_init(const char *name, unsigned int off, fat_info_t **out)
 	fat_opt_t opt;
 	int err;
 
-	if ((opt.dev = fopen(name, "r+")) == NULL)
+	if ((opt.dev = fopen(name, "r")) == NULL)
 		return ERR_NOENT;
 
 	opt.off = off;
@@ -142,55 +142,14 @@ static void fat_dumpinfo(fat_info_t *info)
 }
 
 
-static void fat_dumpdirent(fat_dirent_t *d)
-{
-	int i;
-	if (d->name[0] == 0xE5) {
-		printf("deleted file or directory\n\n");
-		return;
-	}
-	if (d->attr != 0x0F) {
-		printf("name: %c%.7s.%.3s\n", (d->name[0] == 0x05) ? 0xE5 : d->name[0], d->name + 1, d->ext);
-		printf("attr:");
-		if (d->attr & 0x01)
-			printf(" RO");
-		if (d->attr & 0x02)
-			printf(" HIDDEN");
-		if (d->attr & 0x04)
-			printf(" SYSTEM");
-		if (d->attr & 0x08)
-			printf(" DVL");
-		if (d->attr & 0x10)
-			printf(" DIR");
-		if (d->attr & 0x20)
-			printf(" ARCHIVE");
-		printf("\n");
-		printf("mtime: %d\n", d->mtime);
-		printf("mdate: %d\n", d->mdate);
-		printf("start cluster: %d\n", d->cluster);
-		printf("size: %d\n", d->size);
-		printf("\n");
-	} else {
-		printf("lfn %u: ", d->no & 0x1F);
-		for (i = 0; (i < sizeof(d->lfn1) / 2) && (d->lfn1[i] != 0); i++)
-			printf("%c", d->lfn1[i] & 0x007F);
-		for (i = 0; (i < sizeof(d->lfn2) / 2) && (d->lfn2[i] != 0); i++)
-			printf("%c", d->lfn2[i] & 0x007F);
-		for (i = 0; (i < sizeof(d->lfn3) / 2) && (d->lfn3[i] != 0); i++)
-			printf("%c", d->lfn3[i] & 0x007F);
-		printf("\n");
-	}
-	
-}
-
-
 int fat_list(fat_info_t *info, const char *path, unsigned int off, unsigned int size, char dump)
 {
 	fatfat_chain_t c;
-	unsigned int k, r;
+	unsigned int i, k, r, first;
 	int ret;
 	char buff[32 * 6];
 	fat_dirent_t d, *tmpd;
+	fat_name_t name;
 
 	if (fatio_lookup(info, path, &d) < 0) {
 		printf("No such file or directory\n");
@@ -198,9 +157,11 @@ int fat_list(fat_info_t *info, const char *path, unsigned int off, unsigned int 
 	}
 
 	if (d.attr & 0x10) {
-		printf("Directory %s found\n", path);
+		if (dump)
+			printf("Directory %s found\n", path);
 	} else {
-		printf("File %s with size %u found\n", path, d.size);
+		if (dump)
+			printf("File %s with size %u found\n", path, d.size);
 		if (size == 0)
 			size = d.size;
 		if (size + off > d.size)
@@ -210,34 +171,53 @@ int fat_list(fat_info_t *info, const char *path, unsigned int off, unsigned int 
 		r = off;
 	}
 
-	c.start = d.cluster;
+	c.start = 0;
 	c.soff = 0;
 	c.scnt = 0;
 
+	fatio_initname(&name);
+	first = 1;
 	for (r = 0; (d.attr & 0x10) || (size != r); r += ret) {
 		ret = fatio_read(info, &d, &c, r + off, (d.attr & 0x10) ? sizeof(buff) : min(sizeof(buff), size - r), buff);
 		if (ret < 0)
 			return ret;
-		if (dump) {
-			if (d.attr & 0x10) {
-				for (tmpd = (fat_dirent_t *) buff; (char *) tmpd < ret + buff; tmpd++) {
-					if (tmpd->name[0] == 0) {
-						return ERR_NONE;
-					}
-					fat_dumpdirent(tmpd);
+		if (d.attr & 0x10) {
+			for (tmpd = (fat_dirent_t *) buff; (char *) tmpd < ret + buff; tmpd++) {
+				if (tmpd->attr == 0x0F) { /* long file name (LFN) data */
+					fatio_makename(tmpd, &name);
+					continue;
 				}
-			} else {
-				for (k = 0; k < ret; k++) {
+				if (tmpd->name[0] == 0x00) {
+					printf("\n");
+					return ERR_NONE;
+				}
+				if (tmpd->name[0] == 0xE5) {
+					fatio_initname(&name);
+					continue;
+				} else if (first)
+					first = 0;
+				else
+					printf("%c",0x0A);
+				fatio_makename(tmpd, &name);
+				for (i = 0; name.name[i] != 0; i++)
+					printf("%c", tolower(name.name[i] & 0x007F));
+				fatio_initname(&name);
+			}
+		} else {
+			for (k = 0; k < ret; k++) {
+				if (dump) {
 					if (!(k % 64))
 						printf("\n");
 					printf("%c", (isalnum(buff[k]) ? buff[k] : '.'));
-				}
+				} else
+					printf("%c", buff[k]);
 			}
 		}
 		if ((d.attr & 0x10) && (ret < sizeof(buff)))
 			break;
 	}
-	printf("\n");
+	if ((d.attr & 0x10) || dump)
+		printf("\n");
 	return ERR_NONE;
 }
 
@@ -272,6 +252,13 @@ int main(int argc, char *argv[])
 		fat_list(info, path, fo, fs, 1);
 	}
 
+	else if(!strcmp(argv[3], "test")) {
+		path = (argc < 5) ? "/" : argv[4];
+		fo = (argc < 6) ? 0 : atoi(argv[5]);
+		fs = (argc < 7) ? 0 : atoi(argv[6]);
+		fat_list(info, path, fo, fs, 0);
+	}
+
 	else if (!strcmp(argv[3], "perf")) {
 		for (i = 0; i < 64; i++) {
 			printf("dirent[%d]\n", i);
@@ -280,7 +267,8 @@ int main(int argc, char *argv[])
 	}
 
 	e = clock();
-	printf("\nexecution time: %d [us]\n", (unsigned int)((unsigned int)(e - b) * 1000000 / CLOCKS_PER_SEC));
+	if(strcmp(argv[3], "test"))
+		printf("\nexecution time: %d [us]\n", (unsigned int)((unsigned int)(e - b) * 1000000 / CLOCKS_PER_SEC));
 
 	return ERR_NONE;
 }
