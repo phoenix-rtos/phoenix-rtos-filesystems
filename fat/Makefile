@@ -17,7 +17,7 @@ all: fat
 .c.o:
 	$(CC) $(CFLAGS) $<
 
-$(OBJS): fat.h fatfat.h fatdev.h
+$(OBJS): fat.h fatfat.h fatdev.h fatio.h
 
 fat: $(OBJS)
 	$(LD) $(LDFLAGS) -o $(BIN) $(OBJS)

@@ -21,7 +21,7 @@
 
 
 typedef struct _fat_opt_t {
-	FILE *dev;
+	int dev;
 	u32 off;
 } fat_opt_t;
 
@@ -119,7 +119,7 @@ typedef enum { FAT12 = 0, FAT16, FAT32 } fat_type_t;
 
 
 typedef struct _fat_info_t {
-	FILE *dev;
+	int dev;
 
 	fat_type_t type;
 	fat_bsbpb_t bsbpb;

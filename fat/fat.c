@@ -18,6 +18,10 @@
 #include <string.h>
 #include <ctype.h>
 #include <time.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 
 #include "fat.h"
@@ -35,13 +39,13 @@ int fat_init(const char *name, unsigned int off, fat_info_t **out)
 	fat_opt_t opt;
 	int err;
 
-	if ((opt.dev = fopen(name, "r")) == NULL)
+	if ((opt.dev = open(name, O_RDONLY)) < 0)
 		return ERR_NOENT;
 
 	opt.off = off;
 
 	if ((err = fatio_readsuper(&opt, out)) < 0) {
-		fclose(opt.dev);
+		close(opt.dev);
 		return err;
 	}
 
@@ -191,7 +195,7 @@ int fat_list(fat_info_t *info, const char *path, unsigned int off, unsigned int 
 					printf("\n");
 					return ERR_NONE;
 				}
-				if ((tmpd->name[0] == 0xE5) || (tmpd->attr == 0x08)) {
+				if ((tmpd->name[0] == 0xE5) || (tmpd->attr & 0x08)) {
 					fatio_initname(&name);
 					continue;
 				} else if (first)
@@ -200,7 +204,7 @@ int fat_list(fat_info_t *info, const char *path, unsigned int off, unsigned int 
 					printf("%c",0x0A);
 				fatio_makename(tmpd, &name);
 				for (i = 0; name.name[i] != 0; i++)
-					printf("%c", tolower(name.name[i] & 0x007F));
+					printf("%c", (name.name[i] & ~0x007F) ? '?' : tolower(name.name[i] & 0x007F));
 				fatio_initname(&name);
 			}
 		} else {
@@ -272,8 +276,7 @@ int main(int argc, char *argv[])
 	}
 
 	e = clock();
-	if(strcmp(argv[3], "test"))
-		printf("\nexecution time: %d [us]\n", (unsigned int)((unsigned int)(e - b) * 1000000 / CLOCKS_PER_SEC));
+	fprintf(stderr, "\nexecution time: %d [us]\n", (unsigned int)((unsigned int)(e - b) * 1000000 / CLOCKS_PER_SEC));
 
 	return ERR_NONE;
 }
