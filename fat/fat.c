@@ -151,7 +151,7 @@ int fat_list(fat_info_t *info, const char *path, unsigned int off, unsigned int 
 	fatfat_chain_t c;
 	unsigned int i, k, r, first;
 	int ret;
-	char buff[32 * 6];
+	char buff[512];
 	fat_dirent_t d, *tmpd;
 	fat_name_t name;
 
@@ -204,7 +204,7 @@ int fat_list(fat_info_t *info, const char *path, unsigned int off, unsigned int 
 					printf("%c",0x0A);
 				fatio_makename(tmpd, &name);
 				for (i = 0; name.name[i] != 0; i++)
-					printf("%c", (name.name[i] & ~0x007F) ? '?' : tolower(name.name[i] & 0x007F));
+					printf("%c", (name.name[i] & ~0x007F) ? '?' : name.name[i] & 0x007F);
 				fatio_initname(&name);
 			}
 		} else {
