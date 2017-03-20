@@ -94,7 +94,8 @@ typedef struct _fat_dirent_t {
 			u8  name[8];
 			u8  ext[3];
 			u8  attr;
-			u8  reserved[8];
+			u8  cs;
+			u8  reserved[7];
 			u16 clusterH;
 			u16 mtime;
 			u16 mdate;

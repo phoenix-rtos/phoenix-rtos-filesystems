@@ -124,21 +124,21 @@ void fatio_makename(fat_dirent_t *d, fat_name_t *n)
 	}
 	l = i + 1;
 	for (i = 0; i < l; i++)
-		n->name[i] = tolower(d->name[i]);
+		n->name[i] = (d->cs & 0x8) ? tolower(d->name[i]) : d->name[i];
 
 	for (i = 2; (i > 0) && (d->ext[i] == ' '); i--);
 	if (d->ext[i] != ' ') {
 		n->name[l++] = '.';
 		n->name[i + l + 1] = 0;
 		for (; i > 0; i--)
-			n->name[i + l] = tolower(d->ext[i]);
-		n->name[i + l] = tolower(d->ext[i]);
+			n->name[i + l] = (d->cs & 0x10) ? tolower(d->ext[i]) : d->ext[i];
+		n->name[i + l] = (d->cs & 0x10) ? tolower(d->ext[i]) : d->ext[i];
 	} else {
 		n->name[i + l] = 0;
 	}
 
 	if (n->name[0] == 0x0005)
-		n->name[0] = tolower(0x00E5);
+		n->name[0] = 0x00E5;
 }
 
 
