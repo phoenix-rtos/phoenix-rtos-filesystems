@@ -171,5 +171,8 @@ extern void fatio_makename(fat_dirent_t *d, fat_name_t *n);
 extern void fatio_initname(fat_name_t *n);
 
 
+extern s32 UTF16toUnicode(const u16 **s);
+
+
 #endif
 

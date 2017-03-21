@@ -142,27 +142,76 @@ void fatio_makename(fat_dirent_t *d, fat_name_t *n)
 }
 
 
-static int fatio_cmpname(const char *path, fat_name_t *n)
+static u32 UTF8toUnicode(const char **s)
 {
-	int i;
-	if (n->name[0] == 0)
+	u32 u = **s;
+	int ones;
+
+	for (ones = 0; u & 0x80; ones++)
+		u <<= 1;
+
+	u &= 0xFF;
+	u >>= ones--;
+	(*s)++;
+	for (; ones > 0; ones--) {
+		if ((**s & 0xC0) != 0x80)
+			return ERR_PROTO;
+		u <<= 6;
+		u += **s & 0x3F;
+		(*s)++;
+	}
+	return u;
+}
+
+
+s32 UTF16toUnicode(const u16 **s)
+{
+	s32 u = *(*s)++;
+
+	if ((u & 0xFC00) == 0xD800)
+		u = (u & 0x3FF) << 10;
+	else if ((u & 0xFC00) == 0xDC00)
+		u = (u & 0x3FF);
+	else
+		return u;
+	if ((**s & 0xDC00) == 0xD800)
+		u += (**s & 0x3FF) << 10;
+	else if ((**s & 0xDC00) == 0xDC00)
+		u += (**s & 0x3FF);
+	else
+		return ERR_PROTO;
+	(*s)++;
+	u += 0x10000;
+	return u;
+}
+
+
+static int fatio_cmpname(const char *path, fat_name_t *name)
+{
+	const char *p = path;
+	const u16 *n = name->name;
+	s32 up, un;
+
+	if (name->name[0] == 0)
 		return 0;
 
-	for (i = 0; i < sizeof(n->name) / 2; i++) {
-		if (n->name[i] == 0) {
-			if ((path[i] == 0) || (path[i] == '/'))
-				return i;
-			else
-				return 0;
-		}
-		if ((n->name[i] & ~0x007F) == 0) {
-			if (tolower(path[i]) != tolower(n->name[i] & 0x007F))
-				return 0;
-		} else {
-			printf("Usupported character in path detected\n");
+	for (un = 1; un != 0;) {
+		up = UTF8toUnicode(&p);
+		un = UTF16toUnicode(&n);
+		if (up < 0) {
+			printf("Unrecognizable character in path detected\n");
 			return 0;
 		}
+		if (un < 0) {
+			printf("Unrecognizable character in filename detected\n");
+			return 0;
+		}
+		if (up != un)
+			break;
 	}
+
+	if (((up == '/') || (up == 0)) && (un == 0))
+		return p - path - 1;
 	return 0;
 }
 
@@ -209,25 +258,20 @@ static int fatio_lookupone(fat_info_t *info, const char *path, fat_dirent_t *d)
 
 int fatio_lookup(fat_info_t *info, const char *path, fat_dirent_t *d)
 {
-	int p, plen;
-
-	for (p = 0; path[p] == '/'; p++);
+	int plen;
 
 	d->clusterH = 0;
 	d->clusterL = 0;
 	d->attr = 0x10;
-	if (path[p] == 0)
-		return ERR_NONE;
-
-	for (plen = 0;; p += plen) {
-		for (; path[p] == '/'; p++);
-		if (path[p] == 0) {
+	for (;;) {
+		for (; *path == '/'; path++);
+		if (*path == 0)
 			return ERR_NONE;
-		}
-		plen = fatio_lookupone(info, path + p, d);
+		plen = fatio_lookupone(info, path, d);
 		if (plen < 0)
 			return plen;
-		if ((!(d->attr & 0x10)) && (path[plen + p] != 0))
+		path += plen;
+		if ((!(d->attr & 0x10)) && (*path != 0))
 			return ERR_NOENT;
 	}
 

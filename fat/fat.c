@@ -22,6 +22,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <locale.h>
 
 
 #include "fat.h"
@@ -149,11 +150,13 @@ static void fat_dumpinfo(fat_info_t *info)
 int fat_list(fat_info_t *info, const char *path, unsigned int off, unsigned int size, char dump)
 {
 	fatfat_chain_t c;
-	unsigned int i, k, r, first;
+	const u16 *n;
+	unsigned int k, r, first;
 	int ret;
 	char buff[512];
 	fat_dirent_t d, *tmpd;
 	fat_name_t name;
+	s32 u;
 
 	if (fatio_lookup(info, path, &d) < 0) {
 		printf("No such file or directory\n");
@@ -178,7 +181,7 @@ int fat_list(fat_info_t *info, const char *path, unsigned int off, unsigned int 
 	c.start = 0;
 	c.soff = 0;
 	c.scnt = 0;
-
+	setlocale(LC_ALL, "");
 	fatio_initname(&name);
 	first = 1;
 	for (r = 0; (d.attr & 0x10) || (size != r); r += ret) {
@@ -203,8 +206,8 @@ int fat_list(fat_info_t *info, const char *path, unsigned int off, unsigned int 
 				else
 					printf("%c",0x0A);
 				fatio_makename(tmpd, &name);
-				for (i = 0; name.name[i] != 0; i++)
-					printf("%c", (name.name[i] & ~0x007F) ? '?' : name.name[i] & 0x007F);
+				for (n = name.name, u = UTF16toUnicode(&n); u != 0; u = UTF16toUnicode(&n))
+					printf("%lc", u);
 				fatio_initname(&name);
 			}
 		} else {
