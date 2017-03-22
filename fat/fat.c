@@ -182,7 +182,7 @@ int fat_list(fat_info_t *info, const char *path, unsigned int off, unsigned int 
 	c.soff = 0;
 	c.scnt = 0;
 	setlocale(LC_ALL, "");
-	fatio_initname(&name);
+	name[0] = 0;
 	first = 1;
 	for (r = 0; (d.attr & 0x10) || (size != r); r += ret) {
 		ret = fatio_read(info, &d, &c, r + off, (d.attr & 0x10) ? sizeof(buff) : min(sizeof(buff), size - r), buff);
@@ -199,16 +199,16 @@ int fat_list(fat_info_t *info, const char *path, unsigned int off, unsigned int 
 					return ERR_NONE;
 				}
 				if ((tmpd->name[0] == 0xE5) || (tmpd->attr & 0x08)) {
-					fatio_initname(&name);
+					name[0] = 0;
 					continue;
 				} else if (first)
 					first = 0;
 				else
 					printf("%c",0x0A);
 				fatio_makename(tmpd, &name);
-				for (n = name.name, u = UTF16toUnicode(&n); u != 0; u = UTF16toUnicode(&n))
+				for (n = name, u = UTF16toUnicode(&n); u != 0; u = UTF16toUnicode(&n))
 					printf("%lc", u);
-				fatio_initname(&name);
+				name[0] = 0;
 			}
 		} else {
 			for (k = 0; k < ret; k++) {

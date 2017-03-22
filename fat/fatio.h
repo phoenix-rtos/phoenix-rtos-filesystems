@@ -151,9 +151,7 @@ typedef struct _fatfat_chain_t {
 } fatfat_chain_t;
 
 
-typedef struct _fat_name_t {
-	u16 name[256];
-} __attribute__((packed)) fat_name_t;
+typedef u16 fat_name_t[256];
 
 
 extern int fatio_read(fat_info_t *info, fat_dirent_t *d, fatfat_chain_t *c, unsigned int offset, unsigned int size, char * buff);
@@ -166,9 +164,6 @@ extern int fatio_readsuper(void *opt, fat_info_t **out);
 
 
 extern void fatio_makename(fat_dirent_t *d, fat_name_t *n);
-
-
-extern void fatio_initname(fat_name_t *n);
 
 
 extern s32 UTF16toUnicode(const u16 **s);
