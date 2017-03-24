@@ -16,17 +16,21 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <unistd.h>
-
+#include <stdlib.h>
+#include <string.h>
 
 #include "fatdev.h"
+#include "pcache.h"
+
+
+void fatdev_init(int dev)
+{
+	pcache_init(dev);
+}
 
 
 int fatdev_read(fat_info_t *info, unsigned long off, unsigned int size, char *buff)
 {
-	if (lseek(info->dev, info->off + off, SEEK_SET) < 0)
-		return ERR_ARG;
-
-	if (read(info->dev, buff, size) != size)
-		return ERR_PROTO;
-	return ERR_NONE;
+	return pcache_read(info->off + off, size, buff);
 }
+

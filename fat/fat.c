@@ -28,6 +28,7 @@
 #include "fat.h"
 #include "fatio.h"
 #include "fatfat.h"
+#include "fatdev.h"
 
 
 #define min(a, b) ({__typeof__(a) _a = (a); \
@@ -45,6 +46,7 @@ int fat_init(const char *name, unsigned int off, fat_info_t **out)
 
 	opt.off = off;
 
+	fatdev_init(opt.dev);
 	if ((err = fatio_readsuper(&opt, out)) < 0) {
 		close(opt.dev);
 		return err;
