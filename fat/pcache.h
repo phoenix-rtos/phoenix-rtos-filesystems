@@ -21,14 +21,16 @@
 
 
 #define PCACHE_CNT_MAX 30
-#define PCACHE_SIZE_PAGE 0x20000
+#define PCACHE_SIZE_PAGE 100
 #define PCACHE_BUCKETS 1024
 
 
-extern void pcache_init(int dev);
+extern void pcache_init(void *dev);
 
 
 extern int pcache_read(unsigned long off, unsigned int size, char *buff);
 
+
+extern int pcache_devread(void *dev, unsigned long off, unsigned int size, char *buff);
 
 #endif

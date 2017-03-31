@@ -23,10 +23,13 @@
 #define SIZE_SECTOR 512
 
 
-extern void fatdev_init(int dev);
+int fatdev_init(const char *devname, fat_info_t *info);
 
 
 extern int fatdev_read(fat_info_t *info, unsigned long off, unsigned int size, char *buff);
+
+
+void fatdev_deinit(fat_info_t *info);
 
 
 #endif

@@ -13,8 +13,6 @@
  * %LICENSE%
  */
 
-#include <stdio.h>
-#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -30,29 +28,29 @@ struct _list_t {
 typedef struct _list_t list_t;
 
 
-struct _page_t {
+struct _cpage_t {
 	char data[PCACHE_SIZE_PAGE];
 	unsigned long no;
 	int used;
 	list_t b;
 	list_t f;
 };
-typedef struct _page_t page_t;
-#define list2page(entry, field) ((page_t *)((void *)entry - __builtin_offsetof(page_t, field)))
+typedef struct _cpage_t cpage_t;
+#define list2page(entry, field) ((cpage_t *)((void *)entry - __builtin_offsetof(cpage_t, field)))
 
 
 typedef struct _pcache_t {
 	list_t b[PCACHE_BUCKETS];
 	list_t f;
 	int cnt;
-	int dev;
+	void *dev;
 } pcache_t;
 
 
 static pcache_t pcache;
 
 
-void pcache_init(int dev)
+void pcache_init(void *dev)
 {
 	int i;
 
@@ -64,10 +62,10 @@ void pcache_init(int dev)
 }
 
 
-static page_t *pcache_get(unsigned long pno)
+static cpage_t *pcache_get(unsigned long pno)
 {
 	list_t *l;
-	page_t *p;
+	cpage_t *p;
 
 	for (l = pcache.b[pno % PCACHE_BUCKETS].n; l != &pcache.b[pno % PCACHE_BUCKETS]; l = l->n) {
 		p = list2page(l, b);
@@ -87,7 +85,7 @@ static page_t *pcache_get(unsigned long pno)
 }
 
 
-static void pcache_add(page_t *p)
+static void pcache_add(cpage_t *p)
 {
 	int b = p->no % PCACHE_BUCKETS;
 	list_t *l;
@@ -127,33 +125,18 @@ static void pcache_add(page_t *p)
 }
 
 
-static int pcache_bareread(unsigned long off, unsigned int size, char *buff)
-{
-// 	printf("pcache bareread (0x%lx-0x%lx) 0x%x\n", off, off + size, size);
-	if (lseek(pcache.dev, off, SEEK_SET) < 0)
-		return ERR_ARG;
-
-	if (read(pcache.dev, buff, size) != size)
-		return ERR_PROTO;
-	return ERR_NONE;
-}
-
-
 int pcache_read(unsigned long off, unsigned int size, char *buff)
 {
 	unsigned long o, tr;
-	page_t *p;
+	cpage_t *p;
 	int new, ret;
 
-// 	printf("pcache read (0x%lx-0x%lx) 0x%x\n", off, off + size, size);
 	for (o = off / PCACHE_SIZE_PAGE; size > 0; o++) {
-// 		printf("pcache read loop (0x%lx-0x%lx) 0x%x o=0x%lx\n", off, off + size, size, o * PCACHE_SIZE_PAGE);
 		new = 0;
 		if ((p = pcache_get(o)) == NULL) {
-// 			printf("No hit\n");
 			if ((p = malloc(sizeof(*p))) == NULL)
-				return pcache_bareread(off, size, buff);
-			if ((ret = pcache_bareread(o * PCACHE_SIZE_PAGE, PCACHE_SIZE_PAGE, p->data)) != ERR_NONE) {
+				return pcache_devread(pcache.dev, off, size, buff);
+			if ((ret = pcache_devread(pcache.dev, o * PCACHE_SIZE_PAGE, PCACHE_SIZE_PAGE, p->data)) != EOK) {
 				free(p);
 				return ret;
 			}
@@ -161,9 +144,8 @@ int pcache_read(unsigned long off, unsigned int size, char *buff)
 			new = 1;
 		}
 		tr = PCACHE_SIZE_PAGE - (off % PCACHE_SIZE_PAGE);
-		if (size < tr) 
+		if (size < tr)
 			tr = size;
-// 		printf("tr is 0x%x\n", tr);
 		memcpy(buff, p->data + (off % PCACHE_SIZE_PAGE), tr);
 		off += tr;
 		size -= tr;
@@ -171,7 +153,6 @@ int pcache_read(unsigned long off, unsigned int size, char *buff)
 		if (new)
 			pcache_add(p);
 	}
-// 	printf("finish\n", tr);
-	return ERR_NONE;
+	return EOK;
 }
 

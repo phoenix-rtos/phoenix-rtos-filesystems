@@ -13,38 +13,23 @@
  * %LICENSE%
  */
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
-#include <time.h>
 
 
 #include "fatio.h"
 #include "fatdev.h"
 #include "fatfat.h"
+#include "types.h"
 
 
-#define min(a, b) ({__typeof__(a) _a = (a); \
-	__typeof__(b) _b = (b); \
-	_a < _b ? _a : _b;})
-
-
-int fatio_readsuper(void *opt, fat_info_t **out)
+int fatio_readsuper(void *opt, fat_info_t *info)
 {
-	fat_info_t *info;
 	char *bits;
 
-	if ((info = (fat_info_t *)malloc(sizeof(fat_info_t))) == NULL)
-		return ERR_MEM;
-
 	info->off = ((fat_opt_t *)opt)->off;
-	info->dev = ((fat_opt_t *)opt)->dev;
 
-	if (fatdev_read(info, 0, SIZE_SECTOR, (char *)&info->bsbpb) < 0) {
-		free(info);
-		return ERR_PROTO;
-	}
+	if (fatdev_read(info, 0, SIZE_SECTOR, (char *)&info->bsbpb) < 0)
+		return -EPROTO;
 
 	info->fatoff = info->bsbpb.BPB_RsvdSecCnt;
 	info->fatend = info->fatoff;
@@ -66,7 +51,7 @@ int fatio_readsuper(void *opt, fat_info_t **out)
 		&& ((info->bsbpb.fat.BS_BootSig == 0x28) || (info->bsbpb.fat.BS_BootSig == 0x29)))
 		bits = (char *) info->bsbpb.fat.BS_FilSysType + 3;
 	else
-		return ERR_PROTO;
+		return -EPROTO;
 	if (strncmp(bits, "32 ", 3) == 0)
 		info->type = FAT32;
 	else if (strncmp(bits, "16 ", 3) == 0)
@@ -74,10 +59,9 @@ int fatio_readsuper(void *opt, fat_info_t **out)
 	else if (strncmp(bits, "12 ", 3) == 0)
 		info->type = FAT12;
 	else
-		return ERR_PROTO;
+		return -EPROTO;
 
-	*out = (void *)info;
-	return ERR_NONE;
+	return EOK;
 }
 
 
@@ -147,7 +131,7 @@ static u32 UTF8toUnicode(const char **s)
 	(*s)++;
 	for (; ones > 0; ones--) {
 		if ((**s & 0xC0) != 0x80)
-			return ERR_PROTO;
+			return -EPROTO;
 		u <<= 6;
 		u += **s & 0x3F;
 		(*s)++;
@@ -171,7 +155,7 @@ s32 UTF16toUnicode(const u16 **s)
 	else if ((**s & 0xDC00) == 0xDC00)
 		u += (**s & 0x3FF);
 	else
-		return ERR_PROTO;
+		return -EPROTO;
 	(*s)++;
 	u += 0x10000;
 	return u;
@@ -191,11 +175,11 @@ static int fatio_cmpname(const char *path, fat_name_t *name)
 		up = UTF8toUnicode(&p);
 		un = UTF16toUnicode(&n);
 		if (up < 0) {
-			printf("Unrecognizable character in path detected\n");
+			fatprint_err("Unrecognizable character in path detected\n");
 			return 0;
 		}
 		if (un < 0) {
-			printf("Unrecognizable character in filename detected\n");
+			fatprint_err("Unrecognizable character in filename detected\n");
 			return 0;
 		}
 		if (up != un)
@@ -208,7 +192,7 @@ static int fatio_cmpname(const char *path, fat_name_t *name)
 }
 
 
-static int fatio_lookupone(fat_info_t *info, const char *path, fat_dirent_t *d)
+int fatio_lookupone(fat_info_t *info, unsigned int cluster, const char *path, fat_dirent_t *d)
 {
 	fatfat_chain_t c;
 	int plen;
@@ -217,13 +201,13 @@ static int fatio_lookupone(fat_info_t *info, const char *path, fat_dirent_t *d)
 	fat_name_t name;
 	unsigned int r, ret;
 
-	c.start = ((int) d->clusterL) | (((int) d->clusterH) << 16);
+	c.start = cluster;
 	c.soff = 0;
 	c.scnt = 0;
 	name[0] = 0;
 
 	for (r = 0;;r += ret) {
-		ret = fatio_read(info, d, &c, r, sizeof(buff), buff);
+		ret = fatio_read(info, cluster, &c, r, sizeof(buff), buff);
 		if (ret < 0)
 			return ret;
 
@@ -233,7 +217,7 @@ static int fatio_lookupone(fat_info_t *info, const char *path, fat_dirent_t *d)
 				continue;
 			}
 			if (tmpd->name[0] == 0x00)
-				return ERR_NOENT;
+				return -ENOENT;
 			fatio_makename(tmpd, &name);
 			if ((plen = fatio_cmpname(path, &name)) > 0) {
 				memcpy(d, tmpd, sizeof(*d));
@@ -243,7 +227,7 @@ static int fatio_lookupone(fat_info_t *info, const char *path, fat_dirent_t *d)
 		}
 
 		if (ret < sizeof(buff))
-			return ERR_NOENT;
+			return -ENOENT;
 	}
 }
 
@@ -258,20 +242,20 @@ int fatio_lookup(fat_info_t *info, const char *path, fat_dirent_t *d)
 	for (;;) {
 		for (; *path == '/'; path++);
 		if (*path == 0)
-			return ERR_NONE;
-		plen = fatio_lookupone(info, path, d);
+			return EOK;
+		plen = fatio_lookupone(info, ((int) d->clusterL) | (((int) d->clusterH) << 16), path, d);
 		if (plen < 0)
 			return plen;
 		path += plen;
 		if ((!(d->attr & 0x10)) && (*path != 0))
-			return ERR_NOENT;
+			return -ENOENT;
 	}
 
-	return ERR_NONE;
+	return EOK;
 }
 
 
-int fatio_read(fat_info_t *info, fat_dirent_t *d, fatfat_chain_t *c, unsigned int offset, unsigned int size, char * buff)
+int fatio_read(fat_info_t *info, unsigned int cluster, fatfat_chain_t *c, unsigned int offset, unsigned int size, char * buff)
 {
 	int i;
 	unsigned int r = 0;
@@ -281,7 +265,7 @@ int fatio_read(fat_info_t *info, fat_dirent_t *d, fatfat_chain_t *c, unsigned in
 	secoff = offset / info->bsbpb.BPB_BytesPerSec;
 
 	if (c->soff > secoff) {
-		c->start = ((int) d->clusterL) | (((int) d->clusterH) << 16);
+		c->start = cluster;
 		c->soff = 0;
 		c->scnt = 0;
 	}
@@ -289,9 +273,9 @@ int fatio_read(fat_info_t *info, fat_dirent_t *d, fatfat_chain_t *c, unsigned in
 		if (c->start == FAT_EOF)
 			return 0;
 		if (c->scnt == 0)
-			c->start = ((int) d->clusterL) | (((int) d->clusterH) << 16);
+			c->start = cluster;
 		if (fatfat_lookup(info, c, secoff - c->soff - c->scnt) < 0)
-			return ERR_NOENT;
+			return -ENOENT;
 	}
 
 	secoff -= c->soff;
@@ -308,7 +292,7 @@ int fatio_read(fat_info_t *info, fat_dirent_t *d, fatfat_chain_t *c, unsigned in
 			o = (c->areas[i].start + secoff) * info->bsbpb.BPB_BytesPerSec + insecoff;
 			tr = min((c->areas[i].size - secoff) * info->bsbpb.BPB_BytesPerSec - insecoff, size - r);
 			if (fatdev_read(info, o, tr, (char *)buff))
-				return ERR_PROTO;
+				return -EPROTO;
 			insecoff = 0;
 			secoff = 0;
 			r += tr;
@@ -321,7 +305,7 @@ int fatio_read(fat_info_t *info, fat_dirent_t *d, fatfat_chain_t *c, unsigned in
 			return r;
 
 		if (fatfat_lookup(info, c, 0) < 0)
-			return ERR_NOENT;
+			return -ENOENT;
 	}
 }
 

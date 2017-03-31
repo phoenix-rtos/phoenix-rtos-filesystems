@@ -20,12 +20,6 @@
 #include "types.h"
 
 
-typedef struct _fat_opt_t {
-	int dev;
-	u32 off;
-} fat_opt_t;
-
-
 typedef struct _fat_bsbpb_t {
 	u8 BS_jmpBoot[3];
 	u8 BS_OEMName[8];
@@ -120,7 +114,7 @@ typedef enum { FAT12 = 0, FAT16, FAT32 } fat_type_t;
 
 
 typedef struct _fat_info_t {
-	int dev;
+	fat_dev_t dev;
 
 	fat_type_t type;
 	fat_bsbpb_t bsbpb;
@@ -154,13 +148,16 @@ typedef struct _fatfat_chain_t {
 typedef u16 fat_name_t[256];
 
 
-extern int fatio_read(fat_info_t *info, fat_dirent_t *d, fatfat_chain_t *c, unsigned int offset, unsigned int size, char * buff);
+extern int fatio_read(fat_info_t *info, unsigned int cluster, fatfat_chain_t *c, unsigned int offset, unsigned int size, char * buff);
 
 
 extern int fatio_lookup(fat_info_t *info, const char *path, fat_dirent_t *d);
 
 
-extern int fatio_readsuper(void *opt, fat_info_t **out);
+extern int fatio_lookupone(fat_info_t *info, unsigned int cluster, const char *path, fat_dirent_t *d);
+
+
+extern int fatio_readsuper(void *opt, fat_info_t *info);
 
 
 extern void fatio_makename(fat_dirent_t *d, fat_name_t *n);

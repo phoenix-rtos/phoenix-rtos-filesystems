@@ -13,8 +13,6 @@
  * %LICENSE%
  */
 
-#include <stdio.h>
-
 
 #include "fatdev.h"
 #include "fatfat.h"
@@ -26,7 +24,7 @@ int fatfat_get(fat_info_t *info, unsigned int cluster, unsigned int *next)
 	char sector[SIZE_SECTOR];
 
 	if (cluster >= info->clusters)
-		return ERR_ARG;
+		return -EINVAL;
 	
 	if (info->type == FAT32) {
 		bitoff = cluster * 32;
@@ -75,7 +73,7 @@ int fatfat_get(fat_info_t *info, unsigned int cluster, unsigned int *next)
 			cluster = FAT_EOF;
 	}
 	*next = cluster;
-	return ERR_NONE;
+	return EOK;
 }
 
 
@@ -94,7 +92,7 @@ int fatfat_lookup(fat_info_t *info, fatfat_chain_t *c, unsigned int skip)
 
 	assert (c->start != FAT_EOF);
 	if (c->start >= info->clusters)
-		return ERR_NOENT;
+		return -ENOENT;
 	
 	if (c->start == 0) {
 		if (info->type == FAT32) {
@@ -111,7 +109,7 @@ int fatfat_lookup(fat_info_t *info, fatfat_chain_t *c, unsigned int skip)
 				c->soff = skip;
 				c->scnt = c->areas[0].size;
 			}
-			return ERR_NONE;
+			return EOK;
 		}
 	}
 
@@ -123,7 +121,7 @@ int fatfat_lookup(fat_info_t *info, fatfat_chain_t *c, unsigned int skip)
 
 	for (;;) {
 		if (fatfat_get(info, c->start, &next) < 0)
-			return ERR_ARG;
+			return -EINVAL;
 
 		if (next == FAT_EOF) {
 			if (skip >= c->areas[i].size) {
@@ -168,5 +166,5 @@ int fatfat_lookup(fat_info_t *info, fatfat_chain_t *c, unsigned int skip)
 		c->start = next;
 	}
 
-	return ERR_NONE;
+	return EOK;
 }

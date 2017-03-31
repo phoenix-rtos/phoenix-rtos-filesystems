@@ -36,23 +36,20 @@
 	_a < _b ? _a : _b;})
 
 
-int fat_init(const char *name, unsigned int off, fat_info_t **out)
+int fat_init(const char *name, unsigned int off, fat_info_t *out)
 {
 	fat_opt_t opt;
 	int err;
 
-	if ((opt.dev = open(name, O_RDONLY)) < 0)
-		return ERR_NOENT;
-
 	opt.off = off;
 
-	fatdev_init(opt.dev);
+	fatdev_init(name, out);
 	if ((err = fatio_readsuper(&opt, out)) < 0) {
-		close(opt.dev);
+		fatdev_deinit(out);
 		return err;
 	}
 
-	return ERR_NONE;
+	return EOK;
 }
 
 
@@ -162,7 +159,12 @@ int fat_list(fat_info_t *info, const char *path, unsigned int off, unsigned int 
 
 	if (fatio_lookup(info, path, &d) < 0) {
 		printf("No such file or directory\n");
-		return ERR_NOENT;
+		return -ENOENT;
+	}
+
+	if (fatio_lookup(info, path, &d) < 0) {
+		printf("No such file or directory\n");
+		return -ENOENT;
 	}
 
 	if (d.attr & 0x10) {
@@ -176,7 +178,7 @@ int fat_list(fat_info_t *info, const char *path, unsigned int off, unsigned int 
 		if (size + off > d.size)
 			size = d.size - off;
 		if (off >= size)
-			return ERR_NONE;
+			return EOK;
 		r = off;
 	}
 
@@ -187,7 +189,7 @@ int fat_list(fat_info_t *info, const char *path, unsigned int off, unsigned int 
 	name[0] = 0;
 	first = 1;
 	for (r = 0; (d.attr & 0x10) || (size != r); r += ret) {
-		ret = fatio_read(info, &d, &c, r + off, (d.attr & 0x10) ? sizeof(buff) : min(sizeof(buff), size - r), buff);
+		ret = fatio_read(info, ((int) d.clusterL) | (((int) d.clusterH) << 16), &c, r + off, (d.attr & 0x10) ? sizeof(buff) : min(sizeof(buff), size - r), buff);
 		if (ret < 0)
 			return ret;
 		if ((d.attr & 0x10) && (dump != 2)) {
@@ -198,7 +200,7 @@ int fat_list(fat_info_t *info, const char *path, unsigned int off, unsigned int 
 				}
 				if (tmpd->name[0] == 0x00) {
 					printf("\n");
-					return ERR_NONE;
+					return EOK;
 				}
 				if ((tmpd->name[0] == 0xE5) || (tmpd->attr & 0x08)) {
 					name[0] = 0;
@@ -227,13 +229,13 @@ int fat_list(fat_info_t *info, const char *path, unsigned int off, unsigned int 
 	}
 	if ((d.attr & 0x10) || dump)
 		printf("\n");
-	return ERR_NONE;
+	return EOK;
 }
 
 
 int main(int argc, char *argv[])
 {
-	fat_info_t *info = NULL;
+	fat_info_t info;
 	int err;
 	unsigned int i, fo, fs;
 	char *path;
@@ -241,7 +243,7 @@ int main(int argc, char *argv[])
 
 	if (argc < 4) {
 		fprintf(stderr, "To few parameters. Usage: fat <file> <offset> {dump|ls|perf|read} [path] [file_offset] [file_dump_size]\n");
-		return ERR_ARG;
+		return -EINVAL;
 	}
 
 	if ((err = fat_init(argv[1], atoi(argv[2]), &info)) < 0) {
@@ -252,36 +254,36 @@ int main(int argc, char *argv[])
 	b = clock();
 
 	if (!strcmp(argv[3], "dump"))
-		fat_dumpinfo(info);
+		fat_dumpinfo(&info);
 
 	else if(!strcmp(argv[3], "ls")) {
 		path = (argc < 5) ? "/" : argv[4];
-		fat_list(info, path, 0, 0, 1);
+		fat_list(&info, path, 0, 0, 1);
 	}
 
 	else if(!strcmp(argv[3], "cat")) {
 		path = (argc < 5) ? "/" : argv[4];
 		fo = (argc < 6) ? 0 : atoi(argv[5]);
 		fs = (argc < 7) ? 0 : atoi(argv[6]);
-		fat_list(info, path, fo, fs, 2);
+		fat_list(&info, path, fo, fs, 2);
 	}
 
 	else if(!strcmp(argv[3], "test")) {
 		path = (argc < 5) ? "/" : argv[4];
 		fo = (argc < 6) ? 0 : atoi(argv[5]);
 		fs = (argc < 7) ? 0 : atoi(argv[6]);
-		fat_list(info, path, fo, fs, 0);
+		fat_list(&info, path, fo, fs, 0);
 	}
 
 	else if (!strcmp(argv[3], "perf")) {
 		for (i = 0; i < 64; i++) {
 			printf("dirent[%d]\n", i);
-			fat_list(info, "/", 0, 0, 0);
+			fat_list(&info, "/", 0, 0, 0);
 		}
 	}
 
 	e = clock();
 	fprintf(stderr, "\nexecution time: %d [us]\n", (unsigned int)((unsigned int)(e - b) * 1000000 / CLOCKS_PER_SEC));
 
-	return ERR_NONE;
+	return EOK;
 }
