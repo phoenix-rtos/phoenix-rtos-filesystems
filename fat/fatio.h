@@ -89,7 +89,10 @@ typedef struct _fat_dirent_t {
 			u8  ext[3];
 			u8  attr;
 			u8  cs;
-			u8  reserved[7];
+			u8  ctime_ms;
+			u16 ctime;
+			u16 cdate;
+			u16 guid;
 			u16 clusterH;
 			u16 mtime;
 			u16 mdate;
@@ -151,10 +154,10 @@ typedef u16 fat_name_t[256];
 extern int fatio_read(fat_info_t *info, unsigned int cluster, fatfat_chain_t *c, unsigned int offset, unsigned int size, char * buff);
 
 
-extern int fatio_lookup(fat_info_t *info, const char *path, fat_dirent_t *d);
+extern int fatio_lookup(fat_info_t *info, const char *path, fat_dirent_t *d, unsigned int *doff);
 
 
-extern int fatio_lookupone(fat_info_t *info, unsigned int cluster, const char *path, fat_dirent_t *d);
+extern int fatio_lookupone(fat_info_t *info, unsigned int cluster, const char *path, fat_dirent_t *d, unsigned int *doff);
 
 
 extern int fatio_readsuper(void *opt, fat_info_t *info);

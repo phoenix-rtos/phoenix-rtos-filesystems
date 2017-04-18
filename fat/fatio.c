@@ -178,10 +178,6 @@ static int fatio_cmpname(const char *path, fat_name_t *name)
 			fatprint_err("Unrecognizable character in path detected\n");
 			return 0;
 		}
-		if (un < 0) {
-			fatprint_err("Unrecognizable character in filename detected\n");
-			return 0;
-		}
 		if (up != un)
 			break;
 	}
@@ -192,7 +188,7 @@ static int fatio_cmpname(const char *path, fat_name_t *name)
 }
 
 
-int fatio_lookupone(fat_info_t *info, unsigned int cluster, const char *path, fat_dirent_t *d)
+int fatio_lookupone(fat_info_t *info, unsigned int cluster, const char *path, fat_dirent_t *d, unsigned *doff)
 {
 	fatfat_chain_t c;
 	int plen;
@@ -221,6 +217,8 @@ int fatio_lookupone(fat_info_t *info, unsigned int cluster, const char *path, fa
 			fatio_makename(tmpd, &name);
 			if ((plen = fatio_cmpname(path, &name)) > 0) {
 				memcpy(d, tmpd, sizeof(*d));
+				if (doff != NULL)
+					*doff = r / sizeof(*tmpd);
 				return plen;
 			}
 			name[0] = 0;
@@ -232,7 +230,7 @@ int fatio_lookupone(fat_info_t *info, unsigned int cluster, const char *path, fa
 }
 
 
-int fatio_lookup(fat_info_t *info, const char *path, fat_dirent_t *d)
+int fatio_lookup(fat_info_t *info, const char *path, fat_dirent_t *d, unsigned *doff)
 {
 	int plen;
 
@@ -243,7 +241,7 @@ int fatio_lookup(fat_info_t *info, const char *path, fat_dirent_t *d)
 		for (; *path == '/'; path++);
 		if (*path == 0)
 			return EOK;
-		plen = fatio_lookupone(info, ((int) d->clusterL) | (((int) d->clusterH) << 16), path, d);
+		plen = fatio_lookupone(info, ((int) d->clusterL) | (((int) d->clusterH) << 16), path, d, doff);
 		if (plen < 0)
 			return plen;
 		path += plen;

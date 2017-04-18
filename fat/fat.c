@@ -36,7 +36,7 @@
 	_a < _b ? _a : _b;})
 
 
-int fat_init(const char *name, unsigned int off, fat_info_t *out)
+int fat_init(const char *name, offs_t off, fat_info_t *out)
 {
 	fat_opt_t opt;
 	int err;
@@ -157,12 +157,7 @@ int fat_list(fat_info_t *info, const char *path, unsigned int off, unsigned int 
 	fat_name_t name;
 	s32 u;
 
-	if (fatio_lookup(info, path, &d) < 0) {
-		printf("No such file or directory\n");
-		return -ENOENT;
-	}
-
-	if (fatio_lookup(info, path, &d) < 0) {
+	if (fatio_lookup(info, path, &d, NULL) < 0) {
 		printf("No such file or directory\n");
 		return -ENOENT;
 	}

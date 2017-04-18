@@ -3,7 +3,7 @@
 # Copyright 2012 Pawel Pisarczyk
 #
 
-.PHONY: all ph2
+.PHONY: all ph2 ph2-clean
 
 CC = gcc
 LD = gcc
@@ -19,6 +19,9 @@ BIN = fat
 all: fat
 
 ph2: $(PH2_SRCS:%=$(PH2_DIR)/%)
+
+ph2-clean:
+	rm $(PH2_SRCS:%=$(PH2_DIR)/%)
 
 $(PH2_DIR)/%.h : %.h
 	cp $? $@

@@ -18,6 +18,7 @@
 
 
 #include "pcache.h"
+#include "types.h"
 
 
 #define PCACHE_CNT_MAX 30
@@ -25,12 +26,33 @@
 #define PCACHE_BUCKETS 1024
 
 
-extern void pcache_init(void *dev);
+struct _pcache_list_t {
+	struct _pcache_list_t *n;
+	struct _pcache_list_t *p;
+};
+typedef struct _pcache_list_t pcache_list_t;
 
 
-extern int pcache_read(unsigned long off, unsigned int size, char *buff);
+struct _pcache_t {
+	pcache_list_t b[PCACHE_BUCKETS];
+	pcache_list_t f;
+	int cnt;
+	int max_cnt;
+	unsigned pagesize;
+	void *dev;
+};
+typedef struct _pcache_t pcache_t;
 
 
-extern int pcache_devread(void *dev, unsigned long off, unsigned int size, char *buff);
+extern int pcache_init(pcache_t *pcache, unsigned size, void *dev, unsigned pagesize);
+
+
+extern int pcache_resize(pcache_t *pcache, unsigned size, void **dev);
+
+
+extern int pcache_read(pcache_t *pcache, offs_t off, unsigned int size, char *buff);
+
+
+extern int pcache_devread(void *dev, offs_t off, unsigned int size, char *buff);
 
 #endif

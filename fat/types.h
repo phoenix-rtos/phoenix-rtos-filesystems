@@ -20,10 +20,11 @@
 #include <stdio.h>
 #include <ctype.h>
 
+typedef unsigned int offs_t;
 
 typedef struct _fat_opt_t {
 	const char *dev;
-	unsigned int off;
+	offs_t off;
 } fat_opt_t;
 
 
@@ -42,7 +43,7 @@ typedef int s32;
 #define ENOMEM  4
 
 
-typedef int fat_dev_t;
+typedef void * fat_dev_t;
 
 
 #define fatprint_err(...) printf(__VA_ARGS__)

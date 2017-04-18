@@ -23,9 +23,12 @@ int fatfat_get(fat_info_t *info, unsigned int cluster, unsigned int *next)
 	unsigned int bitoff, sec, secoff;
 	char sector[SIZE_SECTOR];
 
+	if (info->bsbpb.BPB_BytesPerSec <= SIZE_SECTOR)
+		return -EPROTO;
+
 	if (cluster >= info->clusters)
 		return -EINVAL;
-	
+
 	if (info->type == FAT32) {
 		bitoff = cluster * 32;
 	} else if (info->type == FAT16)
