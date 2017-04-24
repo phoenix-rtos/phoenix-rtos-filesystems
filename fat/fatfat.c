@@ -18,12 +18,15 @@
 #include "fatfat.h"
 
 
+#define SIZE_SECTOR 512
+
+
 int fatfat_get(fat_info_t *info, unsigned int cluster, unsigned int *next)
 {
 	unsigned int bitoff, sec, secoff;
 	char sector[SIZE_SECTOR];
 
-	if (info->bsbpb.BPB_BytesPerSec <= SIZE_SECTOR)
+	if (info->bsbpb.BPB_BytesPerSec > SIZE_SECTOR)
 		return -EPROTO;
 
 	if (cluster >= info->clusters)
@@ -96,7 +99,7 @@ int fatfat_lookup(fat_info_t *info, fatfat_chain_t *c, unsigned int skip)
 	assert (c->start != FAT_EOF);
 	if (c->start >= info->clusters)
 		return -ENOENT;
-	
+
 	if (c->start == 0) {
 		if (info->type == FAT32) {
 			c->start = info->bsbpb.fat32.BPB_RootClus;

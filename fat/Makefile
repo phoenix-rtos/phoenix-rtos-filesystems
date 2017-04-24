@@ -12,7 +12,7 @@ LDFLAGS = -lm -m32 -D_FILE_OFFSET_BITS=64
 
 PH2_DIR ?= ""
 SRCS = fat.c fatfat.c fatdev.c fatio.c pcache.c
-PH2_SRCS = fatfat.c fatio.c pcache.c fatfat.h fatio.h pcache.h
+PH2_SRCS = fatfat.c fatio.c pcache.c fatfat.h fatio.h pcache.h fatdev.h
 OBJS = $(SRCS:.c=.o)
 BIN = fat
 

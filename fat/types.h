@@ -25,6 +25,8 @@ typedef unsigned int offs_t;
 typedef struct _fat_opt_t {
 	const char *dev;
 	offs_t off;
+	unsigned int bufpsz;
+	unsigned int bufsz;
 } fat_opt_t;
 
 

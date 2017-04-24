@@ -42,8 +42,11 @@ int fat_init(const char *name, offs_t off, fat_info_t *out)
 	int err;
 
 	opt.off = off;
+	opt.bufpsz = 128 * 1024;
+	opt.bufsz = opt.bufpsz * 512;
 
-	fatdev_init(name, out);
+	if ((err = fatdev_init(name, &opt, out)) != EOK)
+		return err;
 	if ((err = fatio_readsuper(&opt, out)) < 0) {
 		fatdev_deinit(out);
 		return err;

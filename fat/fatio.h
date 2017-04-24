@@ -92,7 +92,10 @@ typedef struct _fat_dirent_t {
 			u8  ctime_ms;
 			u16 ctime;
 			u16 cdate;
-			u16 guid;
+			union { /* Depends from settins in CONFIG.SYS */
+				u16 guid;
+				u16 adate;
+			};
 			u16 clusterH;
 			u16 mtime;
 			u16 mdate;

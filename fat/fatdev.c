@@ -23,22 +23,25 @@
 #include "pcache.h"
 
 
-int fatdev_init(const char *devname, fat_info_t *info)
+int fatdev_init(const char *devname, fat_opt_t *opt, fat_info_t *info)
 {
 	int dev;
+
 	info->dev = malloc(sizeof(pcache_t));
 	if (info->dev == 0)
 		return -ENOMEM;
+
 	if ((dev = open(devname, O_RDONLY)) < 0) {
 		free(info->dev);
 		return -ENOENT;
 	}
 
-	if (pcache_init((pcache_t *)info->dev, 512, (void *) dev, 128 * 1024) < 0) {
+	if (pcache_init((pcache_t *)info->dev, opt->bufsz, (void *) dev, opt->bufpsz) < 0) {
 		free(info->dev);
 		close(dev);
 		return -ENOMEM;
 	}
+
 	return EOK;
 }
 

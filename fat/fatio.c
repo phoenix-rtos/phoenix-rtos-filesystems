@@ -28,7 +28,7 @@ int fatio_readsuper(void *opt, fat_info_t *info)
 
 	info->off = ((fat_opt_t *)opt)->off;
 
-	if (fatdev_read(info, 0, SIZE_SECTOR, (char *)&info->bsbpb) < 0)
+	if (fatdev_read(info, 0, 512, (char *)&info->bsbpb) < 0)
 		return -EPROTO;
 
 	info->fatoff = info->bsbpb.BPB_RsvdSecCnt;
@@ -192,10 +192,11 @@ int fatio_lookupone(fat_info_t *info, unsigned int cluster, const char *path, fa
 {
 	fatfat_chain_t c;
 	int plen;
-	char buff[SIZE_SECTOR];
+	char buff[512];
 	fat_dirent_t *tmpd;
 	fat_name_t name;
-	unsigned int r, ret;
+	int ret;
+	unsigned int r;
 
 	c.start = cluster;
 	c.soff = 0;

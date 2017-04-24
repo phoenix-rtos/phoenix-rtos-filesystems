@@ -36,10 +36,18 @@ int pcache_init(pcache_t *pcache, unsigned size, void *dev, unsigned pagesize)
 {
 	int i;
 
+	if (pagesize == 0) {
+		fatprint_err("Page size 0 is not allowed\n");
+		return -EINVAL;
+	}
+	pcache->max_cnt = size / pagesize;
+	if (pcache->max_cnt == 0) {
+		fatprint_err("Not enough space to store pages (pagesize (%d) < size (%d))\n", pagesize, size);
+		return -EINVAL;
+	}
 	for (i = 0; i < PCACHE_BUCKETS; i++)
 		pcache->b[i].n = pcache->b[i].p = &pcache->b[i];
 	pcache->f.n = pcache->f.p = &pcache->f;
-	pcache->max_cnt = size;
 	pcache->cnt = 0;
 	pcache->dev = dev;
 	pcache->pagesize = pagesize;
@@ -63,13 +71,16 @@ int pcache_resize(pcache_t *pcache, unsigned size, void **dev)
 		p->b.n->p = p->b.p;
 		free(p);
 	}
+	mut_unlock(&pcache->m);
 	if (dev != NULL)
 		*dev = pcache->dev;
+	if (size == 0)
+		mut_kill(&pcache->m);
 	return EOK;
 }
 
 
-static cpage_t *pcache_get(pcache_t *pcache, unsigned long pno)
+static cpage_t *_pcache_get(pcache_t *pcache, unsigned long pno)
 {
 	pcache_list_t *l;
 	cpage_t *p;

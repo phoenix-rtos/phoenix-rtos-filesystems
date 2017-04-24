@@ -20,16 +20,13 @@
 #include "fatio.h"
 
 
-#define SIZE_SECTOR 512
-
-
-int fatdev_init(const char *devname, fat_info_t *info);
+extern int fatdev_init(const char *devname, fat_opt_t *opt, fat_info_t *info);
 
 
 extern int fatdev_read(fat_info_t *info, offs_t off, unsigned int size, char *buff);
 
 
-void fatdev_deinit(fat_info_t *info);
+extern void fatdev_deinit(fat_info_t *info);
 
 
 #endif
