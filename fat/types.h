@@ -46,9 +46,14 @@ typedef int s32;
 
 
 typedef void * fat_dev_t;
+typedef void * mut_t;
 
 
 #define fatprint_err(...) printf(__VA_ARGS__)
+#define mut_unlock(m)
+#define mut_lock(m)
+#define mut_init(m)
+#define mut_kill(m)
 
 
 #define min(a, b) ({__typeof__(a) _a = (a); \

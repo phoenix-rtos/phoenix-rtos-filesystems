@@ -51,7 +51,7 @@ int pcache_init(pcache_t *pcache, unsigned size, void *dev, unsigned pagesize)
 	pcache->cnt = 0;
 	pcache->dev = dev;
 	pcache->pagesize = pagesize;
-
+	mut_init(&pcache->m);
 	return EOK;
 }
 
@@ -61,6 +61,7 @@ int pcache_resize(pcache_t *pcache, unsigned size, void **dev)
 	pcache_list_t *l;
 	cpage_t *p;
 
+	mut_lock(&pcache->m);
 	pcache->max_cnt = size;
 	for (; pcache->cnt < size; pcache->cnt--) {
 		l = pcache->f.p;
@@ -109,6 +110,7 @@ static void pcache_add(pcache_t *pcache, cpage_t *p)
 	pcache_list_t *l;
 	
 	p->used = 1;
+	mut_lock(&pcache->m);
 
 	/* add page to bucket */
 	p->b.p = pcache->b[b].p;
@@ -124,6 +126,7 @@ static void pcache_add(pcache_t *pcache, cpage_t *p)
 
 	if (pcache->cnt < pcache->max_cnt) {
 		pcache->cnt++;
+		mut_unlock(&pcache->m);
 		return;
 	}
 	for (l = pcache->f.p; l != &pcache->f; l = l->p) {
@@ -137,6 +140,7 @@ static void pcache_add(pcache_t *pcache, cpage_t *p)
 	p->f.p->n = p->f.n;
 	p->b.n->p = p->b.p;
 	p->b.p->n = p->b.n;
+	mut_unlock(&pcache->m);
 
 	free(p);
 	return;
@@ -152,7 +156,12 @@ int pcache_read(pcache_t *pcache, offs_t off, unsigned int size, char *buff)
 
 	for (o = off / pcache->pagesize; size > 0; o++) {
 		new = 0;
-		if ((p = pcache_get(pcache, o)) == NULL) {
+		tr = pcache->pagesize - (off % pcache->pagesize);
+		if (size < tr)
+			tr = size;
+		mut_lock(&pcache->m);
+		if ((p = _pcache_get(pcache, o)) == NULL) {
+			mut_unlock(&pcache->m);
 			if ((p = malloc(sizeof(*p) + pcache->pagesize)) == NULL)
 				return pcache_devread(pcache->dev, off, size, buff);
 			if ((ret = pcache_devread(pcache->dev, o * pcache->pagesize, pcache->pagesize, p->data)) != EOK) {
@@ -162,15 +171,14 @@ int pcache_read(pcache_t *pcache, offs_t off, unsigned int size, char *buff)
 			p->no = o;
 			new = 1;
 		}
-		tr = pcache->pagesize - (off % pcache->pagesize);
-		if (size < tr)
-			tr = size;
 		memcpy(buff, p->data + (off % pcache->pagesize), tr);
+		if (new)
+			pcache_add(pcache, p);
+		else
+			mut_unlock(&pcache->m);
 		off += tr;
 		size -= tr;
 		buff += tr;
-		if (new)
-			pcache_add(pcache, p);
 	}
 	return EOK;
 }
