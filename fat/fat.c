@@ -240,7 +240,7 @@ int main(int argc, char *argv[])
 	clock_t b, e;
 
 	if (argc < 4) {
-		fprintf(stderr, "To few parameters. Usage: fat <file> <offset> {dump|ls|perf|read} [path] [file_offset] [file_dump_size]\n");
+		fprintf(stderr, "Too few parameters. Usage: fat <file> <offset> {dump|ls|perf|read} [path] [file_offset] [file_dump_size]\n");
 		return -EINVAL;
 	}
 

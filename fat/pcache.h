@@ -37,6 +37,7 @@ struct _pcache_t {
 	mut_t m;
 	pcache_list_t b[PCACHE_BUCKETS];
 	pcache_list_t f;
+	pcache_list_t e;
 	int cnt;
 	int max_cnt;
 	unsigned pagesize;

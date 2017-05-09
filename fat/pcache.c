@@ -35,12 +35,14 @@ typedef struct _cpage_t cpage_t;
 int pcache_init(pcache_t *pcache, unsigned size, void *dev, unsigned pagesize)
 {
 	int i;
+	cpage_t *p = NULL;
 
 	if (pagesize == 0) {
 		fatprint_err("Page size 0 is not allowed\n");
 		return -EINVAL;
 	}
 	pcache->max_cnt = size / pagesize;
+	pcache->pagesize = pagesize;
 	if (pcache->max_cnt == 0) {
 		fatprint_err("Not enough space to store pages (pagesize (%d) < size (%d))\n", pagesize, size);
 		return -EINVAL;
@@ -48,9 +50,28 @@ int pcache_init(pcache_t *pcache, unsigned size, void *dev, unsigned pagesize)
 	for (i = 0; i < PCACHE_BUCKETS; i++)
 		pcache->b[i].n = pcache->b[i].p = &pcache->b[i];
 	pcache->f.n = pcache->f.p = &pcache->f;
+	pcache->e.n = pcache->e.p = &pcache->e;
+
+	for (i = 0; i < pcache->max_cnt; i++) {
+		p = malloc(sizeof(*p) + pcache->pagesize);
+		if (p == NULL)
+			break;
+		p->f.p = pcache->e.p;
+		p->f.n = &(pcache->e);
+		pcache->e.p->n = &(p->f);
+		pcache->e.p = &(p->f);
+	}
+	if (p == NULL) {
+		while (pcache->e.n != &pcache->e) {
+			p = list2page(pcache->e.n, f);
+			pcache->e.n = p->f.n;
+			free(p);
+		}
+		return -ENOMEM;
+	}
+
 	pcache->cnt = 0;
 	pcache->dev = dev;
-	pcache->pagesize = pagesize;
 	mut_init(&pcache->m);
 	return EOK;
 }
@@ -62,8 +83,14 @@ int pcache_resize(pcache_t *pcache, unsigned size, void **dev)
 	cpage_t *p;
 
 	mut_lock(&pcache->m);
-	pcache->max_cnt = size;
-	for (; pcache->cnt < size; pcache->cnt--) {
+	for (; (pcache->max_cnt > size) && (pcache->e.n != &pcache->e); pcache->max_cnt--) {
+		l = pcache->e.p;
+		pcache->e.p = l->p;
+		pcache->e.p->n = &pcache->e;
+		p = list2page(l, f);
+		free(p);
+	}
+	for (; (pcache->max_cnt > size) && (pcache->f.n != &pcache->f); pcache->max_cnt--) {
 		l = pcache->f.p;
 		pcache->f.p = l->p;
 		pcache->f.p->n = &pcache->f;
@@ -104,11 +131,41 @@ static cpage_t *_pcache_get(pcache_t *pcache, unsigned long pno)
 }
 
 
+static cpage_t *_pcache_getEmpty(pcache_t *pcache)
+{
+	pcache_list_t *l;
+	cpage_t *p;
+
+	if (pcache->e.n != &(pcache->e)) {
+		l = pcache->e.n;
+		l->n->p = l->p;
+		l->p->n = l->n;
+		return list2page(l, f);
+	}
+
+	for (l = pcache->f.p; l != &pcache->f; l = l->p) {
+		p = list2page(l, f);
+		p->used--;
+		if (p->used == 0)
+			break;
+	}
+	if (l == &pcache->f)
+		return NULL;
+
+	/* remove page from lists */
+	p->f.n->p = p->f.p;
+	p->f.p->n = p->f.n;
+	p->b.n->p = p->b.p;
+	p->b.p->n = p->b.n;
+
+	return p;
+}
+
+
 static void pcache_add(pcache_t *pcache, cpage_t *p)
 {
 	int b = p->no % PCACHE_BUCKETS;
-	pcache_list_t *l;
-	
+
 	p->used = 1;
 	mut_lock(&pcache->m);
 
@@ -124,25 +181,7 @@ static void pcache_add(pcache_t *pcache, cpage_t *p)
 	pcache->f.p->n = &p->f;
 	pcache->f.p = &p->f;
 
-	if (pcache->cnt < pcache->max_cnt) {
-		pcache->cnt++;
-		mut_unlock(&pcache->m);
-		return;
-	}
-	for (l = pcache->f.p; l != &pcache->f; l = l->p) {
-		p = list2page(l, f);
-		p->used--;
-		if (p->used == 0)
-			break;
-	}
-	/* remove page from lists */
-	p->f.n->p = p->f.p;
-	p->f.p->n = p->f.n;
-	p->b.n->p = p->b.p;
-	p->b.p->n = p->b.n;
 	mut_unlock(&pcache->m);
-
-	free(p);
 	return;
 }
 
@@ -161,11 +200,18 @@ int pcache_read(pcache_t *pcache, offs_t off, unsigned int size, char *buff)
 			tr = size;
 		mut_lock(&pcache->m);
 		if ((p = _pcache_get(pcache, o)) == NULL) {
+			p = _pcache_getEmpty(pcache);
 			mut_unlock(&pcache->m);
-			if ((p = malloc(sizeof(*p) + pcache->pagesize)) == NULL)
+			if (p == NULL)
 				return pcache_devread(pcache->dev, off, size, buff);
 			if ((ret = pcache_devread(pcache->dev, o * pcache->pagesize, pcache->pagesize, p->data)) != EOK) {
-				free(p);
+				/* add page to empty list */
+				mut_lock(&pcache->m);
+				p->f.p = pcache->e.p;
+				p->f.n = &pcache->e;
+				pcache->e.p->n = &p->f;
+				pcache->e.p = &p->f;
+				mut_unlock(&pcache->m);
 				return ret;
 			}
 			p->no = o;
