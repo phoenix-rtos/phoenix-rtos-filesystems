@@ -32,6 +32,42 @@ typedef struct _cpage_t cpage_t;
 #define list2page(entry, field) ((cpage_t *)((void *)entry - __builtin_offsetof(cpage_t, field)))
 
 
+static void __attribute__((unused)) pcache_selfCheck(pcache_t *pcache)
+{
+	int i, j, b;
+	pcache_list_t *l;
+
+	for (i = 0, l = pcache->f.n; (l != &pcache->f) && (i < pcache->max_cnt); i++, l = l->n);
+	if (l != &pcache->f)
+		fatprint_err("Pcache check detected too long next sequence in free\n");
+	for (j = 0, l = pcache->f.p; (l != &pcache->f) && (j < pcache->max_cnt); j++, l = l->p);
+	if (l != &pcache->f)
+		fatprint_err("Pcache check detected too long prev sequence in free\n");
+	if (i != j)
+		fatprint_err("Pcache check detected difference between number of next (%d) and prev (%d) in free\n", i ,j);
+	for (l = pcache->e.n; (l != &pcache->e) && (i < pcache->max_cnt); i++, l = l->n)
+	if (l != &pcache->e)
+		fatprint_err("Pcache check detected too long next sequence in empty\n");
+	for (l = pcache->e.p; (l != &pcache->e) && (j < pcache->max_cnt); j++, l = l->p);
+	if (l != &pcache->e)
+		fatprint_err("Pcache check detected too long prev sequence in empty\n");
+	if (i != j)
+		fatprint_err("Pcache check detected difference between number of next (%d) and prev (%d) in empty + free\n", i ,j);
+	i = 0;
+	j = 0;
+	for (b = 0; b < PCACHE_BUCKETS; b++) {
+		for (l = pcache->b[b].n; (l != &(pcache->b[b])) && (i < pcache->max_cnt); i++, l = l->n);
+		if (l != &(pcache->b[b]))
+			fatprint_err("Pcache check detected too long next sequence in bucket %d\n", b);
+		for (l = pcache->b[b].p; (l != &(pcache->b[b])) && (j < pcache->max_cnt); j++, l = l->p);
+		if (l != &(pcache->b[b]))
+			fatprint_err("Pcache check detected too long prev sequence in bucket %d\n", b);
+		if (i != j)
+			fatprint_err("Pcache check detected difference between number of next (%d) and prev (%d) in bucket %d\n", i, j, b);
+	}
+}
+
+
 int pcache_init(pcache_t *pcache, unsigned size, void *dev, unsigned pagesize)
 {
 	int i;
