@@ -56,16 +56,15 @@ int fatfat_get(fat_info_t *info, unsigned int cluster, unsigned int *next)
 	/* FAT12 */
 	else {
 		if (secoff != info->bsbpb.BPB_BytesPerSec - 1)
-			cluster = (unsigned int)(((u16 *)&sector)[secoff / sizeof(u16)]);
+			cluster = (((unsigned) sector[secoff]) & 0xFF)+ ((((unsigned) sector[secoff + 1]) << 8) & 0xFF00);
 		else {
-			cluster = ((unsigned int)*((u8 *)&sector[secoff])) << 8;
-			
+			cluster = ((unsigned) sector[secoff]) & 0xFF;
 			if (fatdev_read(info, (info->fatoff + sec + 1) * info->bsbpb.BPB_BytesPerSec, info->bsbpb.BPB_BytesPerSec, sector) < 0)
 				return 0;
-
-			cluster |= sector[0];
-			cluster = (cluster >> (4 - bitoff)) & ~(0xf0 << bitoff);
+			cluster |= (((unsigned) sector[0]) & 0xFF) << 8;
 		}
+		cluster >>= bitoff;
+		cluster &= 0xFFF;
 	}
 
 	if (info->type == FAT32) {

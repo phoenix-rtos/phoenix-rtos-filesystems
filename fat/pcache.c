@@ -98,6 +98,7 @@ int pcache_init(pcache_t *pcache, unsigned size, void *dev, unsigned pagesize)
 		pcache->e.p = &(p->f);
 	}
 	if (p == NULL) {
+		fatprint_err("Not enough space to store %d pages\n", pcache->max_cnt);
 		while (pcache->e.n != &pcache->e) {
 			p = list2page(pcache->e.n, f);
 			pcache->e.n = p->f.n;
