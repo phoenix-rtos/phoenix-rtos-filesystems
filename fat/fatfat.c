@@ -18,16 +18,11 @@
 #include "fatfat.h"
 
 
-#define SIZE_SECTOR 512
-
-
 int fatfat_get(fat_info_t *info, unsigned int cluster, unsigned int *next)
 {
-	unsigned int bitoff, sec, secoff;
-	char sector[SIZE_SECTOR];
-
-	if (info->bsbpb.BPB_BytesPerSec > SIZE_SECTOR)
-		return -EPROTO;
+	int ret;
+	unsigned int bitoff;
+	u32 sector;
 
 	if (cluster >= info->clusters)
 		return -EINVAL;
@@ -39,33 +34,18 @@ int fatfat_get(fat_info_t *info, unsigned int cluster, unsigned int *next)
 	else
 		bitoff = cluster * 12;
 
-	sec = (bitoff / 8 / info->bsbpb.BPB_BytesPerSec);
-	secoff = (bitoff / 8) % info->bsbpb.BPB_BytesPerSec;
+	if ((ret = fatdev_read(info, info->fatoff * info->bsbpb.BPB_BytesPerSec + bitoff / 8, sizeof(sector), (char *) &sector)) < 0)
+		return ret;
 
-	bitoff %= 8;
-
-	if (fatdev_read(info, (info->fatoff + sec) * info->bsbpb.BPB_BytesPerSec, info->bsbpb.BPB_BytesPerSec, sector) < 0)
-		return 0;
-	
 	if (info->type == FAT32)
-		cluster = (unsigned int)(((u32 *)&sector)[secoff / sizeof(u32)]);
+		cluster = sector;
 
 	else if (info->type == FAT16)
-		cluster = (unsigned int)(((u16 *)&sector)[secoff / sizeof(u16)]);
+		cluster = sector & 0xFFFF;
 
 	/* FAT12 */
-	else {
-		if (secoff != info->bsbpb.BPB_BytesPerSec - 1)
-			cluster = (((unsigned) sector[secoff]) & 0xFF)+ ((((unsigned) sector[secoff + 1]) << 8) & 0xFF00);
-		else {
-			cluster = ((unsigned) sector[secoff]) & 0xFF;
-			if (fatdev_read(info, (info->fatoff + sec + 1) * info->bsbpb.BPB_BytesPerSec, info->bsbpb.BPB_BytesPerSec, sector) < 0)
-				return 0;
-			cluster |= (((unsigned) sector[0]) & 0xFF) << 8;
-		}
-		cluster >>= bitoff;
-		cluster &= 0xFFF;
-	}
+	else
+		cluster = (sector >> (bitoff % 8)) & 0xFFF;
 
 	if (info->type == FAT32) {
 		if (cluster >= 0xffffff8)
@@ -87,7 +67,7 @@ int fatfat_set(fat_info_t *info, unsigned int cluster, unsigned int next)
 	return 0;
 }
 
-#include <assert.h>
+
 int fatfat_lookup(fat_info_t *info, fatfat_chain_t *c, unsigned int skip)
 {
 	unsigned int i = 0;
@@ -95,7 +75,6 @@ int fatfat_lookup(fat_info_t *info, fatfat_chain_t *c, unsigned int skip)
 
 	c->areas[0].start = 0;
 
-	assert (c->start != FAT_EOF);
 	if (c->start >= info->clusters)
 		return -ENOENT;
 
