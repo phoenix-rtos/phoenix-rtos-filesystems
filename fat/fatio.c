@@ -19,7 +19,7 @@
 #include "fatio.h"
 #include "fatdev.h"
 #include "fatfat.h"
-#include "types.h"
+#include "fatsystem.h"
 
 
 int fatio_readsuper(void *opt, fat_info_t *info)
@@ -175,7 +175,7 @@ static int fatio_cmpname(const char *path, fat_name_t *name)
 		up = UTF8toUnicode(&p);
 		un = UTF16toUnicode(&n);
 		if (up < 0) {
-			fatprint_err("Unrecognizable character in path detected\n");
+			fat_printErr("Unrecognizable character in path detected\n");
 			return 0;
 		}
 		if (up != un)

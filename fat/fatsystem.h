@@ -13,8 +13,8 @@
  * %LICENSE%
  */
 
-#ifndef _MISC_TYPES_H_
-#define _MISC_TYPES_H_
+#ifndef _MISC_FATSYSTEM_H_
+#define _MISC_FATSYSTEM_H_
 
 
 #include <stdio.h>
@@ -46,14 +46,16 @@ typedef int s32;
 
 
 typedef void * fat_dev_t;
-typedef void * mut_t;
+typedef void * fat_mut_t;
 
 
-#define fatprint_err(...) printf(__VA_ARGS__)
-#define mut_unlock(m)
-#define mut_lock(m)
-#define mut_init(m)
-#define mut_kill(m)
+#define fat_printErr(...) printf(__VA_ARGS__)
+#define fat_mutUnlock(m)
+#define fat_mutLock(m)
+#define fat_mutInit(m)
+#define fat_mutKill(m)
+#define fat_malloc(m) malloc(m)
+#define fat_free(m)   free(m)
 
 
 #define min(a, b) ({__typeof__(a) _a = (a); \

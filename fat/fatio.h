@@ -17,7 +17,7 @@
 #define _MISC_FATIO_H_
 
 
-#include "types.h"
+#include "fatsystem.h"
 
 
 typedef struct _fat_bsbpb_t {

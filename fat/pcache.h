@@ -18,7 +18,7 @@
 
 
 #include "pcache.h"
-#include "types.h"
+#include "fatsystem.h"
 
 
 #define PCACHE_CNT_MAX 30
@@ -34,7 +34,7 @@ typedef struct _pcache_list_t pcache_list_t;
 
 
 struct _pcache_t {
-	mut_t m;
+	fat_mut_t m;
 	pcache_list_t b[PCACHE_BUCKETS];
 	pcache_list_t f;
 	pcache_list_t e;

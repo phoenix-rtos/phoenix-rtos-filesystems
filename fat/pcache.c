@@ -18,7 +18,7 @@
 
 
 #include "pcache.h"
-#include "types.h"
+#include "fatsystem.h"
 
 
 struct _cpage_t {
@@ -39,31 +39,31 @@ static void __attribute__((unused)) pcache_selfCheck(pcache_t *pcache)
 
 	for (i = 0, l = pcache->f.n; (l != &pcache->f) && (i < pcache->max_cnt); i++, l = l->n);
 	if (l != &pcache->f)
-		fatprint_err("Pcache check detected too long next sequence in free\n");
+		fat_printErr("Pcache check detected too long next sequence in free\n");
 	for (j = 0, l = pcache->f.p; (l != &pcache->f) && (j < pcache->max_cnt); j++, l = l->p);
 	if (l != &pcache->f)
-		fatprint_err("Pcache check detected too long prev sequence in free\n");
+		fat_printErr("Pcache check detected too long prev sequence in free\n");
 	if (i != j)
-		fatprint_err("Pcache check detected difference between number of next (%d) and prev (%d) in free\n", i ,j);
+		fat_printErr("Pcache check detected difference between number of next (%d) and prev (%d) in free\n", i ,j);
 	for (l = pcache->e.n; (l != &pcache->e) && (i < pcache->max_cnt); i++, l = l->n)
 	if (l != &pcache->e)
-		fatprint_err("Pcache check detected too long next sequence in empty\n");
+		fat_printErr("Pcache check detected too long next sequence in empty\n");
 	for (l = pcache->e.p; (l != &pcache->e) && (j < pcache->max_cnt); j++, l = l->p);
 	if (l != &pcache->e)
-		fatprint_err("Pcache check detected too long prev sequence in empty\n");
+		fat_printErr("Pcache check detected too long prev sequence in empty\n");
 	if (i != j)
-		fatprint_err("Pcache check detected difference between number of next (%d) and prev (%d) in empty + free\n", i ,j);
+		fat_printErr("Pcache check detected difference between number of next (%d) and prev (%d) in empty + free\n", i ,j);
 	i = 0;
 	j = 0;
 	for (b = 0; b < PCACHE_BUCKETS; b++) {
 		for (l = pcache->b[b].n; (l != &(pcache->b[b])) && (i < pcache->max_cnt); i++, l = l->n);
 		if (l != &(pcache->b[b]))
-			fatprint_err("Pcache check detected too long next sequence in bucket %d\n", b);
+			fat_printErr("Pcache check detected too long next sequence in bucket %d\n", b);
 		for (l = pcache->b[b].p; (l != &(pcache->b[b])) && (j < pcache->max_cnt); j++, l = l->p);
 		if (l != &(pcache->b[b]))
-			fatprint_err("Pcache check detected too long prev sequence in bucket %d\n", b);
+			fat_printErr("Pcache check detected too long prev sequence in bucket %d\n", b);
 		if (i != j)
-			fatprint_err("Pcache check detected difference between number of next (%d) and prev (%d) in bucket %d\n", i, j, b);
+			fat_printErr("Pcache check detected difference between number of next (%d) and prev (%d) in bucket %d\n", i, j, b);
 	}
 }
 
@@ -74,13 +74,13 @@ int pcache_init(pcache_t *pcache, unsigned size, void *dev, unsigned pagesize)
 	cpage_t *p = NULL;
 
 	if (pagesize == 0) {
-		fatprint_err("Page size 0 is not allowed\n");
+		fat_printErr("Page size 0 is not allowed\n");
 		return -EINVAL;
 	}
 	pcache->max_cnt = size / pagesize;
 	pcache->pagesize = pagesize;
 	if (pcache->max_cnt == 0) {
-		fatprint_err("Not enough space to store pages (pagesize (%d) < size (%d))\n", pagesize, size);
+		fat_printErr("Not enough space to store pages (pagesize (%d) < size (%d))\n", pagesize, size);
 		return -EINVAL;
 	}
 	for (i = 0; i < PCACHE_BUCKETS; i++)
@@ -89,7 +89,7 @@ int pcache_init(pcache_t *pcache, unsigned size, void *dev, unsigned pagesize)
 	pcache->e.n = pcache->e.p = &pcache->e;
 
 	for (i = 0; i < pcache->max_cnt; i++) {
-		p = malloc(sizeof(*p) + pcache->pagesize);
+		p = fat_malloc(sizeof(*p) + pcache->pagesize);
 		if (p == NULL)
 			break;
 		p->f.p = pcache->e.p;
@@ -98,18 +98,18 @@ int pcache_init(pcache_t *pcache, unsigned size, void *dev, unsigned pagesize)
 		pcache->e.p = &(p->f);
 	}
 	if (p == NULL) {
-		fatprint_err("Not enough space to store %d pages\n", pcache->max_cnt);
+		fat_printErr("Not enough space to store %d pages\n", pcache->max_cnt);
 		while (pcache->e.n != &pcache->e) {
 			p = list2page(pcache->e.n, f);
 			pcache->e.n = p->f.n;
-			free(p);
+			fat_free(p);
 		}
 		return -ENOMEM;
 	}
 
 	pcache->cnt = 0;
 	pcache->dev = dev;
-	mut_init(&pcache->m);
+	fat_mutInit(&pcache->m);
 	return EOK;
 }
 
@@ -119,13 +119,13 @@ int pcache_resize(pcache_t *pcache, unsigned size, void **dev)
 	pcache_list_t *l;
 	cpage_t *p;
 
-	mut_lock(&pcache->m);
+	fat_mutLock(&pcache->m);
 	for (; (pcache->max_cnt > size) && (pcache->e.n != &pcache->e); pcache->max_cnt--) {
 		l = pcache->e.p;
 		pcache->e.p = l->p;
 		pcache->e.p->n = &pcache->e;
 		p = list2page(l, f);
-		free(p);
+		fat_free(p);
 	}
 	for (; (pcache->max_cnt > size) && (pcache->f.n != &pcache->f); pcache->max_cnt--) {
 		l = pcache->f.p;
@@ -134,13 +134,13 @@ int pcache_resize(pcache_t *pcache, unsigned size, void **dev)
 		p = list2page(l, f);
 		p->b.p->n = p->b.n;
 		p->b.n->p = p->b.p;
-		free(p);
+		fat_free(p);
 	}
-	mut_unlock(&pcache->m);
+	fat_mutUnlock(&pcache->m);
 	if (dev != NULL)
 		*dev = pcache->dev;
 	if (size == 0)
-		mut_kill(&pcache->m);
+		fat_mutKill(&pcache->m);
 	return EOK;
 }
 
@@ -204,7 +204,7 @@ static void pcache_add(pcache_t *pcache, cpage_t *p)
 	int b = p->no % PCACHE_BUCKETS;
 
 	p->used = 1;
-	mut_lock(&pcache->m);
+	fat_mutLock(&pcache->m);
 
 	/* add page to bucket */
 	p->b.p = pcache->b[b].p;
@@ -218,7 +218,7 @@ static void pcache_add(pcache_t *pcache, cpage_t *p)
 	pcache->f.p->n = &p->f;
 	pcache->f.p = &p->f;
 
-	mut_unlock(&pcache->m);
+	fat_mutUnlock(&pcache->m);
 	return;
 }
 
@@ -235,20 +235,20 @@ int pcache_read(pcache_t *pcache, offs_t off, unsigned int size, char *buff)
 		tr = pcache->pagesize - (off % pcache->pagesize);
 		if (size < tr)
 			tr = size;
-		mut_lock(&pcache->m);
+		fat_mutLock(&pcache->m);
 		if ((p = _pcache_get(pcache, o)) == NULL) {
 			p = _pcache_getEmpty(pcache);
-			mut_unlock(&pcache->m);
+			fat_mutUnlock(&pcache->m);
 			if (p == NULL)
 				return pcache_devread(pcache->dev, off, size, buff);
 			if ((ret = pcache_devread(pcache->dev, o * pcache->pagesize, pcache->pagesize, p->data)) != EOK) {
 				/* add page to empty list */
-				mut_lock(&pcache->m);
+				fat_mutLock(&pcache->m);
 				p->f.p = pcache->e.p;
 				p->f.n = &pcache->e;
 				pcache->e.p->n = &p->f;
 				pcache->e.p = &p->f;
-				mut_unlock(&pcache->m);
+				fat_mutUnlock(&pcache->m);
 				return ret;
 			}
 			p->no = o;
@@ -258,7 +258,7 @@ int pcache_read(pcache_t *pcache, offs_t off, unsigned int size, char *buff)
 		if (new)
 			pcache_add(pcache, p);
 		else
-			mut_unlock(&pcache->m);
+			fat_mutUnlock(&pcache->m);
 		off += tr;
 		size -= tr;
 		buff += tr;
