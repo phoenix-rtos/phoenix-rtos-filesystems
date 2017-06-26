@@ -16,13 +16,17 @@
 #ifndef _MISC_FATDEV_H_
 #define _MISC_FATDEV_H_
 
-#include "fat.h"
+
+#include "fatio.h"
 
 
-#define SIZE_SECTOR 512
+extern int fatdev_init(const char *devname, fat_opt_t *opt, fat_info_t *info);
 
 
-extern int fatdev_read(fat_info_t *info, unsigned long sector, unsigned int cnt, char *buff);
+extern int fatdev_read(fat_info_t *info, offs_t off, unsigned int size, char *buff);
+
+
+extern void fatdev_deinit(fat_info_t *info);
 
 
 #endif
