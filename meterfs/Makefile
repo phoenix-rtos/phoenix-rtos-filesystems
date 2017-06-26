@@ -3,24 +3,27 @@
 # Copyright 2012 Pawel Pisarczyk
 #
 
-CC = gcc
-LD = gcc
-CFLAGS = -c -Wall -I . -O2 -g
-LDFLAGS = -lm
+CC = i386-pc-phoenix-gcc
+CFLAGS = -c -Wall -I. -I../../libphoenix -O2 -g -DARCH=\"arch/ia32/arch.h\" -nostartfiles -nostdlib -fno-builtin
 
-SRCS = fat.c fatfat.c fatdev.c
+LD = i386-pc-phoenix-gcc
+LDFLAGS = -nostartfiles -nostdlib
+
+GCCLIB := $(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
+
+SRCS = meterfs.c
 OBJS = $(SRCS:.c=.o)
-BIN = fat
+BIN = meterfs
 
-all: fat
+all: meterfs
 
 .c.o:
 	$(CC) $(CFLAGS) $<
 
-$(OBJS): fat.h fatfat.h fatdev.h
+$(OBJS):
 
-fat: $(OBJS)
-	$(LD) $(LDFLAGS) -o $(BIN) $(OBJS)
+meterfs: $(OBJS)
+	$(LD) $(LDFLAGS) -o $(BIN) $(OBJS) ../../libphoenix/libphoenix.a $(GCCLIB)
 
 clean:
 	rm -f *.o *~ core
