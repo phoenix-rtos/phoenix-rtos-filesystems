@@ -22,7 +22,7 @@ all: meterfs
 
 $(OBJS):
 
-meterfs: $(OBJS)
+meterfs: $(OBJS) ../../libphoenix/libphoenix.a
 	$(LD) $(LDFLAGS) -o $(BIN) $(OBJS) ../../libphoenix/libphoenix.a $(GCCLIB)
 
 clean:
