@@ -26,4 +26,4 @@ meterfs: $(OBJS) ../../libphoenix/libphoenix.a
 	$(LD) $(LDFLAGS) -o $(BIN) $(OBJS) ../../libphoenix/libphoenix.a $(GCCLIB)
 
 clean:
-	rm -f *.o *~ core
+	rm -f *.o *~ core $(BIN)
