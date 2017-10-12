@@ -1,32 +1,41 @@
 /*
-*/
+ * Phoenix-RTOS
+ *
+ * Operating system kernel
+ *
+ * Meterfs
+ *
+ * Copyright 2017 Phoenix Systems
+ * Author: Aleksander Kaminski
+ *
+ * This file is part of Phoenix-RTOS.
+ *
+ * %LICENSE%
+ */
 
-#include "stdio.h"
-#include "stdlib.h"
-#include "unistd.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <stdint.h>
+#include <errno.h>
+#include <sys/threads.h>
+#include <sys/msg.h>
+#include "spi.h"
+#include "flash.h"
+
+
+struct {
+	unsigned int port;
+} meterfs_common;
 
 
 int main(void)
 {
-	char *m = "-\\|/";
-	unsigned int i = 0;
+	spi_init();
+	flash_init(2 * 1024 * 1024, 4 * 1024);
 
-	printf("metetrfs: Starting, main is at %p\n", main);
-
-	if (!vfork()) {
-		printf("I'm child:  ");
-		for (;;) {
-			printf("\b%c", m[i++ % 4]);
-			usleep(100);
-		}
-	}
-
-	for (;;) {
-		printf("\r%c", m[i++ % 4]);
-		usleep(100);
-	}
-
-	malloc(100);
-
-	return 0;
+	/* TODO */
+	for (;;)
+		usleep(10000 * 1000);
 }
+
