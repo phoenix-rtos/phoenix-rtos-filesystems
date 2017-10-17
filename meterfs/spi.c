@@ -16,36 +16,10 @@
 #include <sys/threads.h>
 #include <sys/msg.h>
 #include <sys/pwman.h>
+#include <sys/interrupt.h>
 #include <unistd.h>
 
 #include "spi.h"
-
-
-struct {
-	volatile unsigned int *base;
-	volatile unsigned int *rcc;
-
-	char spi_ready;
-	handle_t mutex;
-	handle_t cond;
-
-	unsigned int gpio;
-} spi_common;
-
-
-enum { cr1 = 0, cr2, sr, dr, crcpr, rxcrcr, txcrcr, i2scfgr, i2spr };
-
-
-enum { rcc_apb2enr = 8 };
-
-
-enum { GPIO_CONFIG, GPIO_INTERRUPT, GPIO_GET, GPIO_SET, GPIO_DELAY };
-
-
-enum { GPIOA = 0, GPIOB, GPIOC, GPIOD, GPIOE, GPIOF, GPIOG, GPIOH };
-
-
-enum { EDGE_RISING, EDGE_FALLING };
 
 
 typedef struct {
@@ -89,21 +63,38 @@ typedef struct {
 } __attribute__((packed)) gpiomsg_t;
 
 
-typedef struct {
-	size_t off;
-	char buff[];
-} __attribute__((packed)) gpiodrv_data_t;
+struct {
+	volatile unsigned int *base;
+	volatile unsigned int *rcc;
 
-/* TODO - need interface for registering interrupts from userspace
-static int spi_irqHandler(unsigned int n, cpu_context_t *ctx, void *arg)
+	char spi_ready;
+	handle_t mutex;
+	handle_t cond;
+
+	unsigned int gpio;
+} spi_common;
+
+
+enum { cr1 = 0, cr2, sr, dr, crcpr, rxcrcr, txcrcr, i2scfgr, i2spr };
+
+
+enum { rcc_apb2enr = 8 };
+
+
+enum { GPIO_CONFIG, GPIO_INTERRUPT, GPIO_GET, GPIO_SET, GPIO_DELAY };
+
+
+enum { GPIOA = 0, GPIOB, GPIOC, GPIOD, GPIOE, GPIOF, GPIOG, GPIOH };
+
+
+static int spi_irqHandler(unsigned int n, void *arg)
 {
 	*(spi_common.base + cr2) &= ~(1 << 7);
 	spi_common.spi_ready = 1;
-	condSignal(spi_common.cond);
 
-	return 0;
+	return spi_common.cond;
 }
-*/
+
 
 static void gpio_pinSet(int port, int pin, int state)
 {
@@ -118,7 +109,7 @@ static void gpio_pinSet(int port, int pin, int state)
 }
 
 
-static void gpio_pinConfig(int port, char pin, char mode, char af, char otype, char ospeed, char pupd)
+static void gpio_pinConfig(int port, char pin, char mode, char af, char ospeed, char otype, char pupd)
 {
 	gpiomsg_t devctl;
 
@@ -236,8 +227,7 @@ int spi_init(void)
 	/* Enable SPI */
 	*(spi_common.base + cr1) |= 1 << 6;
 
-	/* TODO - need interface for registering interrupts from userspace */
-//	hal_interruptsSetHandler(spi1_irq, spi_irqHandler, NULL, NULL);
+	interrupt(16 + 35, spi_irqHandler, NULL);
 
 	gpio_pinConfig(GPIOA, 4, 1, 0, 1, 0, 0);  /* SPI PWEN */
 	gpio_pinConfig(GPIOE, 12, 1, 0, 1, 0, 0); /* SPI /CS */

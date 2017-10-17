@@ -25,7 +25,7 @@ struct {
 } flash_common;
 
 
-void flash_waitBusy(void)
+static void flash_waitBusy(void)
 {
 	unsigned char status;
 
@@ -53,7 +53,7 @@ int flash_eraseSector(unsigned int sector)
 }
 
 
-static int flash_read(unsigned int addr, unsigned char *buff, size_t bufflen)
+int flash_read(unsigned int addr, void *buff, size_t bufflen)
 {
 	if (addr > flash_common.flashsz || (addr + bufflen) > flash_common.flashsz || !bufflen)
 		return -EINVAL;
@@ -66,7 +66,7 @@ static int flash_read(unsigned int addr, unsigned char *buff, size_t bufflen)
 }
 
 
-int flash_write(unsigned int addr, unsigned char *buff, size_t bufflen)
+int flash_write(unsigned int addr, void *buff, size_t bufflen)
 {
 	size_t i;
 
@@ -79,14 +79,14 @@ int flash_write(unsigned int addr, unsigned char *buff, size_t bufflen)
 		/* AAI write mode */
 		spi_transaction(cmd_aai_write, addr, spi_address, buff, 2);
 		for (i = 2; i < bufflen; i += 2) {
-			spi_transaction(cmd_aai_write, 0, 0, &buff[i], 2);
+			spi_transaction(cmd_aai_write, 0, 0, &((unsigned char *)buff)[i], 2);
 			flash_waitBusy();
 		}
 	}
 	else {
 		/* Byte write mode */
 		for (i = 0; i < bufflen; ++i) {
-			spi_transaction(cmd_write, addr + i, spi_address, &buff[i], 1);
+			spi_transaction(cmd_write, addr + i, spi_address, &((unsigned char *)buff)[i], 1);
 			flash_waitBusy();
 		}
 	}
@@ -100,7 +100,7 @@ int flash_write(unsigned int addr, unsigned char *buff, size_t bufflen)
 int flash_regionIsBlank(unsigned int addr, size_t len)
 {
 	size_t i, step;
-	unsigned char tmp[16];
+	unsigned char tmp[32];
 
 	for (i = 0; i < len; ) {
 		step = ((len - i) > sizeof(tmp)) ? sizeof(tmp) : len - i;
