@@ -68,27 +68,33 @@ int flash_read(unsigned int addr, void *buff, size_t bufflen)
 
 int flash_write(unsigned int addr, void *buff, size_t bufflen)
 {
-	size_t i;
+	size_t i = 0;
 
 	if (addr > flash_common.flashsz || (addr + bufflen) > flash_common.flashsz || !bufflen)
 		return -EINVAL;
 
 	spi_transaction(cmd_wren, 0, 0, NULL, 0);
 
-	if (!(addr & 1) && !(bufflen & 1) && (bufflen >= 2)) {
-		/* AAI write mode */
-		spi_transaction(cmd_aai_write, addr, spi_address, buff, 2);
-		for (i = 2; i < bufflen; i += 2) {
+	if (addr & 1) {
+		spi_transaction(cmd_write, addr, spi_address, &((unsigned char *)buff)[0], 1);
+		flash_waitBusy();
+		spi_transaction(cmd_wrdi, 0, 0, NULL, 0);
+		spi_transaction(cmd_wren, 0, 0, NULL, 0);
+		++i;
+	}
+
+	if (bufflen - i >= 2) {
+		spi_transaction(cmd_aai_write, addr + i, spi_address, &((unsigned char *)buff)[i], 2);
+		for (i += 2; i < bufflen; i += 2) {
 			spi_transaction(cmd_aai_write, 0, 0, &((unsigned char *)buff)[i], 2);
 			flash_waitBusy();
 		}
+		spi_transaction(cmd_wrdi, 0, 0, NULL, 0);
+		spi_transaction(cmd_wren, 0, 0, NULL, 0);
 	}
-	else {
-		/* Byte write mode */
-		for (i = 0; i < bufflen; ++i) {
-			spi_transaction(cmd_write, addr + i, spi_address, &((unsigned char *)buff)[i], 1);
-			flash_waitBusy();
-		}
+
+	if (i > bufflen) {
+		spi_transaction(cmd_write, addr + i - 1, spi_address, &((unsigned char *)buff)[i - 1], 1);
 	}
 
 	spi_transaction(cmd_wrdi, 0, 0, NULL, 0);
