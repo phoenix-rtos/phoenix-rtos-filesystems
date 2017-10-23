@@ -322,6 +322,7 @@ void meterfs_getFilePos(file_t *f)
 			if (f->lastidx.nvalid || IS_NEXT_ID(e.id, f->lastidx)) {
 				f->lastidx = e.id;
 				f->lastoff = addr - (f->header.sector * meterfs_common.sectorsz);
+				DEBUG("Found new idx %u @ offset %u", f->lastidx.no, f->lastoff);
 			}
 			else {
 				break;
@@ -332,6 +333,8 @@ void meterfs_getFilePos(file_t *f)
 		}
 	}
 
+	DEBUG("Last: idx %u, pos %u", f->lastidx.no, f->lastoff);
+
 	/* File's empty */
 	if (f->lastidx.nvalid)
 		return;
@@ -339,20 +342,28 @@ void meterfs_getFilePos(file_t *f)
 	f->firstidx = f->lastidx;
 	f->firstoff = f->lastoff;
 
-	for (addr = f->lastoff, f->recordcnt = 1; f->recordcnt <= maxrecord; ++(f->recordcnt)) {
+	for (addr = f->lastoff + f->header.sector * meterfs_common.sectorsz, f->recordcnt = 1; f->recordcnt <= maxrecord; ++(f->recordcnt)) {
 		addr -= f->header.recordsz + sizeof(entry_t);
-		if (addr < f->header.sector * meterfs_common.sectorsz)
-			addr += f->header.sectorcnt * meterfs_common.sectorsz;
+		if (addr < f->header.sector * meterfs_common.sectorsz) {
+			/* Go to last possible offset */
+			addr = ((f->header.sectorcnt * meterfs_common.sectorsz) / (f->header.recordsz + sizeof(entry_t))) - 1;
+			addr *= f->header.recordsz + sizeof(entry_t);
+			addr += f->header.sector * meterfs_common.sectorsz;
+			DEBUG("Wrap-around, new addr %u", addr);
+		}
 
 		flash_read(addr, &e, sizeof(e));
 		if (!e.id.nvalid && (f->firstidx.nvalid || IS_NEXT_ID(f->firstidx, e.id))) {
 			f->firstidx = e.id;
-			f->lastoff = addr - (f->header.sector * meterfs_common.sectorsz);
+			f->firstoff = addr - (f->header.sector * meterfs_common.sectorsz);
+			DEBUG("Found new idx %u @ offset %u", f->firstidx.no, f->firstoff);
 		}
 		else {
 			break;
 		}
 	}
+
+	DEBUG("First: idx %u, pos %u", f->firstidx.no, f->firstoff);
 }
 
 
@@ -360,15 +371,21 @@ int meterfs_writeRecord(file_t *f, void *buff)
 {
 	/* This function assumes that f contains valid lastidx and lastoff */
 	entry_t e;
-	unsigned int offset, sector;
+	unsigned int offset, sector, maxrecord;
 
 	if (f == NULL || buff == NULL)
 		return -1;
 
 	offset = f->lastoff;
 
-	if (!f->lastidx.nvalid)
+	if (!f->lastidx.nvalid) {
 		offset += f->header.recordsz + sizeof(entry_t);
+	}
+	else {
+		f->firstidx.no = f->lastidx.no + 1;
+		f->firstidx.nvalid = 0;
+		f->firstoff = 0;
+	}
 
 	if (offset + f->header.recordsz + sizeof(entry_t) >= f->header.sectorcnt * meterfs_common.sectorsz)
 		offset = 0;
@@ -392,6 +409,16 @@ int meterfs_writeRecord(file_t *f, void *buff)
 	f->lastidx.no += 1;
 	f->lastidx.nvalid = 0;
 	f->lastoff = offset;
+
+	if (f->recordcnt < (f->header.filesz / f->header.recordsz)) {
+		++f->recordcnt;
+	}
+	else {
+		++f->firstidx.no;
+		f->firstoff += f->header.recordsz;
+		if (f->firstoff + f->header.recordsz + sizeof(entry_t) >= f->header.sectorcnt * meterfs_common.sectorsz)
+			f->firstoff = 0;
+	}
 
 	return f->header.recordsz;
 }
@@ -531,7 +558,7 @@ void meterfs_fileDump(file_t *f)
 	e = (entry_t *)buff;
 
 	printf("\nData:\n");
-	for (; addr < (f->header.sector + f->header.sectorcnt) * meterfs_common.sectorsz; addr += f->header.recordsz + sizeof(entry_t)) {
+	for (; addr + f->header.recordsz + sizeof(entry_t) < (f->header.sector + f->header.sectorcnt) * meterfs_common.sectorsz; addr += f->header.recordsz + sizeof(entry_t)) {
 		flash_read(addr, buff, f->header.recordsz + sizeof(entry_t));
 		printf("ID: %u (%s)\n", e->id.no, e->id.nvalid ? "not valid" : "valid");
 		printf("Address: 0x%p\n", addr);
@@ -617,10 +644,10 @@ int main(void)
 		memset(data, i, 32);
 		meterfs_writeRecord(&f, data);
 		meterfs_fileDump(&f);
-//		printf("Old pos: idx %u, off %u (%s)\n", f.lastidx.no, f.lastoff, f.lastidx.nvalid ? "not valid" : "valid");
-//		meterfs_getFileInfoName("test", &f.header);
-//		meterfs_getFilePos(&f);
-//		printf("New pos: idx %u, off %u (%s)\n", f.lastidx.no, f.lastoff, f.lastidx.nvalid ? "not valid" : "valid");
+		printf("Old pos: idx %u, off %u (%s)\n", f.lastidx.no, f.lastoff, f.lastidx.nvalid ? "not valid" : "valid");
+		meterfs_getFileInfoName("test", &f.header);
+		meterfs_getFilePos(&f);
+		printf("New pos: idx %u, off %u (%s)\n", f.lastidx.no, f.lastoff, f.lastidx.nvalid ? "not valid" : "valid");
 	}
 
 
