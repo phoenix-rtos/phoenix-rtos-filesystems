@@ -53,8 +53,7 @@ typedef struct {
 	size_t filesz;
 	size_t recordsz;
 	char name[8];
-	index_t curridx;
-	unsigned int offset;
+	char reserved[8];
 } __attribute__((packed)) fileheader_t;
 
 
@@ -69,6 +68,16 @@ typedef struct {
 	index_t id;
 	unsigned char data[];
 } __attribute__((packed)) entry_t;
+
+
+typedef struct {
+	fileheader_t header;
+	index_t lastidx;
+	unsigned int lastoff;
+	index_t firstidx;
+	unsigned int firstoff;
+	unsigned int recordcnt;
+} file_t;
 
 
 struct {
@@ -197,7 +206,7 @@ int meterfs_checkfs(void)
 }
 
 
-int meterfs_readFileInfo(unsigned int n, fileheader_t *f)
+int meterfs_getFileInfoPos(unsigned int n, fileheader_t *f)
 {
 	if (f == NULL || n >= meterfs_common.filecnt)
 		return -1;
@@ -208,7 +217,7 @@ int meterfs_readFileInfo(unsigned int n, fileheader_t *f)
 }
 
 
-int meterfs_getFileInfo(const char *name, fileheader_t *f)
+int meterfs_getFileInfoName(const char *name, fileheader_t *f)
 {
 	header_t header;
 	fileheader_t file;
@@ -220,7 +229,7 @@ int meterfs_getFileInfo(const char *name, fileheader_t *f)
 	flash_read(meterfs_common.hcurrAddr, &header, sizeof(header));
 
 	for (i = 0; i < header.filecnt; ++i) {
-		meterfs_readFileInfo(i, &file);
+		meterfs_getFileInfoPos(i, &file);
 		if (strcmp(name, file.name) == 0) {
 			memcpy(f, &file, sizeof(file));
 			return 0;
@@ -241,7 +250,7 @@ int meterfs_updateFileInfo(fileheader_t *f)
 		return -1;
 
 	/* Check if file exist */
-	if (meterfs_getFileInfo(f->name, &t) != 0)
+	if (meterfs_getFileInfoName(f->name, &t) != 0)
 		return -1;
 
 	/* File can not exceed prealocated sector count */
@@ -252,9 +261,6 @@ int meterfs_updateFileInfo(fileheader_t *f)
 
 	f->sector = t.sector;
 	f->sectorcnt = t.sectorcnt;
-	f->curridx.no = (unsigned int)(-1);
-	f->curridx.nvalid = 1;
-	f->offset = 0;
 
 	/* Clear file content */
 	for (i = 0; i < f->sectorcnt; ++i)
@@ -267,7 +273,7 @@ int meterfs_updateFileInfo(fileheader_t *f)
 	meterfs_eraseFileTable((headerNew == 0) ? 0 : 1);
 
 	for (i = 0, offset = sizeof(header_t); i < meterfs_common.filecnt; ++i) {
-		meterfs_readFileInfo(i, &t);
+		meterfs_getFileInfoPos(i, &t);
 		if (strcmp(f->name, t.name) == 0)
 			flash_write(headerNew + offset, f, sizeof(fileheader_t));
 		else
@@ -277,7 +283,7 @@ int meterfs_updateFileInfo(fileheader_t *f)
 	}
 
 	/* Prepare new header */
-	flash_read(meterfs_common.hcurrAddr, &h, sizeof(h));
+	flash_read(headerOld, &h, sizeof(h));
 	++h.id.no;
 
 	flash_write(headerNew, &h, sizeof(header_t));
@@ -289,63 +295,105 @@ int meterfs_updateFileInfo(fileheader_t *f)
 }
 
 
-void meterfs_getFilePos(fileheader_t *f)
+void meterfs_getFilePos(file_t *f)
 {
-	unsigned int addr;
+	unsigned int addr, endaddr, maxrecord;
 	entry_t e;
 
 	if (f == NULL)
 		return;
 
-	f->offset = 0;
-	f->curridx.no = 0;
-	f->curridx.nvalid = 0;
+	f->firstidx.no = 0;
+	f->firstidx.nvalid = 1;
+	f->lastidx.no = 0;
+	f->lastidx.nvalid = 1;
+	f->firstoff = 0;
+	f->lastoff = 0;
+	f->recordcnt = 0;
 
-	for (addr = f->sector * meterfs_common.sectorsz; addr < (f->sector + f->sectorcnt) * meterfs_common.sectorsz; addr += f->recordsz + sizeof(entry_t)) {
+	addr = f->header.sector * meterfs_common.sectorsz;
+	endaddr = addr + f->header.sectorcnt * meterfs_common.sectorsz;
+	maxrecord = f->header.filesz / f->header.recordsz;
+
+	/* Find newest record */
+	for (; addr < endaddr; addr += f->header.recordsz + sizeof(entry_t)) {
 		flash_read(addr, &e, sizeof(e));
-		if (!e.id.nvalid && (f->curridx.nvalid || IS_NEXT_ID(e.id, f->curridx))) {
-			f->curridx = e.id;
-			f->offset = addr - (f->sector * meterfs_common.sectorsz);
+		if (!e.id.nvalid) {
+			if (f->lastidx.nvalid || IS_NEXT_ID(e.id, f->lastidx)) {
+				f->lastidx = e.id;
+				f->lastoff = addr - (f->header.sector * meterfs_common.sectorsz);
+			}
+			else {
+				break;
+			}
 		}
-		else if (!f->curridx.nvalid) {
+		else if (!f->lastidx.nvalid) {
+			break;
+		}
+	}
+
+	/* File's empty */
+	if (f->lastidx.nvalid)
+		return;
+
+	f->firstidx = f->lastidx;
+	f->firstoff = f->lastoff;
+
+	for (addr = f->lastoff, f->recordcnt = 1; f->recordcnt <= maxrecord; ++(f->recordcnt)) {
+		addr -= f->header.recordsz + sizeof(entry_t);
+		if (addr < f->header.sector * meterfs_common.sectorsz)
+			addr += f->header.sectorcnt * meterfs_common.sectorsz;
+
+		flash_read(addr, &e, sizeof(e));
+		if (!e.id.nvalid && (f->firstidx.nvalid || IS_NEXT_ID(f->firstidx, e.id))) {
+			f->firstidx = e.id;
+			f->lastoff = addr - (f->header.sector * meterfs_common.sectorsz);
+		}
+		else {
 			break;
 		}
 	}
 }
 
 
-int meterfs_writeRecord(fileheader_t *f, void *buff)
+int meterfs_writeRecord(file_t *f, void *buff)
 {
-	/* This function assumes that f contains valid curridx and offset */
+	/* This function assumes that f contains valid lastidx and lastoff */
 	entry_t e;
 	unsigned int offset, sector;
 
 	if (f == NULL || buff == NULL)
 		return -1;
 
-	offset = (f->offset + f->recordsz + sizeof(entry_t) > f->sectorcnt * meterfs_common.sectorsz) ? 0 : f->offset;
+	offset = f->lastoff;
 
-	if (!f->curridx.nvalid)
-		offset += f->recordsz + sizeof(entry_t);
+	if (!f->lastidx.nvalid)
+		offset += f->header.recordsz + sizeof(entry_t);
+
+	if (offset + f->header.recordsz + sizeof(entry_t) >= f->header.sectorcnt * meterfs_common.sectorsz)
+		offset = 0;
+
+	DEBUG("lastoff %u, offset %u", f->lastoff, offset);
 
 	/* Check if we have to erase sector to write new data */
-	if (offset == 0 || (offset / meterfs_common.sectorsz) != ((offset + f->recordsz + sizeof(entry_t)) / meterfs_common.sectorsz)) {
-		sector = f->sector * meterfs_common.sectorsz + offset + f->recordsz + sizeof(entry_t);
-		sector /= meterfs_common.sectorsz;
+	if (offset == 0 || (offset / meterfs_common.sectorsz) != ((offset + f->header.recordsz + sizeof(entry_t)) / meterfs_common.sectorsz)) {
+		sector = ((offset + f->header.recordsz + sizeof(entry_t)) / meterfs_common.sectorsz) % f->header.sectorcnt;
+		sector += f->header.sector;
+		DEBUG("Erasing sector %u", sector);
 		flash_eraseSector(sector);
 	}
 
-	e.id.no = f->curridx.no + 1;
+	e.id.no = f->lastidx.no + 1;
 	e.id.nvalid = 0;
 
-	flash_write(f->sector * meterfs_common.sectorsz + offset + sizeof(entry_t), buff, f->recordsz);
-	flash_write(f->sector * meterfs_common.sectorsz + offset, &e, sizeof(entry_t));
+	flash_write(f->header.sector * meterfs_common.sectorsz + offset + sizeof(entry_t), buff, f->header.recordsz);
+	flash_write(f->header.sector * meterfs_common.sectorsz + offset, &e, sizeof(entry_t));
 
-	f->curridx.no += 1;
-	f->curridx.nvalid = 0;
-	f->offset = offset;
+	f->lastidx.no += 1;
+	f->lastidx.nvalid = 0;
+	f->lastoff = offset;
 
-	return f->recordsz;
+	return f->header.recordsz;
 }
 
 
@@ -387,10 +435,6 @@ int meterfs_alocateFile(fileheader_t *f)
 		addr = meterfs_common.h1Addr << 1;
 		f->sector = addr / meterfs_common.sectorsz;
 	}
-
-	f->curridx.no = (unsigned int)(-1);
-	f->curridx.nvalid = 1;
-	f->offset = 0;
 
 	/* Prepare data space */
 	for (i = 0; i < sectors; ++i) {
@@ -460,44 +504,38 @@ void meterfs_hexdump(const unsigned char *buff, size_t bufflen)
 }
 
 
-void meterfs_fileDump(const char *name)
+void meterfs_fileDump(file_t *f)
 {
-	fileheader_t f;
-	unsigned int i, addr;
+	unsigned int addr;
 //	unsigned char *buff;
 	unsigned char buff[36];
 	entry_t *e;
 
-	printf("Dumping %s\n", name);
+	printf("Dumping %s\n", f->header.name);
 
-	if (meterfs_getFileInfo(name, &f)) {
-		printf("File not found\n");
-		return;
-	}
-
-	addr = f.offset + f.sector * meterfs_common.sectorsz;
+	addr = f->header.sector * meterfs_common.sectorsz;
 
 	printf("File info:\n");
-	printf("Name: %s\n", f.name);
-	printf("Sector: %u\n", f.sector);
-	printf("Sector cnt: %u\n", f.sectorcnt);
-	printf("File size: %u\n", f.filesz);
-	printf("Record size: %u\n", f.recordsz);
-	printf("Current index: %u, (%s)\n", f.curridx.no, f.curridx.nvalid ? "not valid" : "valid");
-	printf("Current offset: %u\n", f.offset);
+	printf("Name: %s\n", f->header.name);
+	printf("Sector: %u\n", f->header.sector);
+	printf("Sector cnt: %u\n", f->header.sectorcnt);
+	printf("File size: %u\n", f->header.filesz);
+	printf("Record size: %u\n", f->header.recordsz);
+	printf("Last index: %u, (%s)\n", f->lastidx.no, f->lastidx.nvalid ? "not valid" : "valid");
+	printf("Last offset: %u\n", f->lastoff);
+	printf("First index: %u, (%s)\n", f->firstidx.no, f->firstidx.nvalid ? "not valid" : "valid");
+	printf("First offset: %u\n", f->firstoff);
 	printf("File begin: 0x%p\n", addr);
 
 //	buff = malloc(f.recordsz + sizeof(entry_t));
 	e = (entry_t *)buff;
 
 	printf("\nData:\n");
-	for (; addr < (f.sector + f.sectorcnt) * meterfs_common.sectorsz; addr += f.recordsz + sizeof(entry_t)) {
-		flash_read(addr, buff, f.recordsz + sizeof(entry_t));
+	for (; addr < (f->header.sector + f->header.sectorcnt) * meterfs_common.sectorsz; addr += f->header.recordsz + sizeof(entry_t)) {
+		flash_read(addr, buff, f->header.recordsz + sizeof(entry_t));
 		printf("ID: %u (%s)\n", e->id.no, e->id.nvalid ? "not valid" : "valid");
-		if (e->id.nvalid)
-			break;
 		printf("Address: 0x%p\n", addr);
-		meterfs_hexdump(e->data, f.recordsz);
+		meterfs_hexdump(e->data, f->header.recordsz);
 		printf("\n");
 	}
 }
@@ -524,7 +562,7 @@ int main(void)
 
 #if 1
 	header_t h;
-	fileheader_t f;
+	file_t f;
 	unsigned char data[32];
 
 	keepidle(1);
@@ -547,16 +585,24 @@ int main(void)
 	DEBUG("Adding file 'test'");
 	printf("Curr header 0x%p\n", meterfs_common.hcurrAddr);
 
-	strcpy(f.name, "test");
-	f.filesz = 1024;
-	f.recordsz = 32;
-	f.sectorcnt = 2;
-	meterfs_alocateFile(&f);
+	strcpy(f.header.name, "test");
+	f.header.filesz = 1024;
+	f.header.recordsz = 32;
+	f.header.sectorcnt = 2;
+	f.firstidx.no = (unsigned int)(-1);
+	f.firstidx.nvalid = 1;
+	f.firstoff = 0;
+	f.lastidx.no = 0;
+	f.lastidx.nvalid = 1;
+	f.lastoff = 0;
+	f.recordcnt = 0;
+
+	meterfs_alocateFile(&f.header);
 
 	flash_read(meterfs_common.hcurrAddr, &h, sizeof(h));
 	printf("h.fcnt %u, h.id %u\n", h.filecnt, h.id);
 
-	meterfs_fileDump("test");
+	meterfs_fileDump(&f);
 	printf("Curr header 0x%p\n", meterfs_common.hcurrAddr);
 
 	DEBUG("Writing 225 records");
@@ -570,11 +616,11 @@ int main(void)
 	for (int i = 0; i < 100; ++i) {
 		memset(data, i, 32);
 		meterfs_writeRecord(&f, data);
-		meterfs_fileDump("test");
-		printf("Old pos: idx %u, off %u (%s)\n", f.curridx.no, f.offset, f.curridx.nvalid ? "not valid" : "valid");
-		meterfs_getFileInfo("test", &f);
-		meterfs_getFilePos(&f);
-		printf("New pos: idx %u, off %u (%s)\n", f.curridx.no, f.offset, f.curridx.nvalid ? "not valid" : "valid");
+		meterfs_fileDump(&f);
+//		printf("Old pos: idx %u, off %u (%s)\n", f.lastidx.no, f.lastoff, f.lastidx.nvalid ? "not valid" : "valid");
+//		meterfs_getFileInfoName("test", &f.header);
+//		meterfs_getFilePos(&f);
+//		printf("New pos: idx %u, off %u (%s)\n", f.lastidx.no, f.lastoff, f.lastidx.nvalid ? "not valid" : "valid");
 	}
 
 

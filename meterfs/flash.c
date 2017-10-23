@@ -16,6 +16,7 @@
 
 #include <stddef.h>
 #include <errno.h>
+#include <unistd.h>
 #include "spi.h"
 
 
@@ -46,6 +47,7 @@ int flash_eraseSector(unsigned int sector)
 
 	spi_transaction(cmd_wren, 0, 0, NULL, 0);
 	spi_transaction(cmd_sector_erase, addr, spi_address, NULL, 0);
+	usleep(25000);
 	flash_waitBusy();
 	spi_transaction(cmd_wrdi, 0, 0, NULL, 0);
 
