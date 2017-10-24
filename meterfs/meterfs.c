@@ -450,9 +450,9 @@ int meterfs_alocateFile(fileheader_t *f)
 		return -ENOMEM;
 
 	if (h.filecnt != 0) {
-		flash_read(meterfs_common.hcurrAddr + h.filecnt * sizeof(fileheader_t), &t, sizeof(t));
+		flash_read(meterfs_common.hcurrAddr + sizeof(header_t) + (h.filecnt - 1) * sizeof(fileheader_t), &t, sizeof(t));
 
-		f->sector = t.sector + SECTORS(&t, meterfs_common.sectorsz);
+		f->sector = t.sector + t.sectorcnt;
 		addr = f->sector * meterfs_common.sectorsz;
 
 		if (addr + (sectors + meterfs_common.sectorsz) >= meterfs_common.flashsz)
@@ -632,6 +632,8 @@ int main(void)
 	meterfs_fileDump(&f);
 	printf("Curr header 0x%p\n", meterfs_common.hcurrAddr);
 
+#if 0
+
 	DEBUG("Writing 225 records");
 	for (int i = 0; i < 225; ++i) {
 		memset(data, i, 32);
@@ -668,7 +670,105 @@ int main(void)
 		meterfs_getFilePos(&f);
 		printf("New pos: idx %u, off %u (%s)\n", f.lastidx.no, f.lastoff, f.lastidx.nvalid ? "not valid" : "valid");
 	}
+#else
+	DEBUG("Writing 23 records");
+	for (int i = 0; i < 23; ++i) {
+		memset(data, i, 32);
+		meterfs_writeRecord(&f, data);
+	}
+	DEBUG("Done.");
 
+	DEBUG("Adding file 'test1'");
+	printf("Curr header 0x%p\n", meterfs_common.hcurrAddr);
+
+	strcpy(f.header.name, "test1");
+	f.header.filesz = 512;
+	f.header.recordsz = 16;
+	f.header.sectorcnt = 2;
+	f.firstidx.no = (unsigned int)(-1);
+	f.firstidx.nvalid = 1;
+	f.firstoff = 0;
+	f.lastidx.no = 0;
+	f.lastidx.nvalid = 1;
+	f.lastoff = 0;
+	f.recordcnt = 0;
+
+	meterfs_alocateFile(&f.header);
+
+	DEBUG("Writing 23 records");
+	for (int i = 0; i < 23; ++i) {
+		memset(data, i, 32);
+		meterfs_writeRecord(&f, data);
+	}
+	DEBUG("Done.");
+
+	DEBUG("Adding file 'test2'");
+	printf("Curr header 0x%p\n", meterfs_common.hcurrAddr);
+
+	strcpy(f.header.name, "test1");
+	f.header.filesz = 256;
+	f.header.recordsz = 16;
+	f.header.sectorcnt = 2;
+	f.firstidx.no = (unsigned int)(-1);
+	f.firstidx.nvalid = 1;
+	f.firstoff = 0;
+	f.lastidx.no = 0;
+	f.lastidx.nvalid = 1;
+	f.lastoff = 0;
+	f.recordcnt = 0;
+
+	meterfs_alocateFile(&f.header);
+
+	DEBUG("Writing 23 records");
+	for (int i = 0; i < 23; ++i) {
+		memset(data, i, 32);
+		meterfs_writeRecord(&f, data);
+	}
+	DEBUG("Done.");
+
+	DEBUG("Dumping files...");
+
+	meterfs_getFileInfoName("test", &f.header);
+	meterfs_getFilePos(&f);
+	meterfs_fileDump(&f);
+
+	meterfs_getFileInfoName("test1", &f.header);
+	meterfs_getFilePos(&f);
+	meterfs_fileDump(&f);
+
+	meterfs_getFileInfoName("test2", &f.header);
+	meterfs_getFilePos(&f);
+	meterfs_fileDump(&f);
+
+	DEBUG("Recreating fs data...");
+
+	meterfs_common.filecnt = 0xbabababa;
+	meterfs_common.h1Addr = 0xbabababa;
+	meterfs_common.hcurrAddr = 0xbabababa;
+
+	meterfs_checkfs();
+
+	printf("Filecnt: %u\n", meterfs_common.filecnt);
+	printf("h1Addr: %u\n", meterfs_common.h1Addr);
+	printf("hcurrAddr: %u\n", meterfs_common.hcurrAddr);
+
+	DEBUG("Dumping files...");
+
+	meterfs_getFileInfoName("test", &f.header);
+	meterfs_getFilePos(&f);
+	meterfs_fileDump(&f);
+
+	meterfs_getFileInfoName("test1", &f.header);
+	meterfs_getFilePos(&f);
+	meterfs_fileDump(&f);
+
+	meterfs_getFileInfoName("test2", &f.header);
+	meterfs_getFilePos(&f);
+	meterfs_fileDump(&f);
+
+
+
+#endif
 
 
 #endif
