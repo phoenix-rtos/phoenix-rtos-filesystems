@@ -637,7 +637,26 @@ int main(void)
 		memset(data, i, 32);
 		meterfs_writeRecord(&f, data);
 	}
+	DEBUG("Done.");
 
+	meterfs_fileDump(&f);
+
+	DEBUG("Changing record size to 23");
+	f.header.recordsz = 23;
+	meterfs_updateFileInfo(&f.header);
+
+	memset(&f, 0, sizeof(file_t));
+
+	meterfs_getFileInfoName("test", &f.header);
+	meterfs_getFilePos(&f);
+
+	meterfs_fileDump(&f);
+
+	DEBUG("Writing 225 records");
+	for (int i = 0; i < 225; ++i) {
+		memset(data, i, 32);
+		meterfs_writeRecord(&f, data);
+	}
 	DEBUG("Done.");
 
 	for (int i = 0; i < 100; ++i) {
