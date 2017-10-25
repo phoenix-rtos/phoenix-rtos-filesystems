@@ -126,7 +126,7 @@ int flash_regionIsBlank(unsigned int addr, size_t len)
 
 void flash_init(size_t flashsz, size_t sectorsz)
 {
-	unsigned char t;
+	unsigned char t = 0;
 
 	flash_common.flashsz = flashsz;
 	flash_common.sectorsz = sectorsz;
