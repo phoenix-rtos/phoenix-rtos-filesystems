@@ -376,7 +376,7 @@ int meterfs_writeRecord(file_t *f, void *buff)
 {
 	/* This function assumes that f contains valid lastidx and lastoff */
 	entry_t e;
-	unsigned int offset, sector, maxrecord;
+	unsigned int offset, sector;
 
 	if (f == NULL || buff == NULL)
 		return -1;
@@ -431,16 +431,38 @@ int meterfs_writeRecord(file_t *f, void *buff)
 
 int meterfs_readRecord(file_t *f, void *buff, unsigned int idx)
 {
-	unsigned int pos;
+	int res;
+	entry_t e;
+	unsigned int addr;
 
 	/* This function assumes that f contains valid firstidx and firstoff */
-	if (f->firstidx.nvalid) {
+	if (f == NULL || buff == NULL)
+		return -EINVAL;
+
+	if (f->firstidx.nvalid || idx > f->recordcnt)
 		return -ENOENT;
-	}
 
+	/* Find record position in flash */
+	addr = f->firstoff + idx * (f->header.recordsz + sizeof(entry_t));
+	addr = addr % (f->header.sectorcnt * meterfs_common.sectorsz);
 
+	if ((addr + f->header.recordsz + sizeof(entry_t)) > (f->header.sectorcnt * meterfs_common.sectorsz))
+		addr = 0;
 
-	return -1;
+	addr += f->header.sector * meterfs_common.sectorsz;
+
+	/* Check if entry's valid */
+	if ((res = flash_read(addr, &e, sizeof(e))) != EOK)
+		return res;
+
+	if (e.id.nvalid)
+		return -ENOENT;
+
+	/* Read data */
+	if ((res = flash_read(addr + sizeof(entry_t), buff, f->header.recordsz)) != EOK)
+		return res;
+
+	return f->header.recordsz;
 }
 
 #ifndef NDEBUG
@@ -548,10 +570,9 @@ void meterfs_hexdump(const unsigned char *buff, size_t bufflen)
 
 void meterfs_fileDump(file_t *f)
 {
+	int i;
 	unsigned int addr;
 	unsigned char *buff;
-//	unsigned char buff[36];
-	entry_t *e;
 
 	printf("Dumping %s\n", f->header.name);
 
@@ -568,17 +589,18 @@ void meterfs_fileDump(file_t *f)
 	printf("First index: %u, (%s)\n", f->firstidx.no, f->firstidx.nvalid ? "not valid" : "valid");
 	printf("First offset: %u\n", f->firstoff);
 	printf("File begin: 0x%p\n", addr);
+	printf("Record count: %u\n", f->recordcnt);
 
-	buff = malloc(f->header.recordsz + sizeof(entry_t));
-	e = (entry_t *)buff;
+	buff = malloc(f->header.recordsz);
 
 	printf("\nData:\n");
-	for (; addr + f->header.recordsz + sizeof(entry_t) < (f->header.sector + f->header.sectorcnt) * meterfs_common.sectorsz; addr += f->header.recordsz + sizeof(entry_t)) {
-		flash_read(addr, buff, f->header.recordsz + sizeof(entry_t));
-		printf("ID: %u (%s)\n", e->id.no, e->id.nvalid ? "not valid" : "valid");
-		printf("Address: 0x%p\n", addr);
-		meterfs_hexdump(e->data, f->header.recordsz);
-		printf("\n");
+	for (i = 0; i < f->recordcnt; ++i) {
+		if (meterfs_readRecord(f, buff, i) < 0) {
+			printf("Could not read record %d!\n", i);
+			break;
+		}
+		printf("Record %d:\n", i);
+		meterfs_hexdump(buff, f->header.recordsz);
 	}
 
 	free(buff);
