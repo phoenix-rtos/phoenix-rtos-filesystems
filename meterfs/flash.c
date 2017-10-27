@@ -36,6 +36,16 @@ static void flash_waitBusy(void)
 }
 
 
+void flash_chipErase(void)
+{
+	spi_transaction(cmd_wren, 0, 0, NULL, 0);
+	spi_transaction(cmd_chip_erase, 0, 0, NULL, 0);
+	usleep(50000);
+	flash_waitBusy();
+	spi_transaction(cmd_wrdi, 0, 0, NULL, 0);
+}
+
+
 int flash_eraseSector(unsigned int sector)
 {
 	unsigned int addr;
@@ -103,24 +113,6 @@ int flash_write(unsigned int addr, void *buff, size_t bufflen)
 	spi_transaction(cmd_wrdi, 0, 0, NULL, 0);
 
 	return EOK;
-}
-
-
-int flash_regionIsBlank(unsigned int addr, size_t len)
-{
-	size_t i, step;
-	unsigned char tmp[32];
-
-	for (i = 0; i < len; ) {
-		step = ((len - i) > sizeof(tmp)) ? sizeof(tmp) : len - i;
-		flash_read(addr + i, tmp, step);
-		while (step--) {
-			if (tmp[i++] != (unsigned char)0xff)
-				return 0;
-		}
-	}
-
-	return 1;
 }
 
 
