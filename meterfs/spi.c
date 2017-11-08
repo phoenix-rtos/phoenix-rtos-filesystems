@@ -152,7 +152,7 @@ static unsigned char spi_readwrite(unsigned char txd)
 	*(spi_common.base + cr2) |= 1 << 7;
 
 	while (!spi_common.spi_ready)
-		condWait(spi_common.cond, spi_common.mutex, 0);
+		condWait(spi_common.cond, spi_common.mutex, 1);
 
 	rxd = *(spi_common.base + dr);
 	mutexUnlock(spi_common.mutex);
@@ -227,7 +227,7 @@ int spi_init(void)
 	/* Enable SPI */
 	*(spi_common.base + cr1) |= 1 << 6;
 
-	interrupt(16 + 35, spi_irqHandler, NULL);
+	interrupt(16 + 35, spi_irqHandler, NULL, spi_common.cond);
 
 	gpio_pinConfig(GPIOA, 4, 1, 0, 1, 0, 0);  /* SPI PWEN */
 	gpio_pinConfig(GPIOE, 12, 1, 0, 1, 0, 0); /* SPI /CS */
