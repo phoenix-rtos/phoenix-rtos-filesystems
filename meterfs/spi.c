@@ -67,7 +67,7 @@ struct {
 	volatile unsigned int *base;
 	volatile unsigned int *rcc;
 
-	char spi_ready;
+	volatile char spi_ready;
 	handle_t mutex;
 	handle_t cond;
 
@@ -152,7 +152,7 @@ static unsigned char spi_readwrite(unsigned char txd)
 	*(spi_common.base + cr2) |= 1 << 7;
 
 	while (!spi_common.spi_ready)
-		condWait(spi_common.cond, spi_common.mutex, 1);
+		condWait(spi_common.cond, spi_common.mutex, 0);
 
 	rxd = *(spi_common.base + dr);
 	mutexUnlock(spi_common.mutex);
