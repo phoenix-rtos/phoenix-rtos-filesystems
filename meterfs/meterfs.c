@@ -25,10 +25,10 @@
 #include "spi.h"
 #include "flash.h"
 
+#define MAX_FILE_CNT            255
 #define TOTAL_SIZE(f)           (((f)->filesz * ((f)->recordsz + sizeof(entry_t))) / (f)->recordsz)
 #define SECTORS(f, sectorsz)    ((TOTAL_SIZE(f) / sectorsz) + 1)
 #define IS_NEXT_ID(next, prev)  (((unsigned int)next.no == (((unsigned int)prev.no + 1) & 0x7fffffff)) || (next.no == prev.no))
-#define MAX_FILE_CNT(sectorsz)  ((sectorsz - sizeof(header_t)) / sizeof(fileheader_t))
 #define FATAL(fmt, ...) \
 	do { \
 		printf("meterfs: FATAL: " fmt "\n", ##__VA_ARGS__); \
@@ -106,11 +106,9 @@ void meterfs_eraseFileTable(unsigned int n)
 		return;
 
 	sector = (n == 0) ? 0 : meterfs_common.h1Addr / meterfs_common.sectorsz;
-	sectorcnt = sizeof(header_t) + (meterfs_common.filecnt * sizeof(fileheader_t));
+	sectorcnt = sizeof(header_t) + MAX_FILE_CNT * sizeof(fileheader_t);
+	sectorcnt += meterfs_common.sectorsz - 1;
 	sectorcnt /= meterfs_common.sectorsz;
-
-	if (!sectorcnt)
-		sectorcnt = 1;
 
 	for (i = 0; i < sectorcnt; ++i)
 		flash_eraseSector(sector + i);
@@ -132,7 +130,7 @@ void meterfs_checkfs(void)
 	}
 
 	/* Check next header */
-	meterfs_common.h1Addr = sizeof(header_t) + MAX_FILE_CNT(meterfs_common.sectorsz) * sizeof(fileheader_t);
+	meterfs_common.h1Addr = sizeof(header_t) + MAX_FILE_CNT * sizeof(fileheader_t);
 
 	flash_read(meterfs_common.h1Addr, &h, sizeof(h));
 
@@ -474,7 +472,7 @@ int meterfs_alocateFile(fileheader_t *f)
 
 	flash_read(meterfs_common.hcurrAddr, &h, sizeof(h));
 
-	if (h.filecnt >= MAX_FILE_CNT(meterfs_common.sectorsz))
+	if (h.filecnt >= MAX_FILE_CNT)
 		return -ENOMEM;
 
 	/* Find free sectors */
