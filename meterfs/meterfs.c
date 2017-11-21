@@ -27,7 +27,7 @@
 
 #define MAX_FILE_CNT            255
 #define TOTAL_SIZE(f)           (((f)->filesz * ((f)->recordsz + sizeof(entry_t))) / (f)->recordsz)
-#define SECTORS(f, sectorsz)    ((TOTAL_SIZE(f) + meterfs_common.sectorsz - 1) / sectorsz)
+#define SECTORS(f, sectorsz)    (((TOTAL_SIZE(f) + sectorsz - 1) / sectorsz) + 1)
 #define IS_NEXT_ID(next, prev)  (((unsigned int)next.no == (((unsigned int)prev.no + 1) & 0x7fffffff)) || (next.no == prev.no))
 #define FATAL(fmt, ...) \
 	do { \
