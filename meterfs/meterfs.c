@@ -27,7 +27,7 @@
 
 #define MAX_FILE_CNT            255
 #define TOTAL_SIZE(f)           (((f)->filesz * ((f)->recordsz + sizeof(entry_t))) / (f)->recordsz)
-#define SECTORS(f, sectorsz)    ((TOTAL_SIZE(f) / sectorsz) + 1)
+#define SECTORS(f, sectorsz)    ((TOTAL_SIZE(f) + meterfs_common.sectorsz - 1) / sectorsz)
 #define IS_NEXT_ID(next, prev)  (((unsigned int)next.no == (((unsigned int)prev.no + 1) & 0x7fffffff)) || (next.no == prev.no))
 #define FATAL(fmt, ...) \
 	do { \
@@ -86,6 +86,7 @@ typedef struct {
 
 
 static const unsigned char magic[4] = { 0xaa, 0x41, 0x4b, 0x55 };
+
 
 struct {
 	unsigned int port;
@@ -193,21 +194,10 @@ void meterfs_checkfs(void)
 }
 
 
-int meterfs_getFileInfoPos(unsigned int n, fileheader_t *f)
-{
-	if (f == NULL || n >= meterfs_common.filecnt)
-		return -EINVAL;
-
-	flash_read(meterfs_common.hcurrAddr + sizeof(header_t) + (n * sizeof(fileheader_t)), f, sizeof(fileheader_t));
-
-	return EOK;
-}
-
-
 int meterfs_getFileInfoName(const char *name, fileheader_t *f)
 {
 	header_t header;
-	fileheader_t file;
+	fileheader_t t;
 	size_t i;
 
 	if (name == NULL || f == NULL)
@@ -216,9 +206,9 @@ int meterfs_getFileInfoName(const char *name, fileheader_t *f)
 	flash_read(meterfs_common.hcurrAddr, &header, sizeof(header));
 
 	for (i = 0; i < header.filecnt; ++i) {
-		meterfs_getFileInfoPos(i, &file);
-		if (strncmp(name, file.name, sizeof(f->name)) == 0) {
-			memcpy(f, &file, sizeof(file));
+		flash_read(meterfs_common.hcurrAddr + sizeof(header_t) + (i * sizeof(fileheader_t)), &t, sizeof(fileheader_t));
+		if (strncmp(name, t.name, sizeof(f->name)) == 0) {
+			memcpy(f, &t, sizeof(t));
 			return EOK;
 		}
 	}
@@ -259,7 +249,7 @@ int meterfs_updateFileInfo(fileheader_t *f)
 	meterfs_eraseFileTable((headerNew == 0) ? 0 : 1);
 
 	for (i = 0; i < meterfs_common.filecnt; ++i) {
-		meterfs_getFileInfoPos(i, &u.t);
+		flash_read(meterfs_common.hcurrAddr + sizeof(header_t) + (i * sizeof(fileheader_t)), f, sizeof(fileheader_t));
 		if (strcmp(f->name, u.t.name) == 0)
 			flash_write(headerNew + sizeof(header_t) + i * sizeof(fileheader_t), f, sizeof(fileheader_t));
 		else
