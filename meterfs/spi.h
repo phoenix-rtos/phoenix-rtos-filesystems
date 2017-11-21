@@ -28,7 +28,7 @@ enum { spi_read = 0x1, spi_address = 0x2, spi_dummy = 0x4 };
 extern void spi_transaction(unsigned char cmd, unsigned int addr, unsigned char flags, unsigned char *buff, size_t bufflen);
 
 
-extern int spi_init(void);
+extern void spi_init(void);
 
 
 #endif

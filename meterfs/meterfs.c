@@ -297,7 +297,7 @@ void meterfs_getFilePos(file_t *f)
 
 	baddr = f->header.sector * meterfs_common.sectorsz;
 	eaddr = baddr + f->header.sectorcnt * meterfs_common.sectorsz;
-	totalrecord = (eaddr - baddr) / (f->header.recordsz + sizeof(entry_t)) - 1;
+	totalrecord = (eaddr - baddr) / (f->header.recordsz + sizeof(entry_t));
 	maxrecord = f->header.filesz / f->header.recordsz - 1;
 	diff = 0;
 
@@ -308,13 +308,13 @@ void meterfs_getFilePos(file_t *f)
 		f->lastoff = 0;
 	}
 	else {
-		for (interval = totalrecord; interval > 0 && f->lastidx.nvalid; interval >>= 1) {
-			for (i = interval; i <= totalrecord; i += (interval << 1)) {
+		for (interval = totalrecord - 1; interval > 0 && f->lastidx.nvalid; interval >>= 1) {
+			for (i = interval; i <= totalrecord - 1; i += (interval << 1)) {
 				offset = i * (f->header.recordsz + sizeof(entry_t));
 				flash_read(baddr + offset, &e, sizeof(e));
 				if (!e.id.nvalid) {
 					f->lastidx = e.id;
-					f->lastoff = baddr + offset;
+					f->lastoff = offset;
 					break;
 				}
 			}
@@ -329,8 +329,8 @@ void meterfs_getFilePos(file_t *f)
 		return;
 
 	/* Find newest record */
-	for (interval = totalrecord; interval != 0; ) {
-		idx = ((f->lastoff / (f->header.recordsz + sizeof(entry_t))) + interval) % (totalrecord + 1);
+	for (interval = totalrecord - 1; interval != 0; ) {
+		idx = ((f->lastoff / (f->header.recordsz + sizeof(entry_t))) + interval) % totalrecord;
 		offset = idx * (f->header.recordsz + sizeof(entry_t));
 		flash_read(baddr + offset, &e, sizeof(e));
 		if (!e.id.nvalid && ((f->lastidx.no + interval) % (1 << 31)) == e.id.no) {
@@ -355,9 +355,9 @@ void meterfs_getFilePos(file_t *f)
 	for (interval = diff; interval != 0 && diff != 0; ) {
 		idx = (int)(f->firstoff / (f->header.recordsz + sizeof(entry_t))) + interval;
 		if (idx < 0)
-			idx = totalrecord - idx;
+			idx += totalrecord;
 		else
-			idx = idx % (totalrecord + 1);
+			idx %= totalrecord;
 		offset = idx * (f->header.recordsz + sizeof(entry_t));
 		flash_read(baddr + offset, &e, sizeof(e));
 		if (!e.id.nvalid && ((f->firstidx.no + interval) % (1 << 31)) == e.id.no) {
@@ -712,7 +712,7 @@ void meterfs_test(void)
 
 	strcpy(f.header.name, "bigone");
 	f.header.filesz = 2048;
-	f.header.recordsz = 124;
+	f.header.recordsz = 125;
 	f.header.sectorcnt = 2;
 	f.firstidx.no = (unsigned int)(-1);
 	f.firstidx.nvalid = 1;
@@ -817,8 +817,7 @@ int main(void)
 	meterfs_common.sectorsz = 4 * 1024;
 	meterfs_common.flashsz = 2 * 1024 * 1024;
 
-	if (spi_init() != EOK)
-		FATAL("Could not initialize SPI interface");
+	spi_init();
 
 	flash_init(meterfs_common.flashsz, meterfs_common.sectorsz);
 flash_chipErase();
