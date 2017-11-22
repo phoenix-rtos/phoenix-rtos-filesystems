@@ -25,7 +25,7 @@
 int (*flash_write)(unsigned int, void *, size_t);
 
 
-static const unsigned char chips[2][3] = { { 0xbf, 0x25, 0x41 }, { 0x1f, 0x47, 0x01 } };
+static const unsigned char chips[3][3] = { { 0xbf, 0x25, 0x41 }, { 0x1f, 0x47, 0x01 }, { 0xc2, 0x20, 0x16 } };
 
 
 static void _flash_waitBusy(void)
@@ -205,6 +205,12 @@ void flash_detect(size_t *flashsz, size_t *sectorsz)
 	}
 	else if (memcmp(jedec, chips[1], 3) == 0) {
 		printf("meterfs: Detected AT25DF321A\n");
+		flash_write = flash_writePage;
+		(*flashsz) = 4 * 1024 * 1024;
+		(*sectorsz) = 4 * 1024;
+	}
+	else if (memcmp(jedec, chips[2], 3) == 0) {
+		printf("meterfs: Detected MX25L3206E\n");
 		flash_write = flash_writePage;
 		(*flashsz) = 4 * 1024 * 1024;
 		(*sectorsz) = 4 * 1024;
