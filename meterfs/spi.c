@@ -234,5 +234,6 @@ void spi_init(void)
 	gpio_pinConfig(GPIOE, 14, 2, 5, 1, 0, 0); /* SPI MISO */
 	gpio_pinConfig(GPIOE, 15, 2, 5, 1, 0, 0); /* SPI MOSI */
 
+	spi_csControl(0);
 	spi_powerCtrl(0);
 }
