@@ -217,10 +217,6 @@ void flash_detect(size_t *flashsz, size_t *sectorsz)
 	}
 
 	printf("meterfs: Capacity 0x%04x, sector %d\n", *flashsz, *sectorsz);
-
-	flash_write = flash_writeAAI;
-	(*flashsz) = 2 * 1024 * 1024;
-	(*sectorsz) = 4 * 1024;
 }
 
 
