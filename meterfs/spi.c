@@ -126,16 +126,18 @@ static void gpio_pinConfig(int port, char pin, char mode, char af, char ospeed, 
 }
 
 
-static void spi_powerCtrl(int state)
+void spi_csControl(int state)
 {
-	if (!state)
-		gpio_pinSet(GPIOE, 12, 1);
+	gpio_pinSet(GPIOE, 12, !state);
+}
 
+
+void spi_powerCtrl(int state)
+{
 	gpio_pinSet(GPIOA, 4, state);
 
 	if (state) {
-		usleep(1000);
-		gpio_pinSet(GPIOE, 12, 0);
+		usleep(5000);
 	}
 }
 
@@ -152,7 +154,7 @@ static unsigned char spi_readwrite(unsigned char txd)
 	*(spi_common.base + cr2) |= 1 << 7;
 
 	while (!spi_common.spi_ready)
-		condWait(spi_common.cond, spi_common.mutex, 0);
+		condWait(spi_common.cond, spi_common.mutex, 1);
 
 	rxd = *(spi_common.base + dr);
 	mutexUnlock(spi_common.mutex);
@@ -165,8 +167,7 @@ void spi_transaction(unsigned char cmd, unsigned int addr, unsigned char flags, 
 {
 	int i;
 
-	keepidle(1);
-	spi_powerCtrl(1);
+	spi_csControl(1);
 
 	spi_readwrite(cmd);
 
@@ -189,8 +190,7 @@ void spi_transaction(unsigned char cmd, unsigned int addr, unsigned char flags, 
 			spi_readwrite(buff[i]);
 	}
 
-	spi_powerCtrl(0);
-	keepidle(0);
+	spi_csControl(0);
 }
 
 
@@ -235,6 +235,4 @@ void spi_init(void)
 	gpio_pinConfig(GPIOE, 15, 2, 5, 1, 0, 0); /* SPI MOSI */
 
 	spi_powerCtrl(0);
-
-	return 0;
 }

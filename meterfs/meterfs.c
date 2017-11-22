@@ -100,19 +100,19 @@ struct {
 
 void meterfs_eraseFileTable(unsigned int n)
 {
-	unsigned int sector, i;
+	unsigned int addr, i;
 	size_t sectorcnt;
 
 	if (n != 0 && n != 1)
 		return;
 
-	sector = (n == 0) ? 0 : meterfs_common.h1Addr / meterfs_common.sectorsz;
+	addr = (n == 0) ? 0 : meterfs_common.h1Addr / meterfs_common.sectorsz;
 	sectorcnt = sizeof(header_t) + MAX_FILE_CNT * sizeof(fileheader_t);
 	sectorcnt += meterfs_common.sectorsz - 1;
 	sectorcnt /= meterfs_common.sectorsz;
 
 	for (i = 0; i < sectorcnt; ++i)
-		flash_eraseSector(sector + i);
+		flash_eraseSector(addr + i * meterfs_common.sectorsz);
 }
 
 
@@ -154,10 +154,18 @@ void meterfs_checkfs(void)
 	}
 
 	/* Select active header and files table */
-	if (!valid1 || ((!h.id.nvalid && !id.nvalid) && IS_NEXT_ID(id, h.id)))
-		meterfs_common.hcurrAddr = 0;
-	else
+	if (valid1) {
 		meterfs_common.hcurrAddr = meterfs_common.h1Addr;
+	}
+	else if (valid0) {
+		meterfs_common.hcurrAddr = 0;
+	}
+	else {
+		if (IS_NEXT_ID(id, h.id))
+			meterfs_common.hcurrAddr = meterfs_common.h1Addr;
+		else
+			meterfs_common.hcurrAddr = 0;
+	}
 
 	flash_read(meterfs_common.hcurrAddr, &h, sizeof(h));
 	meterfs_common.filecnt = h.filecnt;
@@ -241,7 +249,7 @@ int meterfs_updateFileInfo(fileheader_t *f)
 
 	/* Clear file content */
 	for (i = 0; i < f->sectorcnt; ++i)
-		flash_eraseSector(f->sector + i);
+		flash_eraseSector((f->sector + i) * meterfs_common.sectorsz);
 
 	headerNew = (meterfs_common.hcurrAddr == meterfs_common.h1Addr) ? 0 : meterfs_common.h1Addr;
 
@@ -382,7 +390,7 @@ int meterfs_writeRecord(file_t *f, void *buff)
 
 	/* Check if we have to erase sector to write new data */
 	if (offset == 0 || (offset / meterfs_common.sectorsz) != ((offset + f->header.recordsz + sizeof(entry_t)) / meterfs_common.sectorsz))
-		flash_eraseSector(f->header.sector + (offset + f->header.recordsz + sizeof(entry_t)) / meterfs_common.sectorsz);
+		flash_eraseSector((f->header.sector * meterfs_common.sectorsz) + (offset + f->header.recordsz + sizeof(entry_t)));
 
 	e.id.no = f->lastidx.no + 1;
 	e.id.nvalid = 0;
@@ -482,7 +490,7 @@ int meterfs_alocateFile(fileheader_t *f)
 
 	/* Prepare data space */
 	for (i = 0; i < f->sectorcnt; ++i)
-		flash_eraseSector(f->sector + i);
+		flash_eraseSector((f->sector + i) * meterfs_common.sectorsz);
 
 	headerNew = (meterfs_common.hcurrAddr == 0) ? meterfs_common.h1Addr : 0;
 	meterfs_eraseFileTable((headerNew == 0) ? 0 : 1);
@@ -754,7 +762,7 @@ void meterfs_test(void)
 	meterfs_fileDump(&f);
 
 	DEBUG("Erasing 1st sector of bigone");
-	flash_eraseSector(f.header.sector);
+	flash_eraseSector(f.header.sector * meterfs_common.sectorsz);
 
 	meterfs_getFileInfoName("bigone", &f.header);
 	meterfs_getFilePos(&f);
@@ -802,13 +810,13 @@ void meterfs_test(void)
 
 int main(void)
 {
-	meterfs_common.sectorsz = 4 * 1024;
-	meterfs_common.flashsz = 2 * 1024 * 1024;
-
 	spi_init();
 
-	flash_init(meterfs_common.flashsz, meterfs_common.sectorsz);
-flash_chipErase();
+	flash_init(&meterfs_common.flashsz, &meterfs_common.sectorsz);
+
+	if (meterfs_common.flashsz == 0)
+		FATAL("Could not detect flash memory");
+
 	meterfs_checkfs();
 
 	if (portCreate(&meterfs_common.port) != EOK)
