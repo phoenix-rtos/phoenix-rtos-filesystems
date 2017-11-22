@@ -803,6 +803,8 @@ void meterfs_test(void)
 	meterfs_getFileInfoName("longone", &f.header);
 	meterfs_getFilePos(&f);
 	meterfs_fileDump(&f);
+
+	DEBUG("Test: end");
 }
 
 #endif

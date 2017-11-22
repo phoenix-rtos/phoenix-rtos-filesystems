@@ -166,7 +166,7 @@ int flash_writePage(unsigned int addr, void *buff, size_t bufflen)
 	spi_powerCtrl(1);
 
 	while (bufflen) {
-		if ((chunk = 0xff - (addr & 0xff)) > bufflen)
+		if ((chunk = 0x100 - (addr & 0xff)) > bufflen)
 			chunk = bufflen;
 		spi_transaction(cmd_wren, 0, 0, NULL, 0);
 		spi_transaction(cmd_write, addr, spi_address, buff, chunk);
