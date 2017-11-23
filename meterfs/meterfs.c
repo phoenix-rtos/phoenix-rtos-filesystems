@@ -106,7 +106,7 @@ void meterfs_eraseFileTable(unsigned int n)
 	if (n != 0 && n != 1)
 		return;
 
-	addr = (n == 0) ? 0 : meterfs_common.h1Addr / meterfs_common.sectorsz;
+	addr = (n == 0) ? 0 : meterfs_common.h1Addr;
 	sectorcnt = sizeof(header_t) + MAX_FILE_CNT * sizeof(fileheader_t);
 	sectorcnt += meterfs_common.sectorsz - 1;
 	sectorcnt /= meterfs_common.sectorsz;
