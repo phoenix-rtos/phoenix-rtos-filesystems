@@ -358,7 +358,7 @@ int meterfs_writeRecord(file_t *f, void *buff, size_t bufflen)
 	e.id.no = f->lastidx.no + 1;
 	e.id.nvalid = 0;
 
-	flash_write(f->header.sector * meterfs_common.sectorsz + offset + sizeof(entry_t), buff, f->header.recordsz);
+	flash_write(f->header.sector * meterfs_common.sectorsz + offset + sizeof(entry_t), buff, bufflen);
 	flash_write(f->header.sector * meterfs_common.sectorsz + offset, &e, sizeof(entry_t));
 
 	f->lastidx.no += 1;
@@ -526,6 +526,18 @@ size_t meterfs_readFile(unsigned int id, unsigned char *buff, size_t bufflen, si
 	return i;
 }
 
+
+size_t meterfs_writeFile(unsigned int id, unsigned char *buff, size_t bufflen)
+{
+	file_t *f;
+
+	if ((f = opened_find(id)) == NULL)
+		return -EEXIST;
+
+	return meterfs_writeRecord(f, buff, bufflen);
+}
+
+
 unsigned char buff[20];
 int main(void)
 {
@@ -638,6 +650,25 @@ flash_chipErase();
 		printf("0x%02x (ret %d)\n", *buff, ret);
 		i += ret;
 	} while (ret);
+
+	printf("test2\n");
+	ret = meterfs_openFile("test2", &id);
+	printf("ID %u, returned %d\n", id, ret);
+
+	printf("Write byte by byte\n");
+
+	for (int i = 0; i < 20; ++i) {
+		memset(buff, i, 20);
+		printf("Wrote %d bytes\n", meterfs_writeFile(id, buff, i + 1));
+	}
+
+	printf("Reading records:\n");
+	for (int i = 0; i < 20; ++i) {
+		meterfs_readFile(id, buff, 20, i * 20);
+		printf("\n");
+		for (int j = 0; j < 20; ++j)
+			printf("0x%02x ", buff[j]);
+	}
 
 
 	for (;;);
