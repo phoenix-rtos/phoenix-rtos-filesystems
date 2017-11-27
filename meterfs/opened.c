@@ -37,7 +37,7 @@ static int opened_cmp(rbnode_t *n1, rbnode_t *n2)
 	file_node_t *f1 = lib_treeof(file_node_t, linkage, n1);
 	file_node_t *f2 = lib_treeof(file_node_t, linkage, n2);
 
-	return f2->id - f1->id;
+	return f1->id - f2->id;
 }
 
 
@@ -159,10 +159,8 @@ int opened_remove(unsigned int id)
 	if ((r = lib_treeof(file_node_t, linkage, lib_rbFind(&tree, &t.linkage))) == NULL)
 		return -1;
 
-	if (r->refs > 0) {
-		--(r->refs);
+	if ((--r->refs) > 0)
 		return 0;
-	}
 
 	lib_rbRemove(&tree, &r->linkage);
 

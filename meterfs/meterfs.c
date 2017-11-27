@@ -407,10 +407,13 @@ int meterfs_readRecord(file_t *f, void *buff, size_t bufflen, unsigned int idx, 
 	if (e.id.nvalid || e.id.no != f->firstidx.no + idx)
 		return -ENOENT;
 
-	/* Read data */
-	flash_read(addr + sizeof(entry_t) + offset, buff, (bufflen > f->header.recordsz - offset) ? f->header.recordsz - offset : bufflen);
+	if (bufflen > f->header.recordsz - offset)
+		bufflen = f->header.recordsz - offset;
 
-	return f->header.recordsz;
+	/* Read data */
+	flash_read(addr + sizeof(entry_t) + offset, buff, bufflen);
+
+	return bufflen;
 }
 
 
@@ -512,7 +515,7 @@ size_t meterfs_readFile(unsigned int id, unsigned char *buff, size_t bufflen, si
 
 	while (i < bufflen) {
 		chunk = (bufflen - i <= f->header.recordsz) ? bufflen - i : f->header.recordsz;
-		if (meterfs_readRecord(f, buff + i, chunk, idx, pos))
+		if (meterfs_readRecord(f, buff + i, chunk, idx, pos) <= 0)
 			break;
 
 		pos = 0;
@@ -600,6 +603,41 @@ flash_chipErase();
 	printf("test3\n");
 	ret = meterfs_openFile("test3", &id);
 	printf("ID %u, returned %d\n", id, ret);
+
+	printf("Closing file test2\n");
+	opened_remove(1);
+
+	printf("test3\n");
+	ret = meterfs_openFile("test3", &id);
+	printf("ID %u, returned %d\n", id, ret);
+
+	printf("test2\n");
+	ret = meterfs_openFile("test2", &id);
+	printf("ID %u, returned %d\n", id, ret);
+
+	printf("Closing file test1 and test2\n");
+	opened_remove(0);
+	opened_remove(1);
+
+	printf("test3\n");
+	ret = meterfs_openFile("test3", &id);
+	printf("ID %u, returned %d\n", id, ret);
+
+	printf("test2\n");
+	ret = meterfs_openFile("test2", &id);
+	printf("ID %u, returned %d\n", id, ret);
+
+	printf("test1\n");
+	ret = meterfs_openFile("test1", &id);
+	printf("ID %u, returned %d\n", id, ret);
+
+	printf("Read byte by byte\n");
+	int i = 0;
+	do {
+		ret = meterfs_readFile(id, buff, 1, i);
+		printf("0x%02x (ret %d)\n", *buff, ret);
+		i += ret;
+	} while (ret);
 
 
 	for (;;);
