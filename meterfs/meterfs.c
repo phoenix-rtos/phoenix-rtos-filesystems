@@ -18,6 +18,7 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <errno.h>
+#include <sys/fs.h>
 #include <sys/threads.h>
 #include <sys/pwman.h>
 #include <sys/msg.h>
@@ -51,10 +52,10 @@ struct {
 
 	union {
 		unsigned char buff[256];
-		meterfsdata_t data;
-		meterfsopen_t open;
-		meterfsclose_t close;
-		meterfsconfig_t config;
+		fsdata_t data;
+		fsopen_t open;
+		fsclose_t close;
+		fsfcntl_t fcntl;
 	} msg_buff;
 } meterfs_common;
 
@@ -220,11 +221,11 @@ int meterfs_updateFileInfo(fileheader_t *f)
 	meterfs_eraseFileTable((headerNew == 0) ? 0 : 1);
 
 	for (i = 0; i < meterfs_common.filecnt; ++i) {
-		flash_read(meterfs_common.hcurrAddr + HGRAIN + (i * HGRAIN), f, sizeof(fileheader_t));
+		flash_read(meterfs_common.hcurrAddr + HGRAIN + (i * HGRAIN), &u.t, sizeof(fileheader_t));
 		if (strcmp(f->name, u.t.name) == 0)
-			flash_write(headerNew + HGRAIN + i * HGRAIN, f, sizeof(fileheader_t));
+			flash_write(headerNew + HGRAIN + (i * HGRAIN), f, sizeof(fileheader_t));
 		else
-			flash_write(headerNew + HGRAIN + i * HGRAIN, &u.t, sizeof(fileheader_t));
+			flash_write(headerNew + HGRAIN + (i * HGRAIN), &u.t, sizeof(fileheader_t));
 	}
 
 	/* Prepare new header */
@@ -428,7 +429,7 @@ int meterfs_alocateFile(fileheader_t *f)
 
 	/* Check if file exists */
 	if (meterfs_getFileInfoName(f->name, &t) == EOK)
-		return -EEXIST;
+		return -ENOENT;
 
 	/* Check if sectorcnt is valid */
 	if (SECTORS(f, meterfs_common.sectorsz) > f->sectorcnt || f->sectorcnt < 2)
@@ -489,10 +490,25 @@ int meterfs_openFile(char *name, unsigned int *id)
 	if (opened_claim(name, id) == 0)
 		return 0;
 
-	if (meterfs_getFileInfoName(name, &f.header) < 0)
-		return -EEXIST;
+	if (meterfs_getFileInfoName(name, &f.header) < 0) {
+		/* We have to create new file (for now only in RAM) */
+		strncpy(f.header.name, name, 8);
+		f.header.filesz = 0;
+		f.header.recordsz = 0;
+		f.header.sector = 0;
+		f.header.sectorcnt = 0;
 
-	meterfs_getFilePos(&f);
+		f.firstidx.no = 0;
+		f.firstidx.nvalid = 1;
+		f.lastidx.no = 0;
+		f.lastidx.nvalid = 1;
+		f.firstoff = 0;
+		f.lastoff = 0;
+		f.recordcnt = 0;
+	}
+	else {
+		meterfs_getFilePos(&f);
+	}
 
 	if (opened_add(&f, id) != 0)
 		return -ENOMEM;
@@ -508,7 +524,12 @@ size_t meterfs_readFile(unsigned int id, unsigned char *buff, size_t bufflen, si
 	size_t chunk, i = 0;
 
 	if ((f = opened_find(id)) == NULL)
-		return -EEXIST;
+		return -ENOENT;
+
+	if (f->header.sector == 0) {
+		/* File not alocated yet */
+		return -EINVAL;
+	}
 
 	idx = pos / f->header.recordsz;
 	pos %= f->header.recordsz;
@@ -532,9 +553,121 @@ int meterfs_writeFile(unsigned int id, unsigned char *buff, size_t bufflen)
 	file_t *f;
 
 	if ((f = opened_find(id)) == NULL)
-		return -EEXIST;
+		return -ENOENT;
+
+	if (f->header.sector == 0) {
+		/* File not alocated yet */
+		return -EINVAL;
+	}
 
 	return meterfs_writeRecord(f, buff, bufflen);
+}
+
+
+int meterfs_configure(unsigned int id, unsigned int cmd, unsigned long arg)
+{
+	file_t *f;
+
+	if ((f = opened_find(id)) == NULL)
+		return -ENOENT;
+
+	switch (cmd) {
+		case METERFS_ALOCATE:
+			if (f->header.sector != 0)
+				return -EPERM;
+
+			if (arg < 2)
+				return -EINVAL;
+
+			f->header.sectorcnt = arg;
+
+			f->firstidx.no = 0;
+			f->firstidx.nvalid = 1;
+			f->lastidx.no = 0;
+			f->lastidx.nvalid = 1;
+			f->firstoff = 0;
+			f->lastoff = 0;
+			f->recordcnt = 0;
+
+			return meterfs_alocateFile(&f->header);
+
+		case METERFS_RESIZE:
+			if (f->header.sector == 0)
+				return -EPERM;
+
+			if (f->header.recordsz && f->header.recordsz > arg)
+				return -EINVAL;
+
+			if (arg > (f->header.sectorcnt - 1) * meterfs_common.sectorsz)
+				return -EINVAL;
+
+			f->header.filesz = arg;
+
+			f->firstidx.no = 0;
+			f->firstidx.nvalid = 1;
+			f->lastidx.no = 0;
+			f->lastidx.nvalid = 1;
+			f->firstoff = 0;
+			f->lastoff = 0;
+			f->recordcnt = 0;
+
+			return meterfs_updateFileInfo(&f->header);
+
+		case METERFS_RECORDSZ:
+			if (f->header.sector == 0)
+				return -EPERM;
+
+			if (f->header.filesz && arg > f->header.filesz)
+				return -EINVAL;
+
+			if (arg > (f->header.sectorcnt - 1) * meterfs_common.sectorsz)
+				return -EINVAL;
+
+			f->header.recordsz = arg;
+
+			f->firstidx.no = 0;
+			f->firstidx.nvalid = 1;
+			f->lastidx.no = 0;
+			f->lastidx.nvalid = 1;
+			f->firstoff = 0;
+			f->lastoff = 0;
+			f->recordcnt = 0;
+
+			return meterfs_updateFileInfo(&f->header);
+
+		default:
+			return -EINVAL;
+	}
+}
+
+
+void dump_header(void)
+{
+	header_t h;
+	fileheader_t f;
+	int i;
+
+	printf("curr header 0x%08x\n", meterfs_common.hcurrAddr);
+
+	flash_read(meterfs_common.hcurrAddr, &h, sizeof(h));
+
+	printf("index: %d\n", h.id.no);
+	printf("files: %d\n", h.filecnt);
+
+	if (h.filecnt > 10) {
+		printf("Invalid file count\n");
+		return;
+	}
+
+	for (i = 0; i < h.filecnt; ++i) {
+		flash_read(meterfs_common.hcurrAddr + (i+1) * HGRAIN, &f, sizeof(f));
+		printf("name: %s\n", f.name);
+		printf("\tsector: %d\n", f.sector);
+		printf("\tsectorcnt: %d\n", f.sectorcnt);
+		printf("\tsize: %d\n", f.filesz);
+		printf("\trecordsz: %d\n", f.recordsz);
+		printf("\n");
+	}
 }
 
 
@@ -542,34 +675,114 @@ void meterfs_test(void *arg)
 {
 	int ret;
 	unsigned int id;
-	file_t f;
 
 	union {
-		meterfsopen_t open;
-		meterfsdata_t data;
-		meterfsclose_t close;
-		unsigned char buff[sizeof(meterfsdata_t) + 20];
+		fsopen_t open;
+		fsdata_t data;
+		fsclose_t close;
+		fsfcntl_t fcntl;
+		unsigned char buff[sizeof(fsdata_t) + 20];
 	} u;
 
 	printf("Creating files\n");
 
-	strncpy(f.header.name, "test1", 8);
-	f.header.filesz = 1000;
-	f.header.recordsz = 10;
-	f.header.sectorcnt = 2;
-	meterfs_alocateFile(&f.header);
+	dump_header();
 
-	strncpy(f.header.name, "test2", 8);
-	f.header.filesz = 1000;
-	f.header.recordsz = 15;
-	f.header.sectorcnt = 2;
-	meterfs_alocateFile(&f.header);
+	printf("test1\n");
+	strncpy(u.open.name, "test1", 8);
+	u.open.mode = 0;
+	ret = send(meterfs_common.port, OPEN, &u.open, sizeof(u.open) + 6, NORMAL, &id, sizeof(id));
+	printf("open ret %d id %u\n", ret, id);
 
-	strncpy(f.header.name, "test3", 8);
-	f.header.filesz = 100;
-	f.header.recordsz = 5;
-	f.header.sectorcnt = 2;
-	meterfs_alocateFile(&f.header);
+	u.fcntl.id = id;
+	u.fcntl.cmd = METERFS_ALOCATE;
+	u.fcntl.arg = 2;
+	ret = send(meterfs_common.port, DEVCTL, &u.fcntl, sizeof(u.fcntl), NORMAL, NULL, 0);
+	printf("alocate ret %d\n", ret);
+
+	u.fcntl.id = id;
+	u.fcntl.cmd = METERFS_RESIZE;
+	u.fcntl.arg = 1000;
+	ret = send(meterfs_common.port, DEVCTL, &u.fcntl, sizeof(u.fcntl), NORMAL, NULL, 0);
+	printf("resize ret %d\n", ret);
+
+	u.fcntl.id = id;
+	u.fcntl.cmd = METERFS_RECORDSZ;
+	u.fcntl.arg = 10;
+	ret = send(meterfs_common.port, DEVCTL, &u.fcntl, sizeof(u.fcntl), NORMAL, NULL, 0);
+	printf("recordcnt ret %d\n", ret);
+
+	u.close = id;
+	ret = send(meterfs_common.port, CLOSE, &u.close, sizeof(u.close), NORMAL, NULL, 0);
+	printf("close ret %d\n", ret);
+
+
+	dump_header();
+
+
+	printf("test2\n");
+	strncpy(u.open.name, "test2", 8);
+	u.open.mode = 0;
+	ret = send(meterfs_common.port, OPEN, &u.open, sizeof(u.open) + 6, NORMAL, &id, sizeof(id));
+	printf("open ret %d id %u\n", ret, id);
+
+	u.fcntl.id = id;
+	u.fcntl.cmd = METERFS_ALOCATE;
+	u.fcntl.arg = 2;
+	ret = send(meterfs_common.port, DEVCTL, &u.fcntl, sizeof(u.fcntl), NORMAL, NULL, 0);
+	printf("alocate ret %d\n", ret);
+
+	u.fcntl.id = id;
+	u.fcntl.cmd = METERFS_RESIZE;
+	u.fcntl.arg = 1000;
+	ret = send(meterfs_common.port, DEVCTL, &u.fcntl, sizeof(u.fcntl), NORMAL, NULL, 0);
+	printf("resize ret %d\n", ret);
+
+	u.fcntl.id = id;
+	u.fcntl.cmd = METERFS_RECORDSZ;
+	u.fcntl.arg = 15;
+	ret = send(meterfs_common.port, DEVCTL, &u.fcntl, sizeof(u.fcntl), NORMAL, NULL, 0);
+	printf("recordcnt ret %d\n", ret);
+
+	u.close = id;
+	ret = send(meterfs_common.port, CLOSE, &u.close, sizeof(u.close), NORMAL, NULL, 0);
+	printf("close ret %d\n", ret);
+
+
+	dump_header();
+
+
+	printf("test3\n");
+	strncpy(u.open.name, "test3", 8);
+	u.open.mode = 0;
+	ret = send(meterfs_common.port, OPEN, &u.open, sizeof(u.open) + 6, NORMAL, &id, sizeof(id));
+	printf("open ret %d id %u\n", ret, id);
+
+	u.fcntl.id = id;
+	u.fcntl.cmd = METERFS_ALOCATE;
+	u.fcntl.arg = 2;
+	ret = send(meterfs_common.port, DEVCTL, &u.fcntl, sizeof(u.fcntl), NORMAL, NULL, 0);
+	printf("alocate ret %d\n", ret);
+
+	u.fcntl.id = id;
+	u.fcntl.cmd = METERFS_RESIZE;
+	u.fcntl.arg = 100;
+	ret = send(meterfs_common.port, DEVCTL, &u.fcntl, sizeof(u.fcntl), NORMAL, NULL, 0);
+	printf("resize ret %d\n", ret);
+
+	u.fcntl.id = id;
+	u.fcntl.cmd = METERFS_RECORDSZ;
+	u.fcntl.arg = 5;
+	ret = send(meterfs_common.port, DEVCTL, &u.fcntl, sizeof(u.fcntl), NORMAL, NULL, 0);
+	printf("recordcnt ret %d\n", ret);
+
+	u.close = id;
+	ret = send(meterfs_common.port, CLOSE, &u.close, sizeof(u.close), NORMAL, NULL, 0);
+	printf("close ret %d\n", ret);
+
+
+	dump_header();
+
 
 	printf("test1\n");
 	strcpy(u.open.name, "test1");
@@ -730,7 +943,7 @@ beginthread(meterfs_test, 4, malloc(1024), 1024, NULL);
 
 		switch (hdr.op) {
 			case READ:
-				if (s != sizeof(meterfsdata_t)) {
+				if (s != sizeof(fsdata_t)) {
 					respond(meterfs_common.port, EINVAL, NULL, 0);
 					break;
 				}
@@ -744,7 +957,7 @@ beginthread(meterfs_test, 4, malloc(1024), 1024, NULL);
 				break;
 
 			case WRITE:
-				if (s <= sizeof(meterfsdata_t)) {
+				if (s <= sizeof(fsdata_t)) {
 					respond(meterfs_common.port, EINVAL, NULL, 0);
 					break;
 				}
@@ -756,7 +969,7 @@ beginthread(meterfs_test, 4, malloc(1024), 1024, NULL);
 				break;
 
 			case OPEN:
-				if (s < sizeof(meterfsopen_t) + 2) {
+				if (s < sizeof(fsopen_t) + 2) {
 					respond(meterfs_common.port, EINVAL, NULL, 0);
 					break;
 				}
@@ -767,7 +980,7 @@ beginthread(meterfs_test, 4, malloc(1024), 1024, NULL);
 				break;
 
 			case CLOSE:
-				if (s != sizeof(meterfsclose_t)) {
+				if (s != sizeof(fsclose_t)) {
 					respond(meterfs_common.port, EINVAL, NULL, 0);
 					break;
 				}
@@ -778,14 +991,21 @@ beginthread(meterfs_test, 4, malloc(1024), 1024, NULL);
 				break;
 
 			case DEVCTL:
-				if (s != sizeof(meterfsconfig_t)) {
-					err = -EINVAL;
+				if (s != sizeof(fsfcntl_t)) {
+					respond(meterfs_common.port, EINVAL, NULL, 0);
 					break;
 				}
+
+				err = meterfs_configure(meterfs_common.msg_buff.fcntl.id, meterfs_common.msg_buff.fcntl.cmd,
+					meterfs_common.msg_buff.fcntl.arg);
+
+				respond(meterfs_common.port, err, NULL, 0);
+				break;
+
+			default:
+				respond(meterfs_common.port, EINVAL, NULL, 0);
+				break;
 		}
-
-
-
 	}
 }
 

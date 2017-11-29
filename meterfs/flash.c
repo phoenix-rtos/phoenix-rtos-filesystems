@@ -33,15 +33,14 @@ static void _flash_waitBusy(void)
 	unsigned char status;
 	unsigned int sleep = 1000;
 
-	do {
+	while (1) {
 		spi_transaction(cmd_rdsr, 0, spi_read, &status, 1);
-		if (status & 1) {
-			usleep(sleep);
-			if (sleep < 1000000) {
-				sleep *= 2;
-			}
-		}
-	} while (status & 1);
+		if (!(status & 1))
+			break;
+		usleep(sleep);
+		if (sleep < 1000000)
+			sleep <<= 1;
+	}
 }
 
 
