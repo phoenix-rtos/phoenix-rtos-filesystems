@@ -691,7 +691,7 @@ int main(void)
 				}
 
 				cnt = meterfs_writeFile(meterfs_common.msg_buff.data.id, meterfs_common.msg_buff.data.buff,
-					meterfs_common.msg_buff.data.bufflen);
+					s - sizeof(fsdata_t));
 
 				respond(meterfs_common.port, EOK, &cnt, sizeof(cnt));
 				break;
