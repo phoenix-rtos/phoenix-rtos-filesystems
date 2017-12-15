@@ -196,12 +196,15 @@ void spi_transaction(unsigned char cmd, unsigned int addr, unsigned char flags, 
 
 void spi_init(void)
 {
+	oid_t t;
+
 	spi_common.base = (void *)0x40013000; /* SPI1 */
 	spi_common.rcc = (void *)0x40023800;  /* RCC */
 
 	spi_common.spi_ready = 1;
 
-	while (lookup("/gpiodrv", &spi_common.gpio));
+	while (lookup("/gpiodrv", &t));
+	spi_common.gpio = t.port;
 
 	mutexCreate(&spi_common.mutex);
 	condCreate(&spi_common.cond);
