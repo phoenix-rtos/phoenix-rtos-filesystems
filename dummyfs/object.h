@@ -3,7 +3,7 @@
  *
  * Operating system kernel
  *
- * Dummy filesystem
+ * dummyfs - object storage
  *
  * Copyright 2018 Phoenix Systems
  * Copyright 2007 Pawel Pisarczyk

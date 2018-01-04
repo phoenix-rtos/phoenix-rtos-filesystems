@@ -3,11 +3,10 @@
  *
  * Operating system kernel
  *
- * Dummy filesystem (used before regular filesystem mounting)
+ * dummyfs - directory operations
  *
- * Copyright 2012, 2018 Phoenix Systems
- * Copyright 2007 Pawel Pisarczyk
- * Author: Jacek Popko, Katarzyna Baranowska, Pawel Pisarczyk
+ * Copyright 2018 Phoenix Systems
+ * Author: Pawel Pisarczyk
  *
  * This file is part of Phoenix-RTOS.
  *
@@ -18,6 +17,10 @@
 #include <sys/msg.h>
 
 #include "dummyfs.h"
+
+
+int dir_find(void)
+{
 
 	/* Iterate over all entries to find the matching one */
 	do {
@@ -31,62 +34,9 @@
 		e = e->next;
 	} while (e != dir->entries);
 
-
-int dummyfs_link(dummyfs_entry_t *dir, const char *name, oid_t *oid)
-{
-	dummyfs_entry_t *dir;
-
-	if (dir == NULL)
-		return -EINVAL;
-	if (dir->type != entryDirectory)
-		return -EINVAL;
-	if (name == NULL)
-		return -EINVAL;	
-	if ((e = dummyfs_get(oid)) == NULL)
-		return -EINVAL;
-	if (e->type == entryDirectory)
-		return -EINVAL;
-
 	return EOK;
 }
 
-
-int dummyfs_unlink(dummyfs_entry_t *dir, const char *name)
-{
-	dummyfs_entry_t *entry;
-	dummyfs_filedesc_t *fd;
-	dummyfs_entry_t *dirent;
-
-	if (dir == NULL)
-		return -EINVAL;
-	if (dir->type != vnodeDirectory)
-		return -EINVAL;
-	if (name == NULL)
-		return -EINVAL;
-
-	dirent = (dummyfs_entry_t *)dir->fs_priv;
-
-	entry = dummyfs_lookup(dir, name, oid);
-
-	o = dummyfs_get(oid);
-	
-	if (--o->refs == 0)
-		dummyfs_remove(oid);
-
-	}
-	_dummyfs_remove(&((dummyfs_entry_t *)dir->fs_priv)->entries, entry);
-
-	MEM_RELEASE(sizeof(dummyfs_entry_t));
-	vm_kfree(entry);
-	proc_mutexUnlock(&dirent->lock);
-	//TODO - what do do with opened file
-	return EOK;
-}
-
-int dummyfs_release(vnode_t *vnode)
-{
-	return -EFAULT;
-}
 
 int dummyfs_symlink(vnode_t *dir, const char *name, const char *ref)
 {

@@ -3,7 +3,7 @@
  *
  * Operating system kernel
  *
- * Dummy filesystem
+ * dummyfs
  *
  * Copyright 2012, 2016, 2018 Phoenix Systems
  * Copyright 2007 Pawel Pisarczyk
@@ -64,10 +64,10 @@ int dummyfs_link(oid_t *dir, const char *name, oid_t *oid)
 	if (name == NULL)
 		return -EINVAL;
 
-	if ((d = object_get(dir)) == NULL)
+	if ((d = object_get(dir->id)) == NULL)
 		return -ENOENT;
 
-	if ((o = object_get(oid)) == NULL) {
+	if ((o = object_get(oid->id)) == NULL) {
 		object_put(d);
 		return -ENOENT;
 	}
@@ -99,13 +99,13 @@ int dummyfs_link(oid_t *dir, const char *name, oid_t *oid)
 
 int dummyfs_unlink(oid_t *dir, const char *name)
 {
-	oid_t *oid;
+	oid_t oid;
 	dummyfs_object_t *o, *d;
 
-	dummyfs_lookup(dir, name, oid);
+	dummyfs_lookup(dir, name, &oid);
 
-	d = object_get(dir);
-	o = object_get(oid);
+	d = object_get(dir->id);
+	o = object_get(oid.id);
 
 	if (o->type == otDir)
 		return -EINVAL;
