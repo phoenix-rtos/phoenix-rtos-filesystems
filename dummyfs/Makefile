@@ -1,38 +1,32 @@
 #
-# Makefile for Phoenix-RTOS kernel (fs/dummyfs)
+# Phoenix-RTOS
 #
-# Copyright 2012-2015 Phoenix Systems
+# dummyfs - dummy filesystem driver
 #
+# Copyright 2018 Phoenix Systems
+# Author: Pawel Pisarczyk
+#
+
+CC = i386-pc-phoenix-gcc
+CFLAGS = -c -Wall -O2 -g -I. -I../../libphoenix/ -DARCH=\"arch/ia32/arch.h\"
+
+LD = i386-pc-phoenix-gcc
+LDFLAGS = -nostartfiles -nostdlib
 
 SRCS = dummyfs.c
-
 OBJS = $(SRCS:.c=.o)
 
+LIBPHOENIX = ../../libphoenix/libphoenix.a
+GCCLIB := $(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
+BIN = dummyfs
 
-all: check $(ARCH)
-
-
-check:
-	@(if test -z "$(ARCH)"; then\
-		echo "Error: Only main Makefile can be used for compilation!";\
-		exit 1;\
-	fi;)
-
+all: dummyfs
 
 .c.o:
-	@(echo "  CC $<"; $(CC) -c $(CFLAGS) $<)
+	$(CC) $(CFLAGS) $<
 
+dummyfs: $(OBJS) $(LIBPHOENIX)
+	$(LD) $(LDFLAGS) -o $(BIN) $(OBJS) $(LIBPHOENIX) $(GCCLIB)
 
--include .depend
-
-
-$(ARCH): $(OBJS)
-	$(SIL)$(AR) $(ARFLAGS) $(ARCH) $(OBJS) 2>/dev/null
-
-
-depend: check
-	$(SIL)$(MKDEP) $(MKDEPFLAGS) $(SRCS) >.depend
-
-
-clean: check
-	@rm -f core *.o $(ARCH)
+clean:
+	rm -f *.o *~ core

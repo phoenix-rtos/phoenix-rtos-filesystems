@@ -3,9 +3,9 @@
  *
  * Operating system kernel
  *
- * Dummy filesystem (used before regular filesystem mounting)
+ * Dummy filesystem
  *
- * Copyright 2012 Phoenix Systems
+ * Copyright 2012, 2018 Phoenix Systems
  * Copyright 2008 Pawel Pisarczyk
  * Author: Pawel Pisarczyk
  *
@@ -14,18 +14,53 @@
  * %LICENSE%
  */
 
-#ifndef _FS_DUMMYFS_H_
-#define _FS_DUMMYFS_H_
+#ifndef _DUMMYFS_H_
+#define _DUMMYFS_H_
 
-#include <hal/if.h>
-#include <fs/if.h>
-
-
-#define SIZE_DUMMYFS_NAME   256
+#include <sys/rb.h>
 
 
-/* Function initializes and registers dummy filesystem */
-int dummyfs_init(void);
+typedef struct _dummyfs_dirent_t {
+	char *name;
+	unsigned int len;
+	oid_t oid;
+
+	struct _dummyfs_dirent_t *next;
+	struct _dummyfs_dirent_t *prev;
+} dummyfs_dirent_t;
+
+
+typedef struct _dummyfs_chunk_t {
+	char *data;
+
+	offs_t offs;
+	size_t size;
+	size_t used;
+
+	struct dummyfs_chunk_t *next;
+	struct dummyfs_chunk_t *prev;
+} dummyfs_chunk_t;
+
+
+typedef struct _dummyfs_object_t {
+	oid_t oid;
+	enum { otDir = 0, otFile } type;
+
+	unsigned int uid;
+	unsigned int gid;
+	u32 mode;
+
+	rbnode_t node;
+
+	union {
+		dummyfs_dirent_t *entries;
+		struct {
+			size_t size;
+			dummyfs_chunk_t *chunks;
+		};
+	};
+
+} dummyfs_object_t;
 
 
 #endif
