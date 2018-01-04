@@ -67,7 +67,7 @@ struct {
 	volatile unsigned int *base;
 	volatile unsigned int *rcc;
 
-	char spi_ready;
+	volatile char spi_ready;
 	handle_t mutex;
 	handle_t cond;
 
@@ -126,16 +126,18 @@ static void gpio_pinConfig(int port, char pin, char mode, char af, char ospeed, 
 }
 
 
-static void spi_powerCtrl(int state)
+void spi_csControl(int state)
 {
-	if (!state)
-		gpio_pinSet(GPIOE, 12, 1);
+	gpio_pinSet(GPIOE, 12, !state);
+}
 
+
+void spi_powerCtrl(int state)
+{
 	gpio_pinSet(GPIOA, 4, state);
 
 	if (state) {
-		usleep(1000);
-		gpio_pinSet(GPIOE, 12, 0);
+		usleep(5000);
 	}
 }
 
@@ -165,8 +167,7 @@ void spi_transaction(unsigned char cmd, unsigned int addr, unsigned char flags, 
 {
 	int i;
 
-	keepidle(1);
-	spi_powerCtrl(1);
+	spi_csControl(1);
 
 	spi_readwrite(cmd);
 
@@ -189,20 +190,21 @@ void spi_transaction(unsigned char cmd, unsigned int addr, unsigned char flags, 
 			spi_readwrite(buff[i]);
 	}
 
-	spi_powerCtrl(0);
-	keepidle(0);
+	spi_csControl(0);
 }
 
 
-int spi_init(void)
+void spi_init(void)
 {
+	oid_t t;
+
 	spi_common.base = (void *)0x40013000; /* SPI1 */
 	spi_common.rcc = (void *)0x40023800;  /* RCC */
 
 	spi_common.spi_ready = 1;
 
-	if (lookup("/gpiodrv", &spi_common.gpio))
-		return -1;
+	while (lookup("/gpiodrv", &t));
+	spi_common.gpio = t.port;
 
 	mutexCreate(&spi_common.mutex);
 	condCreate(&spi_common.cond);
@@ -235,7 +237,6 @@ int spi_init(void)
 	gpio_pinConfig(GPIOE, 14, 2, 5, 1, 0, 0); /* SPI MISO */
 	gpio_pinConfig(GPIOE, 15, 2, 5, 1, 0, 0); /* SPI MOSI */
 
+	spi_csControl(0);
 	spi_powerCtrl(0);
-
-	return 0;
 }

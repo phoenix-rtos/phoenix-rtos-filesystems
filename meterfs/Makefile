@@ -22,7 +22,7 @@ LD = arm-phoenix-ld
 
 GCCLIB := $(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
 
-SRCS = meterfs.c spi.c flash.c
+SRCS = meterfs.c spi.c flash.c node.c
 OBJS = $(SRCS:.c=.o)
 BIN = meterfs
 
