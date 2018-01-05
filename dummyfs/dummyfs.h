@@ -66,5 +66,12 @@ typedef struct _dummyfs_object_t {
 
 } dummyfs_object_t;
 
+/* attribute types */
+enum {
+	atMode = 0,
+	atUid,
+	atGid,
+	atSize
+};
 
 #endif

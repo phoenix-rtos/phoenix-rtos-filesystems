@@ -17,187 +17,166 @@
 #include <stdio.h>
 #include <sys/msg.h>
 
+#include "dummyfs.h"
 
-static int dummyfs_truncate(vnode_t *v, unsigned int size)
+int dummyfs_truncate(dummyfs_object_t *o, unsigned int size)
 {
-	dummyfs_entry_t *entry;
-	dummyfs_chunk_t *chunk;
-	dummyfs_filedesc_t *fd;
+	dummyfs_chunk_t *chunk, *trash;
+	char *tmp;
+	unsigned int chunksz;
 
-	if (v == NULL)
+	if (o == NULL)
 		return -EINVAL;
 
-	if (v->type != vnodeFile)
+	if (o->type != otFile)
 		return -EINVAL;
-	if (v->size == size)
+
+	if (o->size == size)
 		return EOK;
 
-	entry = v->fs_priv;
-	assert(entry != NULL);
-	fd = &entry->filedes;
+	chunk = o->chunks;
 
-	if (size == fd->size)
-		return EOK;
-		
-	if (size > fd->size) {
+	if (size > o->size) {
 
 		/* expansion */
-		if(fd->first == NULL) {
+		if (chunk == NULL) {
 			/* allocate new chunk */
-			unsigned allocSize = (size < DUMMYFS_MIN_ALLOC) ? DUMMYFS_MIN_ALLOC : size;
-			if(!CHECK_MEMAVAL(sizeof(dummyfs_chunk_t)))
-				return -ENOMEM;
+			chunk = malloc(sizeof(dummyfs_chunk_t));
 
-			if((fd->first=vm_kmalloc(sizeof(dummyfs_chunk_t)))==NULL) {
-				MEM_RELEASE(sizeof(dummyfs_chunk_t));
-				return -ENOMEM;
-			}
-			memset(fd->first, 0x0, sizeof(dummyfs_chunk_t));
-			fd->last = fd->first;
-			fd->recent = fd->first;
-			fd->first->next = fd->first;
-			fd->first->prev = fd->first;
-			if(!CHECK_MEMAVAL(allocSize))
-				return -ENOMEM;
-			if((fd->first->data = vm_kmalloc(allocSize))==NULL) {
-				MEM_RELEASE(allocSize);
-				return -ENOMEM;
-			}
-			fd->first->size=allocSize;
-			fd->first->used=size;
-			memset(fd->first->data, 0x0, size);
+			chunk->offs = 0;
+			chunk->size = size;
+			chunk->used = 0;
+			chunk->data = NULL;
+			chunk->next = chunk;
+			chunk->prev = chunk;
+			o->chunks = chunk;
 		}
 		else {
 			/* reallocate last chunk */
-			if(!CHECK_MEMAVAL(size - (fd->last->offs + fd->last->size)))
-				return -ENOMEM;
-			char *n = vm_krealloc(fd->last->data, size - fd->last->offs);
-			if(n==NULL) {
-				MEM_RELEASE(size - (fd->last->offs + fd->last->size));
-				return -ENOMEM;
+			chunk->prev->size += size - o->size;
+			if (chunk->prev->used) {
+				tmp = realloc(chunk->prev->data, chunk->prev->size);
+				if (tmp == NULL) {
+					chunk->prev->size -= size - o->size;
+					return -ENOMEM;
+				}
+				chunk->prev->data = tmp;
 			}
-			fd->last->data = n;
-			fd->last->size = size - fd->last->offs;
-			memset(fd->last->data + fd->last->used, 0x0, fd->last->size - fd->last->used);
-			fd->last->used = fd->last->size;
 		}
 	}
 	else {
 		/* shrink */
-		dummyfs_chunk_t *toDel;
-		for (chunk = fd->last; chunk != fd->first && chunk->offs >= size; chunk = chunk->prev);
+		chunk = chunk->prev;
 
-		/* chunk now points to last area that shuold be preserved - everything after it will be freed. */
-		toDel = chunk->next;
-		while(toDel != fd->first) {
-			dummyfs_chunk_t *tmp=toDel->next;
-			vm_kfree(toDel->data);
-			MEM_RELEASE(toDel->size);
-			vm_kfree(toDel);
-			MEM_RELEASE(sizeof(dummyfs_chunk_t));
-			toDel = tmp;
+		do {
+			if (chunk->offs >= size)
+				chunk = chunk->prev;
+			else
+				break;
+		} while (chunk != o->chunks)
+
+		if (chunk->off + chunk->size > size)
+		{
+			chunksz = size - chunk->off;
+			tmp = realloc(chunk->data, chunksz);
+			if (tmp == NULL)
+				return -ENOMEM;
+			chunk->size = chunksz;
+			chunk->data = tmp;
 		}
-		fd->last = chunk;
-		fd->first->prev = chunk;
-		chunk->next = fd->first;
-		fd->recent = chunk;
-		chunk->used = size-chunk->offs;
+		/* chunk now points to last area that shuold be preserved - everything after it will be freed. */
+		trash = chunk->next;
+		chunk->next = o->chunks;
+		o->chunks->prev = chunk;
+		while (trash != o->chunks) {
+			chunk = trash->next;
+			free(trash->data);
+			free(trash);
+			trash = chunk;
+		}
+		if (size == 0) {
+			free(trash->data);
+			free(trash);
+		}
 	}
-	fd->size = size;
-	v->size = size;
+	o->size = size;
 	return EOK;
 }
 
 
-int dummyfs_read(file_t* file, offs_t offs, char *buff, unsigned int len)
-{  
-	dummyfs_entry_t *entry;
-	dummyfs_chunk_t *chunk;
-	dummyfs_filedesc_t *fd;
-
+int dummyfs_read(dummyfs_object_t *o, offs_t offs, char *buff, unsigned int len)
+{
 	int ret = 0;
-	if (file == NULL || file->priv == NULL)
+	int readsz;
+	int readoffs;
+
+	if (o == NULL)
 		return -EINVAL;
-	if (file->vnode->type != vnodeFile)
+
+	if (o->type != otFile)
 		return -EINVAL;
+
 	if (buff == NULL)
 		return -EINVAL;
 
-	entry = file->priv;
-	assert(entry != NULL);
-	fd = &entry->filedes;
+	if (o->size <= offs)
+		return -EINVAL;
 
-	if(fd->last == NULL || offs >= (fd->last->offs + fd->last->used)) {
-		return 0;
-	}
+	if (len == 0)
+		return EOK;
 
-	for(chunk = fd->first; chunk->next != fd->first; chunk = chunk->next)
-		if(chunk->offs <= offs && (chunk->offs + chunk->used) > offs )
+	for(chunk = o->chunks; chunk != o->chunks; chunk = chunk->next)
+		if (chunk->offs + chunk->size > offs)
 			break;
-	if(chunk->offs <= offs && (chunk->offs + chunk->size) > offs )
-		do {
-			int remaining = chunk->used - (offs-chunk->offs);
-			assert(chunk->used > (offs-chunk->offs));
-			remaining = (remaining > len) ? len : remaining;
-			if(remaining > 0)
-				memcpy(buff, chunk->data + (offs-chunk->offs), remaining);
 
-			buff += remaining;
-			len -= remaining;
-			offs+=remaining;
-			ret += remaining;
-			fd->recent = chunk;
-			chunk = chunk->next;
-		}while(len > 0 && chunk != fd->first);
-	else
-		ret = 0;
+	do {
+		readsz = len > chunk->size ? chunk->size : len;
+		readoffs = offs - chunk->offs;
+		if (chunk->used)
+			memcpy(buff, chunk->data + readoffs, chunk->size - readoffs);
+		else
+			memset(buff, 0, readsz);
+
+		len  -= readsz;
+		buff += readsz;
+		offs += readsz;
+		ret  += readsz;
+
+		chunk = chunk->next;
+
+	} while (len && chunk != o->chunks);
+
 	return ret;
 }
 
 
-int dummyfs_write(file_t* file, offs_t offs, char *buff, unsigned int len)
+int dummyfs_write(dummyfs_object_t *o, offs_t offs, char *buff, unsigned int len)
 {
-	vnode_t *vnode;
-	dummyfs_entry_t *entry;
 	dummyfs_chunk_t *chunk;
-	dummyfs_filedesc_t *fd;
 
 	int ret = 0;
-	unsigned int allocSize = (len < DUMMYFS_MIN_ALLOC) ? DUMMYFS_MIN_ALLOC : len;
 
-	if (file == NULL || file->priv == NULL || file->vnode == NULL)
+	if (o == NULL)
 		return -EINVAL;
-	if (file->vnode->type != vnodeFile)
+
+	if (o->type != otFile)
 		return -EINVAL;
+
 	if (buff == NULL)
 		return -EINVAL;
 
-	entry = file->priv;
-	vnode = file->vnode;
-	assert(entry != NULL);
-	fd = &entry->filedes;
+	if (len == 0)
+		return EOK;
 
-	if(fd->first == NULL) {
-		if(!CHECK_MEMAVAL(sizeof(dummyfs_chunk_t)))
-			return -ENOMEM;
-		if((fd->first = vm_kmalloc(sizeof(dummyfs_chunk_t)))==NULL) {
-			MEM_RELEASE(sizeof(dummyfs_chunk_t));
-			return -ENOMEM;
-		}
-		chunk=fd->first;
-		fd->last = chunk;
-		fd->recent = chunk;
+	if (o->chunks == NULL) {
+		chunk = malloc(sizeof(dummyfs_chunk_t));
 		chunk->next = chunk;
 		chunk->prev = chunk;
-
-		memset(chunk, 0x0, sizeof(dummyfs_chunk_t));
-		if(!CHECK_MEMAVAL(allocSize))
-			return -ENOMEM;/* no need to free entry, because it is a first entry */
-		if((chunk->data = vm_kmalloc(allocSize))==NULL) {
-			MEM_RELEASE(allocSize);
-			return -ENOMEM;
-		}
-		chunk->size = allocSize;
+		chunk->offs = 0;
+		chunk->size = offs;
+		chunk->data = NULL;
+		chunk->used = 0;
+		o->chunks = chunk;
 	}
 
 	/* NO SUPPORT FOR SPARSE FILES */

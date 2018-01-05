@@ -153,8 +153,6 @@ int object_destroy(dummyfs_object_t *o)
 
 	lib_rbRemove(&file_objects, &o->node);
 
-	free(o);
-
 	return EOK;
 }
 
