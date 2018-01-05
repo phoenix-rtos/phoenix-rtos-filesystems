@@ -15,6 +15,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/threads.h>
 #include <sys/msg.h>
 #include <sys/rb.h>
@@ -22,25 +23,27 @@
 
 #include "dummyfs.h"
 
+rbtree_t file_objects = { 0 };
 
 static int object_cmp(rbnode_t *n1, rbnode_t *n2)
 {
-	dummyfs_object_t *o1 = lib_treeof(dummyfs_object_t, linkage, n1);
-	dummyfs_object_t *o2 = lib_treeof(dummyfs_object_t, linkage, n2);
+	dummyfs_object_t *o1 = lib_treeof(dummyfs_object_t, node, n1);
+	dummyfs_object_t *o2 = lib_treeof(dummyfs_object_t, node, n2);
 
-	return (o1->id - o2->id);
+	/* possible overflow */
+	return (o1->oid.id - o2->oid.id);
 }
 
 
 static int object_gapcmp(rbnode_t *n1, rbnode_t *n2)
 {
-	dummyfs_object_t *o1 = lib_treeof(dummyfs_object_t, linkage, n1);
-	dummyfs_object_t *o2 = lib_treeof(dummyfs_object_t, linkage, n2);
+	dummyfs_object_t *o1 = lib_treeof(dummyfs_object_t, node, n1);
+	dummyfs_object_t *o2 = lib_treeof(dummyfs_object_t, node, n2);
 	rbnode_t *child = NULL;
 	int ret = 1;
 
 	if (o1->lmaxgap > 0 && o1->rmaxgap > 0) {
-		if (o2->id > o1->id) {
+		if (o2->oid.id > o1->oid.id) {
 			child = n1->right;
 			ret = -1;
 		}
@@ -69,40 +72,40 @@ static void object_augment(rbnode_t *node)
 {
 	rbnode_t *it;
 	rbnode_t *parent = node->parent;
-	dummyfs_object_t *n = lib_treeof(dummyfs_object_t, linkage, node);
-	dummyfs_object_t *p = lib_treeof(dummyfs_object_t, linkage, parent);
-	dummyfs_object_t *pp = (parent != NULL) ? lib_treeof(dummyfs_object_t, linkage, parent->parent) : NULL;
+	dummyfs_object_t *n = lib_treeof(dummyfs_object_t, node, node);
+	dummyfs_object_t *p = lib_treeof(dummyfs_object_t, node, parent);
+	dummyfs_object_t *pp = (parent != NULL) ? lib_treeof(dummyfs_object_t, node, parent->parent) : NULL;
 	dummyfs_object_t *l, *r;
 
 	if (node->left == NULL) {
 		if (parent != NULL && parent->right == node)
-			n->lmaxgap = n->id - p->id - 1;
+			n->lmaxgap = n->oid.id - p->oid.id - 1;
 		else if (parent != NULL && parent->parent != NULL && parent->parent->right == parent)
-			n->lmaxgap = n->id - pp->id - 1;
+			n->lmaxgap = n->oid.id - pp->oid.id - 1;
 		else
-			n->lmaxgap = n->id;
+			n->lmaxgap = n->oid.id;
 	}
 	else {
-		l = lib_treeof(dummyfs_object_t, linkage, node->left);
+		l = lib_treeof(dummyfs_object_t, node, node->left);
 		n->lmaxgap = max(l->lmaxgap, l->rmaxgap);
 	}
 
 	if (node->right == NULL) {
 		if (parent != NULL && parent->left == node)
-			n->rmaxgap = p->id - n->id - 1;
+			n->rmaxgap = p->oid.id - n->oid.id - 1;
 		else if (parent != NULL && parent->parent != NULL && parent->parent->left == parent)
-			n->rmaxgap = pp->id - n->id - 1;
+			n->rmaxgap = pp->oid.id - n->oid.id - 1;
 		else
-			n->rmaxgap = (unsigned int)-1 - n->id - 1;
+			n->rmaxgap = (unsigned int)-1 - n->oid.id - 1;
 	}
 	else {
-		r = lib_treeof(dummyfs_object_t, linkage, node->right);
+		r = lib_treeof(dummyfs_object_t, node, node->right);
 		n->rmaxgap = max(r->lmaxgap, r->rmaxgap);
 	}
 
 	for (it = node; it->parent != NULL; it = it->parent) {
-		n = lib_treeof(dummyfs_object_t, linkage, it);
-		p = lib_treeof(dummyfs_object_t, linkage, it->parent);
+		n = lib_treeof(dummyfs_object_t, node, it);
+		p = lib_treeof(dummyfs_object_t, node, it->parent);
 
 		if (it->parent->left == it)
 			p->lmaxgap = max(n->lmaxgap, n->rmaxgap);
@@ -116,96 +119,67 @@ dummyfs_object_t *object_create(dummyfs_object_t *objects, unsigned int *id)
 {
 	dummyfs_object_t *r, t;
 
-	proc_lockSet(&process->lock);
-
-	if (process->resources.root == NULL)
+	if (file_objects.root == NULL)
 		*id = 0;
 	else {
-		t.id = 0;
-		r = lib_treeof(dummyfs_object_t, linkage, lib_rbFindEx(process->resources.root, &t.linkage, resource_gapcmp));
+		t.oid.id = 0;
+		r = lib_treeof(dummyfs_object_t, node, lib_rbFindEx(file_objects.root, &t.node, object_gapcmp));
 		if (r != NULL) {
 			if (r->lmaxgap > 0)
-				*id = r->id - 1;
+				*id = r->oid.id - 1;
 			else
-				*id = r->id + 1;
+				*id = r->oid.id + 1;
 		}
 		else {
-			proc_lockClear(&process->lock);
 			return NULL;
 		}
 	}
 
-	r = (dummyfs_object_t *)vm_kmalloc(sizeof(dummyfs_object_t));
-	r->id = *id;
+	r = (dummyfs_object_t *)malloc(sizeof(dummyfs_object_t));
+	r->oid.id = *id;
 	r->refs = 1;
 
-	lib_rbInsert(&process->resources, &r->linkage);
-	proc_lockClear(&process->lock);
+	lib_rbInsert(&file_objects, &r->node);
 
 	return r;
 }
 
 
-int object_destroy(dummyfs_object_t *r)
+int object_destroy(dummyfs_object_t *o)
 {
-	process_t *process;
 
-	process = proc_current()->process;
-
-	proc_lockSet(&process->lock);
-
-	if (r->refs > 1) {
-		proc_lockClear(&process->lock);
+	if (o->refs > 1)
 		return -EBUSY;
-	}
 
-	lib_rbRemove(&process->resources, &r->linkage);
-	proc_lockClear(&process->lock);
+	lib_rbRemove(&file_objects, &o->node);
 
-	vm_kfree(r);
+	free(o);
 
 	return EOK;
 }
 
 
-dummyfs_object_t *resource_get(process_t *process, unsigned int id)
+dummyfs_object_t *object_get(unsigned int id)
 {
-	dummyfs_object_t *r, t;
+	dummyfs_object_t *o, t;
 
-	t.id = id;
+	t.oid.id = id;
 
-	proc_lockSet(&process->lock);
-	if ((r = lib_treeof(dummyfs_object_t, linkage, lib_rbFind(&process->resources, &t.linkage))) != NULL)
-		r->refs++;
-	proc_lockClear(&process->lock);
+	if ((o = lib_treeof(dummyfs_object_t, node, lib_rbFind(&file_objects, &t.node))) != NULL)
+		o->refs++;
 
-	return r;
+	return o;
 }
 
 
-void resource_put(process_t *process, dummyfs_object_t *r)
+void object_put(dummyfs_object_t *o)
 {
-	proc_lockSet(&process->lock);
-	if (r->refs)
-		r->refs--;
-	proc_lockClear(&process->lock);
+	if (o->refs)
+		o->refs--;
 	return;
 }
 
-
-int proc_resourceFree(unsigned int h)
+void object_init(void)
 {
-	process_t *process;
-	dummyfs_object_t *r;
-
-	process = proc_current()->process;
-	r = resource_get(process, h);
-
-	return resource_free(r);
-}
-
-
-void resource_init(process_t *process)
-{
-	lib_rbInit(&process->resources, resource_cmp, resource_augment);
+	lib_rbInit(&file_objects, object_cmp, object_augment);
 }

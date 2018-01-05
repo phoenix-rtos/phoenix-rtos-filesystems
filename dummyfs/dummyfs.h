@@ -50,6 +50,10 @@ typedef struct _dummyfs_object_t {
 	unsigned int gid;
 	u32 mode;
 
+	int refs;
+
+	size_t lmaxgap;
+	size_t rmaxgap;
 	rbnode_t node;
 
 	union {
