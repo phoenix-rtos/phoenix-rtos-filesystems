@@ -40,13 +40,13 @@ int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res)
 
 	mutexLock(dummyfs_common.mutex);
 
-	if ((d = object_get(oid->id)) == NULL) {
+	if ((d = object_get(dir->id)) == NULL) {
 		mutexUnlock(dummyfs_common.mutex);
 		return -ENOENT;
 	}
 
 	if (d->type != otDir) {
-		object_put(o);
+		object_put(d);
 		mutexUnlock(dummyfs_common.mutex);
 		return -EINVAL;
 	}
@@ -66,7 +66,7 @@ int dummyfs_setattr(oid_t *oid, int type, int attr)
 
 	mutexLock(dummyfs_common.mutex);
 
-	if (o = object_get(oid->id) == NULL)
+	if ((o = object_get(oid->id)) == NULL)
 		return -ENOENT;
 
 	switch (type) {
@@ -100,7 +100,7 @@ int dummyfs_getattr(oid_t *oid, int type, int *attr)
 
 	mutexLock(dummyfs_common.mutex);
 
-	if (o = object_get(oid->id) == NULL)
+	if ((o = object_get(oid->id)) == NULL)
 		return -ENOENT;
 
 	switch (type) {
@@ -194,7 +194,8 @@ int dummyfs_unlink(oid_t *dir, const char *name)
 		return -EINVAL;
 	}
 
-	if (ret = object_destroy(o) == EOK) {
+	object_put(o);
+	if ((ret = object_destroy(o)) == EOK) {
 		dummyfs_truncate(o, 0);
 		free(o);
 	}
@@ -248,84 +249,82 @@ int dummyfs_mknod(oid_t *dir, const char *name, unsigned int mode, dev_t dev)
 
 int dummyfs_mkdir(oid_t *dir, const char *name, int mode)
 {
-	dummyfs_entry_t *entry;
-	dummyfs_entry_t *dirent;
-	vnode_t *res;
+	dummyfs_object_t *d, *o;
+	oid_t oid;
+	unsigned int id;
+	int ret = EOK;
 
 	if (dir == NULL)
-		return -EINVAL;
-	if (dir->type != vnodeDirectory)
-		return -EINVAL;
+	   return -EINVAL;
+
 	if (name == NULL)
 		return -EINVAL;
 
-	dirent = (dummyfs_entry_t *)dir->fs_priv;
-
-	proc_mutexLock(&dirent->lock);
-	_dummyfs_lookup(dir, name, &res);
-	if(res != NULL) {
-		proc_mutexUnlock(&dirent->lock);
+	if (dummyfs_lookup(dir, name, &oid) == EOK)
 		return -EEXIST;
-	}
 
-	if ((entry = _dummyfs_newentry(dir->fs_priv, name, NULL)) == NULL) {
-		proc_mutexUnlock(&dirent->lock);
-		return -ENOMEM;
-	}
+	mutexLock(dummyfs_common.mutex);
 
-	entry->mode = mode;
-	entry->type = vnodeDirectory;
+	d = object_get(dir->id);
 
-	proc_mutexCreate(&entry->lock);
+	o = object_create(NULL, &id);
 
-	if ((entry = _dummyfs_newentry(entry, "..", dir->fs_priv)) == NULL) {
-		_dummyfs_remove(&((dummyfs_entry_t *)dir->fs_priv)->entries, entry);
-		MEM_RELEASE(sizeof(dummyfs_entry_t));
-		vm_kfree(entry);
-		proc_mutexUnlock(&dirent->lock);
-		return -ENOMEM;
-	}
-	proc_mutexUnlock(&dirent->lock);
-	return EOK;
+	o->mode = mode;
+	o->type = otDir;
+
+	dir_add(d, name, &o->oid);
+
+	object_put(d);
+
+	mutexUnlock(dummyfs_common.mutex);
+
+	return ret;
 }
 
 
 int dummyfs_rmdir(oid_t *dir, const char *name)
 {
-	dummyfs_entry_t *dirent;
-	vnode_t *tr;
-	dummyfs_entry_t *entry;
 
+	dummyfs_object_t *d, *o;
+	oid_t oid;
+	int ret = EOK;
 
 	if (dir == NULL)
 		return -EINVAL;
-	if (dir->fs_priv == NULL)
-		return -EINVAL;
-	if (dir->type != vnodeDirectory)
-		return -ENOTDIR;
+
 	if (name == NULL)
 		return -EINVAL;
 
-	dirent = (dummyfs_entry_t *)dir->fs_priv;
-	assert(dirent != NULL);
+	dummyfs_lookup(dir, name, &oid);
 
-	proc_mutexLock(&dirent->lock);
-	_dummyfs_lookup(dir, name, &tr);
-	if(tr == NULL) {
-		proc_mutexUnlock(&dirent->lock);
+	mutexLock(dummyfs_common.mutex);
+
+	d = object_get(dir->id);
+	o = object_get(oid.id);
+
+	if (o == NULL) {
+		mutexUnlock(dummyfs_common.mutex);
 		return -ENOENT;
 	}
-	assert(tr->type == vnodeDirectory);
-	entry = (dummyfs_entry_t *)tr->fs_priv;
 
-	_dummyfs_remove(&((dummyfs_entry_t *)dir->fs_priv)->entries, entry);
-	MEM_RELEASE(sizeof(dummyfs_entry_t));
-	proc_mutexTerminate(&entry->lock);
-	vm_kfree(entry);
+	if (o->type != otDir) {
+		object_put(d);
+		mutexUnlock(dummyfs_common.mutex);
+		return -EINVAL;
+	}
 
+	if (o->entries != NULL)
+		return -EBUSY;
 
-	proc_mutexUnlock(&dirent->lock);
-	return EOK;
+	if ((ret = dir_remove(d, name)) == EOK) {
+		object_put(o);
+		if((ret = object_destroy(o)) == EOK)
+			free(o);
+	}
+
+	object_put(d);
+	mutexUnlock(dummyfs_common.mutex);
+	return ret;
 }
 
 
@@ -378,48 +377,6 @@ quit:
 }
 
 /*
-int dummyfs_symlink(vnode_t *dir, const char *name, const char *ref)
-{
-	dummyfs_entry_t *dirent;
-
-	if (dir == NULL)
-		return -EINVAL;
-	if (dir->type != vnodeDirectory)
-		return -EINVAL;
-	if (name == NULL)
-		return -EINVAL;
-	if (ref == NULL)
-		return -EINVAL;
-
-	dirent = (dummyfs_entry_t *)dir->fs_priv;
-	assert(dirent != NULL);
-	//TODO
-	return -ENOENT;
-}
-
-
-int dummyfs_readlink(vnode_t *vnode, char *buf, unsigned int size)
-{
-
-	if (vnode == NULL)
-		return -EINVAL;
-	if (vnode->fs_priv == NULL)
-		return -EINVAL;
-	if (buf == NULL)
-		return -EINVAL;
-
-	//TODO
-	return -ENOENT;
-}
-
-
-int dummyfs_poll(file_t* file, ktime_t timeout, int op)
-{
-
-	//TODO
-	return -ENOENT;
-}
-
 
 int dummyfs_ioctl(file_t* file, unsigned int cmd, unsigned long arg)
 {
@@ -427,11 +384,11 @@ int dummyfs_ioctl(file_t* file, unsigned int cmd, unsigned long arg)
 	//TODO
 	return -ENOENT;
 }
-*/
 
-int dummyfs_open(vnode_t *vnode, file_t* file)
+
+int dummyfs_open(oid_t *file)
 {
-	if (file == NULL || file->priv != NULL || file->vnode == NULL || vnode == NULL || vnode != file->vnode)
+	if (file == NULL)
 		return -EINVAL;
 	if (vnode->type != vnodeFile)
 		return -EINVAL;
@@ -441,7 +398,7 @@ int dummyfs_open(vnode_t *vnode, file_t* file)
 	return EOK;
 }
 
-/*
+
 int dummyfs_fsync(file_t* file)
 {
 	dummyfs_entry_t *entry;
@@ -453,6 +410,7 @@ int dummyfs_fsync(file_t* file)
 
 	return EOK;
 }
+
 */
 
 int main(void)

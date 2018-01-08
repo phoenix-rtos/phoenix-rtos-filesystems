@@ -147,7 +147,6 @@ dummyfs_object_t *object_create(dummyfs_object_t *objects, unsigned int *id)
 
 int object_destroy(dummyfs_object_t *o)
 {
-
 	if (o->refs > 1)
 		return -EBUSY;
 
