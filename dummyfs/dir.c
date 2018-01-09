@@ -24,6 +24,9 @@ int dir_find(dummyfs_object_t *dir, const char *name, oid_t *res)
 {
 
 	dummyfs_dirent_t *e = dir->entries;
+
+	if (e == NULL)
+		return -ENOENT;
 	/* Iterate over all entries to find the matching one */
 	do {
 		if (!strcmp(e->name, (char *)name)) {
@@ -42,6 +45,9 @@ int dir_add(dummyfs_object_t *dir, const char *name, oid_t *oid)
 	oid_t res;
 	dummyfs_dirent_t *n;
 	dummyfs_dirent_t *e = dir->entries;
+
+	if (dir == NULL)
+		return -EINVAL;
 
 	if (dir_find(dir, name, &res) == EOK)
 		return -EEXIST;

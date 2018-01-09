@@ -33,6 +33,8 @@ extern int dir_find(dummyfs_object_t *dir, const char *name, oid_t *res);
 extern int dir_add(dummyfs_object_t *dir, const char *name, oid_t *oid);
 extern int dir_remove(dummyfs_object_t *dir, const char *name);
 
+
+
 int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res)
 {
 	dummyfs_object_t *d;
@@ -40,7 +42,9 @@ int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res)
 
 	mutexLock(dummyfs_common.mutex);
 
-	if ((d = object_get(dir->id)) == NULL) {
+	if(dir == NULL)
+		d = object_get(0);
+	else if ((d = object_get(dir->id)) == NULL) {
 		mutexUnlock(dummyfs_common.mutex);
 		return -ENOENT;
 	}
@@ -155,7 +159,7 @@ int dummyfs_link(oid_t *dir, const char *name, oid_t *oid)
 		return -EINVAL;
 	}
 
-	if (o->type == otDir && o->refs > 0) {
+	if (o->type == otDir && o->refs > 1) {
 		object_put(o);
 		object_put(d);
 		mutexUnlock(dummyfs_common.mutex);
@@ -211,24 +215,23 @@ int dummyfs_unlink(oid_t *dir, const char *name)
 	return ret;
 }
 
-oid_t dummyfs_create(int type, int mode)
+int dummyfs_create(oid_t *oid, int type, int mode)
 {
 	dummyfs_object_t *o;
-	oid_t oid = { 0 };
 	unsigned int id;
 
 	mutexLock(dummyfs_common.mutex);
 	o = object_create(NULL, &id);
 
 	if (o == NULL)
-		return oid;
+		return -EINVAL;
 
 	o->type = type;
 	o->mode = mode;
-	oid = o->oid;
+	memcpy(oid, &o->oid, sizeof(oid_t));
 	mutexUnlock(dummyfs_common.mutex);
 
-	return oid;
+	return EOK;
 }
 
 int dummyfs_destroy(oid_t *dir, char *name, oid_t *oid)
@@ -268,45 +271,6 @@ int dummyfs_destroy(oid_t *dir, char *name, oid_t *oid)
 	return ret;
 }
 
-/*
-int dummyfs_mknod(oid_t *dir, const char *name, unsigned int mode, dev_t dev)
-{
-	dummyfs_entry_t *entry;
-	dummyfs_entry_t *dirent;
-	unsigned int type;
-
-	if (dir == NULL)
-		return -EINVAL;
-	if (dir->type != vnodeDirectory)
-		return -EINVAL;
-	if (name == NULL)
-		return -EINVAL;
-
-	dirent = (dummyfs_entry_t *)dir->fs_priv;
-	assert(dirent != NULL);
-	proc_mutexLock(&dirent->lock);
-    if (S_ISCHR(mode) || S_ISBLK(mode)) {
-        type = vnodeDevice;
-    } else if (S_ISFIFO(mode)) {
-        type = vnodePipe;
-    } else {
-		proc_mutexUnlock(&dirent->lock);
-        return -EINVAL;
-    }
-
-	if ((entry = _dummyfs_newentry(dir->fs_priv, name, NULL)) == NULL) {
-		proc_mutexUnlock(&dirent->lock);
-		return -ENOMEM;
-	}
-
-    entry->type = type;
-	entry->dev = dev;
-    entry->mode = mode & S_IRWXUGO;
-	proc_mutexUnlock(&dirent->lock);
-	return EOK;
-}
-*/
-
 int dummyfs_mkdir(oid_t *dir, const char *name, int mode)
 {
 	dummyfs_object_t *d, *o;
@@ -340,7 +304,6 @@ int dummyfs_mkdir(oid_t *dir, const char *name, int mode)
 
 	return ret;
 }
-
 
 int dummyfs_rmdir(oid_t *dir, const char *name)
 {
@@ -449,39 +412,19 @@ int dummyfs_ioctl(oid_t* file, unsigned int cmd, unsigned long arg)
 	return -ENOENT;
 }
 
-/*
-int dummyfs_open(oid_t *file)
-{
-	if (file == NULL)
-		return -EINVAL;
-	if (vnode->type != vnodeFile)
-		return -EINVAL;
 
-	file->priv = (dummyfs_entry_t *) vnode->fs_priv;
-	assert(file->priv != NULL);
+int dummyfs_open(oid_t *oid)
+{
 	return EOK;
 }
-
-
-int dummyfs_fsync(file_t* file)
-{
-	dummyfs_entry_t *entry;
-
-	if (file == NULL || file->vnode == NULL || file->vnode->type != vnodeFile)
-		return -EINVAL;
-	entry = file->priv;
-	assert(entry != NULL);
-
-	return EOK;
-}
-
-*/
 
 int main(void)
 {
 	u32 port;
 	oid_t toid;
+	oid_t root;
 	msg_t msg;
+	dummyfs_object_t *o;
 	unsigned int rid;
 
 	usleep(500000);
@@ -492,10 +435,16 @@ int main(void)
 	if (portRegister(port, "/", &toid) == EOK)
 		printf("dummyfs: Mounted as root %s\n", "");
 
+	object_init();
+
 	mutexCreate(&dummyfs_common.mutex);
 
 	/* Create root directory */
+	if (dummyfs_create(&root, otDir, 0) != EOK)
+		return -1;
 
+	o = object_get(root.id);
+	dir_add(o, "..", &root);
 
 	for (;;) {
 		msgRecv(port, &msg, &rid);
@@ -504,12 +453,18 @@ int main(void)
 		case mtOpen:
 			break;
 		case mtWrite:
-			//msg.o.io.err = dummyfs_write(&msg.i.io.oid, msg.i.data, msg.i.size);
+			mutexLock(dummyfs_common.mutex);
+			o = object_get(msg.i.io.oid.id);
+			msg.o.io.err = dummyfs_write(o, msg.i.io.offs, msg.i.data, msg.i.size);
+			object_put(o);
+			mutexUnlock(dummyfs_common.mutex);
 			break;
 		case mtRead:
-			msg.o.io.err = 0;
-			msg.o.size = 1;
-			//msg.o.io.err = dummyfs_read(&msg.i.io.oid, msg.o.data, msg.o.size);
+			mutexLock(dummyfs_common.mutex);
+			o = object_get(msg.i.io.oid.id);
+			msg.o.io.err = dummyfs_read(o, msg.i.io.offs, msg.o.data, msg.o.size);
+			object_put(o);
+			mutexUnlock(dummyfs_common.mutex);
 			break;
 		case mtClose:
 			break;
