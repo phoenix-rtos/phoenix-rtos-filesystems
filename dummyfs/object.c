@@ -137,7 +137,7 @@ dummyfs_object_t *object_create(dummyfs_object_t *objects, unsigned int *id)
 
 	r = (dummyfs_object_t *)malloc(sizeof(dummyfs_object_t));
 	r->oid.id = *id;
-	r->refs = 1;
+	r->refs = 0;
 
 	lib_rbInsert(&file_objects, &r->node);
 

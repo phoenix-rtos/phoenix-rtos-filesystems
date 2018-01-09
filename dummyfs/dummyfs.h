@@ -37,14 +37,14 @@ typedef struct _dummyfs_chunk_t {
 	size_t size;
 	size_t used;
 
-	struct dummyfs_chunk_t *next;
-	struct dummyfs_chunk_t *prev;
+	struct _dummyfs_chunk_t *next;
+	struct _dummyfs_chunk_t *prev;
 } dummyfs_chunk_t;
 
 
 typedef struct _dummyfs_object_t {
 	oid_t oid;
-	enum { otDir = 0, otFile } type;
+	enum { otDir = 0, otFile, otChrdev } type;
 
 	unsigned int uid;
 	unsigned int gid;

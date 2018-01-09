@@ -15,6 +15,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/msg.h>
 
 #include "dummyfs.h"
@@ -52,15 +53,25 @@ int dummyfs_truncate(dummyfs_object_t *o, unsigned int size)
 			o->chunks = chunk;
 		}
 		else {
-			/* reallocate last chunk */
+			/* reallocate last chunk or alloc new one if reallocation fails */
 			chunk->prev->size += size - o->size;
 			if (chunk->prev->used) {
 				tmp = realloc(chunk->prev->data, chunk->prev->size);
 				if (tmp == NULL) {
 					chunk->prev->size -= size - o->size;
-					return -ENOMEM;
-				}
-				chunk->prev->data = tmp;
+					chunk = malloc(sizeof(dummyfs_chunk_t));
+					if (chunk == NULL)
+						return -ENOMEM;
+					chunk->offs = o->size;
+					chunk->size = size - o->size;
+					chunk->used = 0;
+					chunk->data = NULL;
+					chunk->next = o->chunks;
+					chunk->prev = o->chunks->prev;
+					o->chunks->prev->next = chunk;
+					o->chunks->prev = chunk;
+				} else
+					chunk->prev->data = tmp;
 			}
 		}
 	}
@@ -73,11 +84,11 @@ int dummyfs_truncate(dummyfs_object_t *o, unsigned int size)
 				chunk = chunk->prev;
 			else
 				break;
-		} while (chunk != o->chunks)
+		} while (chunk != o->chunks);
 
-		if (chunk->off + chunk->size > size)
+		if (chunk->offs + chunk->size > size)
 		{
-			chunksz = size - chunk->off;
+			chunksz = size - chunk->offs;
 			tmp = realloc(chunk->data, chunksz);
 			if (tmp == NULL)
 				return -ENOMEM;
@@ -110,6 +121,7 @@ int dummyfs_read(dummyfs_object_t *o, offs_t offs, char *buff, unsigned int len)
 	int ret = 0;
 	int readsz;
 	int readoffs;
+	dummyfs_chunk_t *chunk;
 
 	if (o == NULL)
 		return -EINVAL;
@@ -170,7 +182,7 @@ int dummyfs_write(dummyfs_object_t *o, offs_t offs, char *buff, unsigned int len
 		return EOK;
 
 	if (offs + len > o->size)
-		if (ret = dummyfs_truncate(o, offs + len) != EOK)
+		if ((ret = dummyfs_truncate(o, offs + len)) != EOK)
 			return ret;
 
 	for (chunk = o->chunks; chunk != o->chunks; chunk = chunk->next)

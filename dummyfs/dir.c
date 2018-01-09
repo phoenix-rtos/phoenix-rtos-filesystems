@@ -14,6 +14,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/msg.h>
 
 #include "dummyfs.h"
@@ -66,7 +67,8 @@ int dir_add(dummyfs_object_t *dir, const char *name, oid_t *oid)
 	n->len = strlen(name);
 	n->name = malloc(n->len);
 	memcpy(n->name, name, n->len);
-	memcpy(&n->oid, oid, sizeof(oid));
+	memcpy(&n->oid, oid, sizeof(oid_t));
+	dir->size += sizeof(dummyfs_dirent_t) + n->len;
 
 	return EOK;
 }
@@ -80,9 +82,10 @@ int dir_remove(dummyfs_object_t *dir, const char *name)
 
 	if (e == e->next) {
 		if (!strcmp(e->name, (char *)name)) {
-			dir->entries == NULL;
+			dir->entries = NULL;
 			free(e->name);
 			free(e);
+			dir->size = 0;
 			return EOK;
 		}
 		return -ENOENT;
@@ -92,6 +95,7 @@ int dir_remove(dummyfs_object_t *dir, const char *name)
 		if (!strcmp(e->name, (char *)name)) {
 			e->prev->next = e->next;
 			e->next->prev = e->prev;
+			dir->size -= sizeof(dummyfs_dirent_t) + e->len;
 			free(e->name);
 			free(e);
 			return EOK;
