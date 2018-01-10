@@ -171,7 +171,7 @@ dummyfs_object_t *object_get(unsigned int id)
 
 void object_put(dummyfs_object_t *o)
 {
-	if (o->refs)
+	if (o != NULL && o->refs)
 		o->refs--;
 	return;
 }
