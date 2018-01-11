@@ -349,8 +349,8 @@ int dummyfs_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int s
 {
 	dummyfs_object_t *d;
 	dummyfs_dirent_t *ei;
-	struct dirent *e;
 	offs_t diroffs = 0;
+	offs_t entoffs = 0;
 
 	mutexLock(dummyfs_common.mutex);
 
@@ -374,16 +374,17 @@ int dummyfs_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int s
 	}
 
 	do {
-		if(diroffs >= offs){
+		if(diroffs >= offs) {
 			if ((diroffs - offs + sizeof(struct dirent) + ei->len) > size)
 				goto out;
-			e = (struct dirent*) (((char*)dent) + diroffs);
-			e->d_ino = (addr_t)&ei;
-			e->d_reclen = sizeof(struct dirent) + ei->len;
-			memcpy(&(e->d_name[0]), ei->name, ei->len);
-			diroffs += sizeof(struct dirent) + ei->len;
+			dent->d_ino = ei->oid.id;
+			dent = ((char*)dent) + entoffs;
+			dent->d_reclen = sizeof(struct dirent) + ei->len;
+			//dent->d_reclen = dent->d_reclen + (4 - (dent->d_reclen % 4));
+			memcpy(&(dent->d_name[0]), ei->name, ei->len);
+			entoffs += dent->d_reclen;
 		}
-		diroffs += sizeof(dummyfs_dirent_t) + ei->len;
+		diroffs += sizeof(struct dirent) + ei->len;
 		ei = ei->next;
 	} while (ei != d->entries);
 

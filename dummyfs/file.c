@@ -119,7 +119,7 @@ int dummyfs_truncate(dummyfs_object_t *o, unsigned int size)
 
 int dummyfs_read(dummyfs_object_t *o, offs_t offs, char *buff, unsigned int len)
 {
-	int ret = 0;
+	int ret = EOK;
 	int readsz;
 	int readoffs;
 	dummyfs_chunk_t *chunk;
@@ -139,15 +139,17 @@ int dummyfs_read(dummyfs_object_t *o, offs_t offs, char *buff, unsigned int len)
 	if (len == 0)
 		return EOK;
 
-	for(chunk = o->chunks; chunk != o->chunks; chunk = chunk->next)
-		if (chunk->offs + chunk->size > offs)
+	for(chunk = o->chunks; chunk->next != o->chunks; chunk = chunk->next) {
+		if (chunk->offs + chunk->size > offs) {
 			break;
+		}
+	}
 
 	do {
-		readsz = len > chunk->size ? chunk->size : len;
 		readoffs = offs - chunk->offs;
+		readsz = len > chunk->size - readoffs ? chunk->size - readoffs : len;
 		if (chunk->used)
-			memcpy(buff, chunk->data + readoffs, chunk->size - readoffs);
+			memcpy(buff, chunk->data + readoffs, readsz);
 		else
 			memset(buff, 0, readsz);
 
@@ -183,10 +185,11 @@ int dummyfs_write(dummyfs_object_t *o, offs_t offs, char *buff, unsigned int len
 		return EOK;
 
 	if (offs + len > o->size)
-		if ((ret = dummyfs_truncate(o, offs + len)) != EOK)
+		if ((ret = dummyfs_truncate(o, offs + len)) != EOK) {
 			return ret;
+		}
 
-	for (chunk = o->chunks; chunk != o->chunks; chunk = chunk->next)
+	for (chunk = o->chunks; chunk->next != o->chunks; chunk = chunk->next)
 		if ((chunk->offs + chunk->size) > offs)
 			break; /* found appropriate chunk */
 

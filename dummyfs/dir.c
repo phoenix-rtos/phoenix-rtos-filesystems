@@ -70,11 +70,11 @@ int dir_add(dummyfs_object_t *dir, const char *name, oid_t *oid)
 		e->prev = n;
 	}
 
-	n->len = strlen(name);
+	n->len = strlen(name) + 1;
 	n->name = malloc(n->len);
 	memcpy(n->name, name, n->len);
+	n->name[n->len - 1] = '\0';
 	memcpy(&n->oid, oid, sizeof(oid_t));
-	dir->size += sizeof(dummyfs_dirent_t) + n->len;
 
 	return EOK;
 }
@@ -91,7 +91,6 @@ int dir_remove(dummyfs_object_t *dir, const char *name)
 			dir->entries = NULL;
 			free(e->name);
 			free(e);
-			dir->size = 0;
 			return EOK;
 		}
 		return -ENOENT;
@@ -101,7 +100,6 @@ int dir_remove(dummyfs_object_t *dir, const char *name)
 		if (!strcmp(e->name, (char *)name)) {
 			e->prev->next = e->next;
 			e->next->prev = e->prev;
-			dir->size -= sizeof(dummyfs_dirent_t) + e->len;
 			free(e->name);
 			free(e);
 			return EOK;
