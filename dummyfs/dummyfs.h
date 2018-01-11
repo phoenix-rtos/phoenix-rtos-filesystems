@@ -62,6 +62,7 @@ typedef struct _dummyfs_object_t {
 			size_t size;
 			dummyfs_chunk_t *chunks;
 		};
+		u32 port;
 	};
 
 } dummyfs_object_t;

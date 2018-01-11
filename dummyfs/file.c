@@ -20,6 +20,7 @@
 
 #include "dummyfs.h"
 
+
 int dummyfs_truncate(dummyfs_object_t *o, unsigned int size)
 {
 	dummyfs_chunk_t *chunk, *trash;

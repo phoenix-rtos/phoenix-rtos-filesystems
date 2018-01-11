@@ -17,9 +17,6 @@
 #ifndef _DUMMYFS_OBJECT_H_
 #define _DUMMYFS_OBJECT_H_
 
-#include "dummyfs.h"
-
-
 extern dummyfs_object_t *object_create(dummyfs_object_t *objects, unsigned int *id);
 
 
