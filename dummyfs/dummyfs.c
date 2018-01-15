@@ -124,6 +124,10 @@ int dummyfs_getattr(oid_t *oid, int type, int *attr)
 		case (atSize):
 			*attr = o->size;
 			break;
+
+		case (atType):
+			*attr = o->type;
+			break;
 	}
 
 	object_put(o);
@@ -350,7 +354,7 @@ int dummyfs_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int s
 	dummyfs_object_t *d;
 	dummyfs_dirent_t *ei;
 	offs_t diroffs = 0;
-	offs_t entoffs = 0;
+	int ret = EOK;
 
 	mutexLock(dummyfs_common.mutex);
 
@@ -375,14 +379,15 @@ int dummyfs_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int s
 
 	do {
 		if(diroffs >= offs) {
-			if ((diroffs - offs + sizeof(struct dirent) + ei->len) > size)
+			if ((sizeof(struct dirent) + ei->len) > size) {
+				ret = -EINVAL;
 				goto out;
+			}
 			dent->d_ino = ei->oid.id;
-			dent = ((char*)dent) + entoffs;
 			dent->d_reclen = sizeof(struct dirent) + ei->len;
-			//dent->d_reclen = dent->d_reclen + (4 - (dent->d_reclen % 4));
+			dent->d_namlen = ei->len;
 			memcpy(&(dent->d_name[0]), ei->name, ei->len);
-			entoffs += dent->d_reclen;
+			goto out;
 		}
 		diroffs += sizeof(struct dirent) + ei->len;
 		ei = ei->next;
@@ -391,7 +396,7 @@ int dummyfs_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int s
 out:
 	object_put(d);
 	mutexUnlock(dummyfs_common.mutex);
-	return 	diroffs;
+	return 	ret;
 }
 
 

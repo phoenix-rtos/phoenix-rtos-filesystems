@@ -72,7 +72,8 @@ enum {
 	atMode = 0,
 	atUid,
 	atGid,
-	atSize
+	atSize,
+	atType
 };
 
 #endif
