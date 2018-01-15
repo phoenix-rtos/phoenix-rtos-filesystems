@@ -13,7 +13,7 @@ CFLAGS = -c -Wall -O2 -g -I. -I../../libphoenix/ -DARCH=\"arch/ia32/arch.h\"
 LD = i386-pc-phoenix-gcc
 LDFLAGS = -nostartfiles -nostdlib
 
-SRCS = dummyfs.c
+SRCS = dummyfs.c file.c dir.c object.c
 OBJS = $(SRCS:.c=.o)
 
 LIBPHOENIX = ../../libphoenix/libphoenix.a
