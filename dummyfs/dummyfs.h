@@ -19,6 +19,7 @@
 
 #include <sys/rb.h>
 
+#define DUMMYFS_SIZE_MAX 4 * 1024 * 1024
 
 typedef struct _dummyfs_dirent_t {
 	char *name;
@@ -44,7 +45,7 @@ typedef struct _dummyfs_chunk_t {
 
 typedef struct _dummyfs_object_t {
 	oid_t oid;
-	enum { otDir = 0, otFile, otChrdev } type;
+	enum { otDir = 0, otFile, otDev } type;
 
 	unsigned int uid;
 	unsigned int gid;
@@ -73,7 +74,32 @@ enum {
 	atUid,
 	atGid,
 	atSize,
-	atType
+	atType,
+	atPort
 };
+
+
+struct _dummyfs_common_t{
+	u32 port;
+	handle_t mutex;
+	int	size;
+};
+
+extern struct _dummyfs_common_t dummyfs_common;
+
+inline int dummyfs_cksz(int size) {
+
+	if (dummyfs_common.size + size > DUMMYFS_SIZE_MAX)
+		return -ENOMEM;
+	return EOK;
+};
+
+inline void dummyfs_incsz(int size) {
+	dummyfs_common.size += size;
+}
+
+inline void dummyfs_decsz(int size) {
+	dummyfs_common.size -= size;
+}
 
 #endif

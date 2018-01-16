@@ -28,12 +28,7 @@
 #include "object.h"
 
 
-struct {
-	u32 port;
-	handle_t mutex;
-} dummyfs_common;
-
-
+struct _dummyfs_common_t dummyfs_common;
 
 int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res)
 {
@@ -56,7 +51,7 @@ int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res)
 	}
 
 	err = dir_find(d, name, res);
-
+	object_get(res->id);
 	object_put(d);
 	mutexUnlock(dummyfs_common.mutex);
 
@@ -89,6 +84,10 @@ int dummyfs_setattr(oid_t *oid, int type, int attr)
 
 		case (atSize):
 			ret = dummyfs_truncate(o, attr);
+			break;
+		case (atPort):
+			if (o->type == otDir)
+				o->oid.port = attr;
 			break;
 	}
 
@@ -224,11 +223,18 @@ int dummyfs_create(oid_t *oid, int type, int mode)
 	unsigned int id;
 
 	mutexLock(dummyfs_common.mutex);
+
+	if (dummyfs_cksz(sizeof(dummyfs_object_t) != EOK)) {
+		mutexUnlock(dummyfs_common.mutex);
+		return -ENOMEM;
+	}
+
 	o = object_create(NULL, &id);
 
 	if (o == NULL)
 		return -EINVAL;
 
+	dummyfs_incsz(sizeof(dummyfs_object_t));
 	o->oid.port = dummyfs_common.port;
 	o->type = type;
 	o->mode = mode;
@@ -238,22 +244,13 @@ int dummyfs_create(oid_t *oid, int type, int mode)
 	return EOK;
 }
 
-int dummyfs_destroy(oid_t *dir, char *name, oid_t *oid)
+int dummyfs_destroy(oid_t *oid)
 {
-	dummyfs_object_t *d, *o;
+	dummyfs_object_t *o;
 	int ret = EOK;
-
-	if (dir == NULL)
-		return -EINVAL;
-
-	if (name == NULL)
-		return -EINVAL;
-
-	dummyfs_lookup(dir, name, oid);
 
 	mutexLock(dummyfs_common.mutex);
 
-	d = object_get(dir->id);
 	o = object_get(oid->id);
 
 	if (o == NULL) {
@@ -261,16 +258,9 @@ int dummyfs_destroy(oid_t *dir, char *name, oid_t *oid)
 		return -ENOENT;
 	}
 
-	if (o->type == otDir) {
-		object_put(d);
-		mutexUnlock(dummyfs_common.mutex);
-		return -EINVAL;
-	}
+	object_destroy(o);
+	dummyfs_decsz(sizeof(dummyfs_object_t));
 
-	object_put(o);
-	ret = dummyfs_unlink(dir, name);
-
-	object_put(d);
 	mutexUnlock(dummyfs_common.mutex);
 	return ret;
 }
@@ -400,35 +390,15 @@ out:
 	return 	ret;
 }
 
-
-int dummyfs_ioctl(oid_t* oid, msg_t *msg)
-{
-
-	dummyfs_object_t *o;
-
-	mutexLock(dummyfs_common.mutex);
-	o = object_get(oid->id);
-
-	if (o == NULL)
-		return -ENOENT;
-
-	if (o->type != otChrdev)
-		msgSend(oid->port, msg);
-	else
-		msg->o.io.err = -EINVAL;
-
-	object_put(o);
-	mutexUnlock(dummyfs_common.mutex);
-	return EOK;
-}
-
 int main(void)
 {
-	oid_t toid;
+	oid_t toid = { 0 };
 	oid_t root;
 	msg_t msg;
 	dummyfs_object_t *o;
 	unsigned int rid;
+
+	dummyfs_common.size = 0;
 
 	usleep(500000);
 	portCreate(&dummyfs_common.port);
@@ -456,9 +426,7 @@ int main(void)
 
 		case mtOpen:
 			mutexLock(dummyfs_common.mutex);
-			object_get(msg.i.open.oid.id);
-			if (o->type == otChrdev)
-				msgSend(o->port, &msg);
+			o = object_get(msg.i.open.oid.id);
 			mutexUnlock(dummyfs_common.mutex);
 			break;
 
@@ -466,8 +434,6 @@ int main(void)
 			mutexLock(dummyfs_common.mutex);
 			o = object_get(msg.i.close.oid.id);
 			object_put(o);
-			if (o->type == otChrdev)
-				msgSend(o->port, &msg);
 			object_put(o);
 			mutexUnlock(dummyfs_common.mutex);
 			break;
@@ -475,10 +441,7 @@ int main(void)
 		case mtWrite:
 			mutexLock(dummyfs_common.mutex);
 			o = object_get(msg.i.io.oid.id);
-			if (o->type != otChrdev)
-				msg.o.io.err = dummyfs_write(o, msg.i.io.offs, msg.i.data, msg.i.size);
-			else
-				msgSend(o->port, &msg);
+			msg.o.io.err = dummyfs_write(o, msg.i.io.offs, msg.i.data, msg.i.size);
 			object_put(o);
 			mutexUnlock(dummyfs_common.mutex);
 			break;
@@ -486,10 +449,7 @@ int main(void)
 		case mtRead:
 			mutexLock(dummyfs_common.mutex);
 			o = object_get(msg.i.io.oid.id);
-			if (o->type != otChrdev)
-				msg.o.io.err = dummyfs_read(o, msg.i.io.offs, msg.o.data, msg.o.size);
-			else
-				msgSend(o->port, &msg);
+			msg.o.io.err = dummyfs_read(o, msg.i.io.offs, msg.o.data, msg.o.size);
 			object_put(o);
 			mutexUnlock(dummyfs_common.mutex);
 			break;
@@ -503,27 +463,27 @@ int main(void)
 			break;
 
 		case mtCreate:
-			msg.o.io.err = dummyfs_create(&msg.o.create.oid, msg.i.create.type, msg.i.create.mode);
-			if (msg.i.create.type == otChrdev &&  msg.o.io.err == EOK) {
+			dummyfs_create(&msg.o.create.oid, msg.i.create.type, msg.i.create.mode);
+			if (msg.i.create.type == otDev) {
 				mutexLock(dummyfs_common.mutex);
 				o = object_get(msg.o.create.oid.id);
 				if (o != NULL)
-					o->port = msg.i.create.port;
+					o->oid.port = msg.i.create.port;
 				object_put(o);
 				mutexUnlock(dummyfs_common.mutex);
 			}
 			break;
 
 		case mtDestroy:
-			msg.o.io.err = dummyfs_destroy(&msg.i.destroy.dir, msg.i.data, &msg.i.destroy.oid);
+			msg.o.io.err = dummyfs_destroy(&msg.i.destroy.oid);
 			break;
 
 		case mtSetattr:
-			msg.o.io.err = dummyfs_setattr(&msg.i.attr.oid, msg.i.attr.type, msg.i.attr.val);
+			dummyfs_setattr(&msg.i.attr.oid, msg.i.attr.type, msg.i.attr.val);
 			break;
 
 		case mtGetattr:
-			msg.o.io.err = dummyfs_getattr(&msg.i.attr.oid, msg.i.attr.type, &msg.o.attr.val);
+			dummyfs_getattr(&msg.i.attr.oid, msg.i.attr.type, &msg.o.attr.val);
 			break;
 
 		case mtLink:
@@ -535,11 +495,11 @@ int main(void)
 			break;
 
 		case mtLookup:
-			msg.o.io.err = dummyfs_lookup(&msg.i.lookup.dir, msg.i.data, &msg.o.lookup.res);
+			dummyfs_lookup(&msg.i.lookup.dir, msg.i.data, &msg.o.lookup.res);
 			break;
 
 		case mtDevctl:
-			dummyfs_ioctl(&msg.i.io.oid, &msg);
+			msg.o.io.err = -EINVAL;
 			break;
 
 		case mtReaddir:

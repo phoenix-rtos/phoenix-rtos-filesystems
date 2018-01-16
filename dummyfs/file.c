@@ -24,7 +24,7 @@
 int dummyfs_truncate(dummyfs_object_t *o, unsigned int size)
 {
 	dummyfs_chunk_t *chunk, *trash;
-	char *tmp;
+	char *tmp = NULL;
 	unsigned int chunksz;
 
 	if (o == NULL)
@@ -43,6 +43,8 @@ int dummyfs_truncate(dummyfs_object_t *o, unsigned int size)
 		/* expansion */
 		if (chunk == NULL) {
 			/* allocate new chunk */
+			if (dummyfs_cksz(sizeof(dummyfs_chunk_t) != EOK))
+					return -ENOMEM;
 			chunk = malloc(sizeof(dummyfs_chunk_t));
 
 			chunk->offs = 0;
@@ -52,17 +54,28 @@ int dummyfs_truncate(dummyfs_object_t *o, unsigned int size)
 			chunk->next = chunk;
 			chunk->prev = chunk;
 			o->chunks = chunk;
+			dummyfs_incsz(sizeof(dummyfs_chunk_t));
 		}
 		else {
 			/* reallocate last chunk or alloc new one if reallocation fails */
 			chunk->prev->size += size - o->size;
 			if (chunk->prev->used) {
+				if (dummyfs_cksz(size - o->size) != EOK)
+					return -ENOMEM;
+
 				tmp = realloc(chunk->prev->data, chunk->prev->size);
 				if (tmp == NULL) {
 					chunk->prev->size -= size - o->size;
+
+					if (dummyfs_cksz(sizeof(dummyfs_chunk_t) != EOK))
+						return -ENOMEM;
+
 					chunk = malloc(sizeof(dummyfs_chunk_t));
+
 					if (chunk == NULL)
 						return -ENOMEM;
+					dummyfs_incsz(sizeof(dummyfs_chunk_t));
+
 					chunk->offs = o->size;
 					chunk->size = size - o->size;
 					chunk->used = 0;
@@ -71,8 +84,10 @@ int dummyfs_truncate(dummyfs_object_t *o, unsigned int size)
 					chunk->prev = o->chunks->prev;
 					o->chunks->prev->next = chunk;
 					o->chunks->prev = chunk;
-				} else
+				} else {
 					chunk->prev->data = tmp;
+					dummyfs_incsz(size + o->size);
+				}
 			}
 		}
 	}
@@ -93,6 +108,8 @@ int dummyfs_truncate(dummyfs_object_t *o, unsigned int size)
 			tmp = realloc(chunk->data, chunksz);
 			if (tmp == NULL)
 				return -ENOMEM;
+
+			dummyfs_decsz(chunk->size - chunksz);
 			chunk->used = chunk->used > chunksz ? chunksz : chunk->used;
 			chunk->size = chunksz;
 			chunk->data = tmp;
@@ -103,11 +120,13 @@ int dummyfs_truncate(dummyfs_object_t *o, unsigned int size)
 		o->chunks->prev = chunk;
 		while (trash != o->chunks) {
 			chunk = trash->next;
+			dummyfs_decsz(sizeof(dummyfs_chunk_t) + trash->size);
 			free(trash->data);
 			free(trash);
 			trash = chunk;
 		}
 		if (size == 0) {
+			dummyfs_decsz(sizeof(dummyfs_chunk_t) + trash->size);
 			free(trash->data);
 			free(trash);
 		}
@@ -168,7 +187,7 @@ int dummyfs_read(dummyfs_object_t *o, offs_t offs, char *buff, unsigned int len)
 
 int dummyfs_write(dummyfs_object_t *o, offs_t offs, char *buff, unsigned int len)
 {
-	dummyfs_chunk_t *chunk, *split;
+	dummyfs_chunk_t *chunk;
 	int writesz, writeoffs;
 	int ret = EOK;
 
@@ -198,45 +217,18 @@ int dummyfs_write(dummyfs_object_t *o, offs_t offs, char *buff, unsigned int len
 		writeoffs = offs - chunk->offs;
 		writesz = len > chunk->size - writeoffs ? chunk->size - writeoffs : len;
 
-		/* check if chunk split could save some space */
 		if (!chunk->used) {
-			if (writeoffs > sizeof(dummyfs_chunk_t)) {
-				split = malloc(sizeof(dummyfs_chunk_t));
-				split->data = NULL;
-				split->used = 0;
-				split->size = writeoffs;
-				split->offs = chunk->offs;
-				split->prev = chunk->prev;
-				split->next = chunk;
-				chunk->prev->next = split;
-				chunk->prev = split;
-				chunk->offs += writeoffs;
-				chunk->size -= writeoffs;
-				writeoffs = 0;
-				if (chunk == o->chunks)
-					o->chunks = split;
-			}
-			if (writesz < chunk->size - writeoffs) {
-				if(chunk->size - writeoffs - writesz > sizeof(dummyfs_chunk_t)) {
-					split = malloc(sizeof(dummyfs_chunk_t));
-					split->data = NULL;
-					split->used = 0;
-					split->size = chunk->size - writeoffs - writesz;
-					split->offs = chunk->offs + writesz;
-					split->prev = chunk;
-					split->next = chunk->next;
-					chunk->next->prev = split;
-					chunk->next = split;
-					chunk->size -= split->size;
-				}
-			}
+			if (dummyfs_cksz(chunk->size) != EOK)
+				return -ENOMEM;
 			chunk->data = malloc(chunk->size);
-			memset(chunk->data + writesz, 0, chunk->size - writesz);
-		}
-
+			memset(chunk->data, 0, writeoffs);
+			memset(chunk->data + writeoffs +  writesz, 0, chunk->size - writesz - writeoffs);
+			chunk->used = writesz;
+			dummyfs_incsz(chunk->size);
+		} else
+			chunk->used += writesz;
 		memcpy(chunk->data + writeoffs, buff, writesz);
 
-		chunk->used += writesz;
 		len  -= writesz;
 		offs += writesz;
 		buff += writesz;

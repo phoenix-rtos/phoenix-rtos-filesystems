@@ -52,6 +52,9 @@ int dir_add(dummyfs_object_t *dir, const char *name, oid_t *oid)
 	if (dir_find(dir, name, &res) == EOK)
 		return -EEXIST;
 
+	if (dummyfs_cksz(sizeof(dummyfs_dirent_t) + strlen(name) + 1) != EOK)
+		return -ENOMEM;
+
 	n = malloc(sizeof(dummyfs_dirent_t));
 
 	if (e == NULL) {
@@ -76,6 +79,7 @@ int dir_add(dummyfs_object_t *dir, const char *name, oid_t *oid)
 	n->name[n->len - 1] = '\0';
 	memcpy(&n->oid, oid, sizeof(oid_t));
 
+	dummyfs_incsz(sizeof(dummyfs_dirent_t) + n->len);
 	return EOK;
 }
 
@@ -100,6 +104,7 @@ int dir_remove(dummyfs_object_t *dir, const char *name)
 		if (!strcmp(e->name, (char *)name)) {
 			e->prev->next = e->next;
 			e->next->prev = e->prev;
+			dummyfs_decsz(e->len + sizeof(dummyfs_dirent_t));
 			free(e->name);
 			free(e);
 			return EOK;
