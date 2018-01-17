@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/msg.h>
+#include <string.h>
 
 #include "dummyfs.h"
 
@@ -24,14 +25,23 @@ int dir_find(dummyfs_object_t *dir, const char *name, oid_t *res)
 {
 
 	dummyfs_dirent_t *e = dir->entries;
+	char *dirname = strdup(name);
+	char *end = strchr(dirname, '/');
+	int len;
 
 	if (e == NULL)
 		return -ENOENT;
+
+	if (end != NULL)
+		*end = 0;
+
+	len = strlen(dirname);
+
 	/* Iterate over all entries to find the matching one */
 	do {
-		if (!strcmp(e->name, (char *)name)) {
+		if (!strcmp(e->name, dirname)) {
 			memcpy(res, &e->oid, sizeof(oid_t));
-			return EOK;
+			return len;
 		}
 
 		e = e->next;
@@ -49,7 +59,7 @@ int dir_add(dummyfs_object_t *dir, const char *name, oid_t *oid)
 	if (dir == NULL)
 		return -EINVAL;
 
-	if (dir_find(dir, name, &res) == EOK)
+	if (dir_find(dir, name, &res) >= 0)
 		return -EEXIST;
 
 	if (dummyfs_cksz(sizeof(dummyfs_dirent_t) + strlen(name) + 1) != EOK)
@@ -113,4 +123,30 @@ int dir_remove(dummyfs_object_t *dir, const char *name)
 	} while (e != dir->entries);
 
 	return -ENOENT;
+}
+
+int dir_empty(dummyfs_object_t *dir)
+{
+	if (dir->entries == NULL)
+		return EOK;
+
+	if (dir->refs > 1)
+		return -EBUSY;
+
+	if (dir->entries->next->next != dir->entries)
+		return -EBUSY;
+
+	return EOK;
+}
+
+void dir_destroy(dummyfs_object_t *dir)
+{
+	if (dir_empty(dir) == EOK) {
+		free(dir->entries->next->name);
+		free(dir->entries->next);
+
+		free(dir->entries->name);
+		free(dir->entries);
+		dir->entries = NULL;
+	}
 }

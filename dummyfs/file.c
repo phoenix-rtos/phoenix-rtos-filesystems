@@ -17,25 +17,37 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/msg.h>
+#include <sys/threads.h>
 
 #include "dummyfs.h"
+#include "object.h"
 
-
-int dummyfs_truncate(dummyfs_object_t *o, unsigned int size)
+int dummyfs_truncate(oid_t *oid, unsigned int size)
 {
 	dummyfs_chunk_t *chunk, *trash;
 	char *tmp = NULL;
 	unsigned int chunksz;
+	dummyfs_object_t *o;
 
-	if (o == NULL)
+	mutexLock(dummyfs_common.mutex);
+	o = object_get(oid->id);
+
+	if (o == NULL) {
+		mutexUnlock(dummyfs_common.mutex);
 		return -EINVAL;
+	}
 
-	if (o->type != otFile)
+	if (o->type != otFile) {
+		object_put(o);
+		mutexUnlock(dummyfs_common.mutex);
 		return -EINVAL;
+	}
 
-	if (o->size == size)
+	if (o->size == size) {
+		object_put(o);
+		mutexUnlock(dummyfs_common.mutex);
 		return EOK;
-
+	}
 	chunk = o->chunks;
 
 	if (size > o->size) {
@@ -43,8 +55,8 @@ int dummyfs_truncate(dummyfs_object_t *o, unsigned int size)
 		/* expansion */
 		if (chunk == NULL) {
 			/* allocate new chunk */
-			if (dummyfs_cksz(sizeof(dummyfs_chunk_t) != EOK))
-					return -ENOMEM;
+			if (dummyfs_cksz(sizeof(dummyfs_chunk_t)) != EOK)
+					goto err;
 			chunk = malloc(sizeof(dummyfs_chunk_t));
 
 			chunk->offs = 0;
@@ -61,19 +73,19 @@ int dummyfs_truncate(dummyfs_object_t *o, unsigned int size)
 			chunk->prev->size += size - o->size;
 			if (chunk->prev->used) {
 				if (dummyfs_cksz(size - o->size) != EOK)
-					return -ENOMEM;
+					goto err;
 
 				tmp = realloc(chunk->prev->data, chunk->prev->size);
 				if (tmp == NULL) {
 					chunk->prev->size -= size - o->size;
 
-					if (dummyfs_cksz(sizeof(dummyfs_chunk_t) != EOK))
-						return -ENOMEM;
+					if (dummyfs_cksz(sizeof(dummyfs_chunk_t)) != EOK)
+						goto err;
 
 					chunk = malloc(sizeof(dummyfs_chunk_t));
 
 					if (chunk == NULL)
-						return -ENOMEM;
+						goto err;
 					dummyfs_incsz(sizeof(dummyfs_chunk_t));
 
 					chunk->offs = o->size;
@@ -107,7 +119,7 @@ int dummyfs_truncate(dummyfs_object_t *o, unsigned int size)
 			chunksz = size - chunk->offs;
 			tmp = realloc(chunk->data, chunksz);
 			if (tmp == NULL)
-				return -ENOMEM;
+				goto err;
 
 			dummyfs_decsz(chunk->size - chunksz);
 			chunk->used = chunk->used > chunksz ? chunksz : chunk->used;
@@ -132,31 +144,48 @@ int dummyfs_truncate(dummyfs_object_t *o, unsigned int size)
 		}
 	}
 	o->size = size;
+
+	object_put(o);
+	mutexUnlock(dummyfs_common.mutex);
 	return EOK;
+
+err:
+	object_put(o);
+	mutexUnlock(dummyfs_common.mutex);
+	return -ENOMEM;
 }
 
 
-int dummyfs_read(dummyfs_object_t *o, offs_t offs, char *buff, unsigned int len)
+int dummyfs_read(oid_t *oid, offs_t offs, char *buff, unsigned int len)
 {
 	int ret = EOK;
 	int readsz;
 	int readoffs;
 	dummyfs_chunk_t *chunk;
+	dummyfs_object_t *o;
 
-	if (o == NULL)
+	mutexLock(dummyfs_common.mutex);
+	o = object_get(oid->id);
+
+	if (o == NULL) {
+		mutexUnlock(dummyfs_common.mutex);
 		return -EINVAL;
+	}
 
 	if (o->type != otFile)
-		return -EINVAL;
+		ret = -EINVAL;
 
 	if (buff == NULL)
-		return -EINVAL;
+		ret = -EINVAL;
 
 	if (o->size <= offs)
-		return -EINVAL;
+		ret = -EINVAL;
+
+	if (ret != EOK)
+		goto out;
 
 	if (len == 0)
-		return EOK;
+		goto out;
 
 	for(chunk = o->chunks; chunk->next != o->chunks; chunk = chunk->next) {
 		if (chunk->offs + chunk->size > offs) {
@@ -181,30 +210,43 @@ int dummyfs_read(dummyfs_object_t *o, offs_t offs, char *buff, unsigned int len)
 
 	} while (len && chunk != o->chunks);
 
+out:
+	object_put(o);
+	mutexUnlock(dummyfs_common.mutex);
 	return ret;
 }
 
 
-int dummyfs_write(dummyfs_object_t *o, offs_t offs, char *buff, unsigned int len)
+int dummyfs_write(oid_t *oid, offs_t offs, char *buff, unsigned int len)
 {
 	dummyfs_chunk_t *chunk;
+	dummyfs_object_t *o;
 	int writesz, writeoffs;
 	int ret = EOK;
 
-	if (o == NULL)
+	mutexLock(dummyfs_common.mutex);
+	o = object_get(oid->id);
+
+	if (o == NULL) {
+		mutexUnlock(dummyfs_common.mutex);
 		return -EINVAL;
+	}
 
 	if (o->type != otFile)
-		return -EINVAL;
+		ret = -EINVAL;
 
 	if (buff == NULL)
-		return -EINVAL;
+		ret = -EINVAL;
+
+	if (ret != EOK)
+		goto out;
 
 	if (len == 0)
-		return EOK;
+		goto out;
+
 
 	if (offs + len > o->size)
-		if ((ret = dummyfs_truncate(o, offs + len)) != EOK) {
+		if ((ret = dummyfs_truncate(oid, offs + len)) != EOK) {
 			return ret;
 		}
 
@@ -218,8 +260,11 @@ int dummyfs_write(dummyfs_object_t *o, offs_t offs, char *buff, unsigned int len
 		writesz = len > chunk->size - writeoffs ? chunk->size - writeoffs : len;
 
 		if (!chunk->used) {
-			if (dummyfs_cksz(chunk->size) != EOK)
-				return -ENOMEM;
+			if (dummyfs_cksz(chunk->size) != EOK) {
+				ret = -ENOMEM;
+				goto out;
+			}
+
 			chunk->data = malloc(chunk->size);
 			memset(chunk->data, 0, writeoffs);
 			memset(chunk->data + writeoffs +  writesz, 0, chunk->size - writesz - writeoffs);
@@ -238,5 +283,8 @@ int dummyfs_write(dummyfs_object_t *o, offs_t offs, char *buff, unsigned int len
 
 	} while (len && chunk != o->chunks);
 
+out:
+	object_put(o);
+	mutexUnlock(dummyfs_common.mutex);
 	return ret;
 }
