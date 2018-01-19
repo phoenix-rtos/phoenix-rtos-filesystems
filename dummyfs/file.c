@@ -245,10 +245,15 @@ int dummyfs_write(oid_t *oid, offs_t offs, char *buff, unsigned int len)
 		goto out;
 
 
-	if (offs + len > o->size)
+	if (offs + len > o->size) {
+		mutexUnlock(dummyfs_common.mutex);
 		if ((ret = dummyfs_truncate(oid, offs + len)) != EOK) {
+			mutexLock(dummyfs_common.mutex);
+			object_put(o);
+			mutexUnlock(dummyfs_common.mutex);
 			return ret;
 		}
+	}
 
 	for (chunk = o->chunks; chunk->next != o->chunks; chunk = chunk->next)
 		if ((chunk->offs + chunk->size) > offs)
