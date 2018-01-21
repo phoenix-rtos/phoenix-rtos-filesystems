@@ -30,6 +30,7 @@
 
 struct _dummyfs_common_t dummyfs_common;
 
+
 int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res)
 {
 	dummyfs_object_t *d;
@@ -37,7 +38,7 @@ int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res)
 
 	mutexLock(dummyfs_common.mutex);
 
-	if(dir == NULL)
+	if (dir == NULL)
 		d = object_get(0);
 	else if ((d = object_get(dir->id)) == NULL) {
 		mutexUnlock(dummyfs_common.mutex);
@@ -97,6 +98,7 @@ int dummyfs_setattr(oid_t *oid, int type, int attr)
 	return ret;
 }
 
+
 int dummyfs_getattr(oid_t *oid, int type, int *attr)
 {
 	dummyfs_object_t *o;
@@ -134,6 +136,7 @@ int dummyfs_getattr(oid_t *oid, int type, int *attr)
 
 	return EOK;
 }
+
 
 int dummyfs_link(oid_t *dir, const char *name, oid_t *oid)
 {
@@ -182,6 +185,7 @@ int dummyfs_link(oid_t *dir, const char *name, oid_t *oid)
 	return ret;
 }
 
+
 int dummyfs_unlink(oid_t *dir, const char *name)
 {
 	oid_t oid;
@@ -227,6 +231,7 @@ int dummyfs_unlink(oid_t *dir, const char *name)
 	return ret;
 }
 
+
 int dummyfs_create(oid_t *oid, int type, int mode)
 {
 	dummyfs_object_t *o;
@@ -253,6 +258,7 @@ int dummyfs_create(oid_t *oid, int type, int mode)
 
 	return EOK;
 }
+
 
 int dummyfs_destroy(oid_t *oid)
 {
@@ -281,6 +287,7 @@ int dummyfs_destroy(oid_t *oid)
 	mutexUnlock(dummyfs_common.mutex);
 	return ret;
 }
+
 
 int dummyfs_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int size)
 {
@@ -332,6 +339,7 @@ out:
 	mutexUnlock(dummyfs_common.mutex);
 	return 	ret;
 }
+
 
 int main(void)
 {

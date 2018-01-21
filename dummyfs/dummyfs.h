@@ -68,6 +68,7 @@ typedef struct _dummyfs_object_t {
 
 } dummyfs_object_t;
 
+
 /* attribute types */
 enum {
 	atMode = 0,
@@ -82,24 +83,29 @@ enum {
 struct _dummyfs_common_t{
 	u32 port;
 	handle_t mutex;
-	int	size;
+	int size;
 };
+
 
 extern struct _dummyfs_common_t dummyfs_common;
 
-inline int dummyfs_cksz(int size) {
+
+static inline int dummyfs_cksz(int size) {
 
 	if (dummyfs_common.size + size > DUMMYFS_SIZE_MAX)
 		return -ENOMEM;
 	return EOK;
-};
+}
 
-inline void dummyfs_incsz(int size) {
+
+static inline void dummyfs_incsz(int size) {
 	dummyfs_common.size += size;
 }
 
-inline void dummyfs_decsz(int size) {
+
+static inline void dummyfs_decsz(int size) {
 	dummyfs_common.size -= size;
 }
+
 
 #endif
