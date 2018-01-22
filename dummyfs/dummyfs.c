@@ -351,7 +351,9 @@ int main(void)
 
 	dummyfs_common.size = 0;
 
-	usleep(500000);
+	/* Wait for console to start */
+	while (write(0, "", 1) < 0) usleep(5000);
+
 	portCreate(&dummyfs_common.port);
 	printf("dummyfs: Starting dummyfs server at port %d\n", dummyfs_common.port);
 
