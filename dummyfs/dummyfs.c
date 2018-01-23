@@ -174,10 +174,10 @@ int dummyfs_link(oid_t *dir, const char *name, oid_t *oid)
 	}
 
 	if (o->type == otDir) {
-		dir_add(o, ".", oid);
-		dir_add(o, "..", dir);
+		dir_add(o, ".", otDir, oid);
+		dir_add(o, "..", otDir, dir);
 	}
-	ret = dir_add(d, name, oid);
+	ret = dir_add(d, name, o->type, oid);
 
 	object_put(d);
 	mutexUnlock(dummyfs_common.mutex);
@@ -326,6 +326,7 @@ int dummyfs_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int s
 			dent->d_ino = ei->oid.id;
 			dent->d_reclen = sizeof(struct dirent) + ei->len;
 			dent->d_namlen = ei->len;
+			dent->d_type = ei->type;
 			memcpy(&(dent->d_name[0]), ei->name, ei->len);
 			ret = EOK;
 			goto out;
@@ -370,8 +371,8 @@ int main(void)
 		return -1;
 
 	o = object_get(root.id);
-	dir_add(o, ".", &root);
-	dir_add(o, "..", &root);
+	dir_add(o, ".", otDir, &root);
+	dir_add(o, "..", otDir, &root);
 
 	for (;;) {
 		msgRecv(dummyfs_common.port, &msg, &rid);

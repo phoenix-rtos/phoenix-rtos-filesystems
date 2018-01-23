@@ -50,7 +50,7 @@ int dir_find(dummyfs_object_t *dir, const char *name, oid_t *res)
 	return -ENOENT;
 }
 
-int dir_add(dummyfs_object_t *dir, const char *name, oid_t *oid)
+int dir_add(dummyfs_object_t *dir, const char *name, int type, oid_t *oid)
 {
 	oid_t res;
 	dummyfs_dirent_t *n;
@@ -88,6 +88,7 @@ int dir_add(dummyfs_object_t *dir, const char *name, oid_t *oid)
 	memcpy(n->name, name, n->len);
 	n->name[n->len - 1] = '\0';
 	memcpy(&n->oid, oid, sizeof(oid_t));
+	n->type = type;
 
 	dummyfs_incsz(sizeof(dummyfs_dirent_t) + n->len);
 	return EOK;
