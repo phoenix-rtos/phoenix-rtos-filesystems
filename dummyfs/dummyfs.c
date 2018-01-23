@@ -215,7 +215,7 @@ int dummyfs_unlink(oid_t *dir, const char *name)
 		return -ENOENT;
 	}
 
-	if (o->type == otDir && dir_empty(o) == EOK) {
+	if (o->type == otDir && dir_empty(o) != EOK) {
 		object_put(d);
 		object_put(o);
 		mutexUnlock(dummyfs_common.mutex);
