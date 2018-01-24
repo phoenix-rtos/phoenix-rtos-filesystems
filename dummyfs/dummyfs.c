@@ -291,7 +291,7 @@ int dummyfs_destroy(oid_t *oid)
 
 int dummyfs_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int size)
 {
-	dummyfs_object_t *d;
+	dummyfs_object_t *d, *o;
 	dummyfs_dirent_t *ei;
 	offs_t diroffs = 0;
 	int ret = -ENOENT;
@@ -328,6 +328,11 @@ int dummyfs_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int s
 			dent->d_namlen = ei->len;
 			memcpy(&(dent->d_name[0]), ei->name, ei->len);
 			ret = EOK;
+
+			o = object_get(ei->oid.id);
+			dent->d_type = (o->type == otDir) ? 4 : 0;
+			object_put(o);
+			
 			goto out;
 		}
 		diroffs += sizeof(struct dirent) + ei->len;
@@ -352,14 +357,17 @@ int main(void)
 	dummyfs_common.size = 0;
 
 	/* Wait for console to start */
-	while (write(0, "", 1) < 0) usleep(5000);
+	while (write(0, "", 1) < 0)
+		usleep(5000);
 
 	portCreate(&dummyfs_common.port);
 	printf("dummyfs: Starting dummyfs server at port %d\n", dummyfs_common.port);
 
 	/* Try to mount fs as root */
-	if (portRegister(dummyfs_common.port, "/", &toid) == EOK)
-		printf("dummyfs: Mounted as root %s\n", "");
+	if (portRegister(dummyfs_common.port, "/", &toid) < 0) {
+		printf("dummyfs: Can't mount on directory %s\n", "/");
+		return -1;
+	}
 
 	object_init();
 
