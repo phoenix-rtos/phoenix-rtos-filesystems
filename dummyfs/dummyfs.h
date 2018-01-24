@@ -21,9 +21,15 @@
 
 #define DUMMYFS_SIZE_MAX 4 * 1024 * 1024
 
+enum {	otDir = 0,
+		otFile,
+		otDev
+};
+
 typedef struct _dummyfs_dirent_t {
 	char *name;
 	unsigned int len;
+	u32 type;
 	oid_t oid;
 
 	struct _dummyfs_dirent_t *next;
@@ -45,7 +51,7 @@ typedef struct _dummyfs_chunk_t {
 
 typedef struct _dummyfs_object_t {
 	oid_t oid;
-	enum { otDir = 0, otFile, otDev } type;
+	u32 type;
 
 	unsigned int uid;
 	unsigned int gid;

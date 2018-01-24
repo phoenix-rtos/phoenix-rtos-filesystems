@@ -40,7 +40,7 @@ int dummyfs_truncate(oid_t *oid, unsigned int size)
 	if (o->type != otFile) {
 		object_put(o);
 		mutexUnlock(dummyfs_common.mutex);
-		return -EINVAL;
+		return -EACCES;
 	}
 
 	if (o->size == size) {
