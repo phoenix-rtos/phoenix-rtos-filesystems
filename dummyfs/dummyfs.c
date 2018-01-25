@@ -320,22 +320,24 @@ int dummyfs_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int s
 	do {
 		if(diroffs >= offs) {
 			if ((sizeof(struct dirent) + ei->len) > size) {
-				ret = -EINVAL;
-				goto out;
+				object_put(d);
+				mutexUnlock(dummyfs_common.mutex);
+				return 	-EINVAL;
 			}
 			dent->d_ino = ei->oid.id;
 			dent->d_reclen = sizeof(struct dirent) + ei->len;
 			dent->d_namlen = ei->len;
 			dent->d_type = ei->type;
 			memcpy(&(dent->d_name[0]), ei->name, ei->len);
-			ret = EOK;
-			goto out;
+
+			object_put(d);
+			mutexUnlock(dummyfs_common.mutex);
+			return 	EOK;
 		}
 		diroffs += sizeof(struct dirent) + ei->len;
 		ei = ei->next;
 	} while (ei != d->entries);
 
-out:
 	object_put(d);
 	mutexUnlock(dummyfs_common.mutex);
 	return 	ret;
