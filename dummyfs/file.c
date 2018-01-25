@@ -7,7 +7,7 @@
  *
  * Copyright 2012, 2018 Phoenix Systems
  * Copyright 2007 Pawel Pisarczyk
- * Author: Jacek Popko, Katarzyna Baranowska, Pawel Pisarczyk
+ * Author: Jacek Popko, Katarzyna Baranowska, Pawel Pisarczyk, Kamil Amanowicz
  *
  * This file is part of Phoenix-RTOS.
  *
