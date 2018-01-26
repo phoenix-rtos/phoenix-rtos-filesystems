@@ -290,7 +290,7 @@ int dummyfs_destroy(oid_t *oid)
 
 int dummyfs_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int size)
 {
-	dummyfs_object_t *d, *o;
+	dummyfs_object_t *d;
 	dummyfs_dirent_t *ei;
 	offs_t diroffs = 0;
 	int ret = -ENOENT;
@@ -329,10 +329,6 @@ int dummyfs_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int s
 			dent->d_type = ei->type;
 			memcpy(&(dent->d_name[0]), ei->name, ei->len);
 
-			o = object_get(ei->oid.id);
-			dent->d_type = (o->type == otDir) ? 4 : 0;
-			object_put(o);
-			
 			object_put(d);
 			mutexUnlock(dummyfs_common.mutex);
 			return 	EOK;
