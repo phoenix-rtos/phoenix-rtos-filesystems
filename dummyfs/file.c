@@ -7,7 +7,7 @@
  *
  * Copyright 2012, 2018 Phoenix Systems
  * Copyright 2007 Pawel Pisarczyk
- * Author: Jacek Popko, Katarzyna Baranowska, Pawel Pisarczyk
+ * Author: Jacek Popko, Katarzyna Baranowska, Pawel Pisarczyk, Kamil Amanowicz
  *
  * This file is part of Phoenix-RTOS.
  *
@@ -55,8 +55,12 @@ int dummyfs_truncate(oid_t *oid, unsigned int size)
 		/* expansion */
 		if (chunk == NULL) {
 			/* allocate new chunk */
-			if (dummyfs_cksz(sizeof(dummyfs_chunk_t)) != EOK)
-					goto err;
+			if (dummyfs_cksz(sizeof(dummyfs_chunk_t)) != EOK) {
+				object_put(o);
+				mutexUnlock(dummyfs_common.mutex);
+				return -ENOMEM;
+			}
+
 			chunk = malloc(sizeof(dummyfs_chunk_t));
 
 			chunk->offs = 0;
@@ -72,20 +76,30 @@ int dummyfs_truncate(oid_t *oid, unsigned int size)
 			/* reallocate last chunk or alloc new one if reallocation fails */
 			chunk->prev->size += size - o->size;
 			if (chunk->prev->used) {
-				if (dummyfs_cksz(size - o->size) != EOK)
-					goto err;
+				if (dummyfs_cksz(size - o->size) != EOK) {
+					object_put(o);
+					mutexUnlock(dummyfs_common.mutex);
+					return -ENOMEM;
+				}
 
 				tmp = realloc(chunk->prev->data, chunk->prev->size);
 				if (tmp == NULL) {
 					chunk->prev->size -= size - o->size;
 
-					if (dummyfs_cksz(sizeof(dummyfs_chunk_t)) != EOK)
-						goto err;
+					if (dummyfs_cksz(sizeof(dummyfs_chunk_t)) != EOK) {
+						object_put(o);
+						mutexUnlock(dummyfs_common.mutex);
+						return -ENOMEM;
+					}
 
 					chunk = malloc(sizeof(dummyfs_chunk_t));
 
-					if (chunk == NULL)
-						goto err;
+					if (chunk == NULL) {
+						object_put(o);
+						mutexUnlock(dummyfs_common.mutex);
+						return -ENOMEM;
+					}
+
 					dummyfs_incsz(sizeof(dummyfs_chunk_t));
 
 					chunk->offs = o->size;
@@ -118,8 +132,11 @@ int dummyfs_truncate(oid_t *oid, unsigned int size)
 		{
 			chunksz = size - chunk->offs;
 			tmp = realloc(chunk->data, chunksz);
-			if (tmp == NULL)
-				goto err;
+			if (tmp == NULL) {
+				object_put(o);
+				mutexUnlock(dummyfs_common.mutex);
+				return -ENOMEM;
+			}
 
 			dummyfs_decsz(chunk->size - chunksz);
 			chunk->used = chunk->used > chunksz ? chunksz : chunk->used;
@@ -148,11 +165,6 @@ int dummyfs_truncate(oid_t *oid, unsigned int size)
 	object_put(o);
 	mutexUnlock(dummyfs_common.mutex);
 	return EOK;
-
-err:
-	object_put(o);
-	mutexUnlock(dummyfs_common.mutex);
-	return -ENOMEM;
 }
 
 
@@ -181,11 +193,17 @@ int dummyfs_read(oid_t *oid, offs_t offs, char *buff, unsigned int len)
 	if (o->size <= offs)
 		ret = -EINVAL;
 
-	if (ret != EOK)
-		goto out;
+	if (ret != EOK) {
+		object_put(o);
+		mutexUnlock(dummyfs_common.mutex);
+		return ret;
+	}
 
-	if (len == 0)
-		goto out;
+	if (len == 0) {
+		object_put(o);
+		mutexUnlock(dummyfs_common.mutex);
+		return EOK;
+	}
 
 	for(chunk = o->chunks; chunk->next != o->chunks; chunk = chunk->next) {
 		if (chunk->offs + chunk->size > offs) {
@@ -210,7 +228,6 @@ int dummyfs_read(oid_t *oid, offs_t offs, char *buff, unsigned int len)
 
 	} while (len && chunk != o->chunks);
 
-out:
 	object_put(o);
 	mutexUnlock(dummyfs_common.mutex);
 	return ret;
@@ -238,12 +255,17 @@ int dummyfs_write(oid_t *oid, offs_t offs, char *buff, unsigned int len)
 	if (buff == NULL)
 		ret = -EINVAL;
 
-	if (ret != EOK)
-		goto out;
+	if (ret != EOK) {
+		object_put(o);
+		mutexUnlock(dummyfs_common.mutex);
+		return ret;
+	}
 
-	if (len == 0)
-		goto out;
-
+	if (len == 0) {
+		object_put(o);
+		mutexUnlock(dummyfs_common.mutex);
+		return EOK;
+	}
 
 	if (offs + len > o->size) {
 		mutexUnlock(dummyfs_common.mutex);
@@ -266,8 +288,9 @@ int dummyfs_write(oid_t *oid, offs_t offs, char *buff, unsigned int len)
 
 		if (!chunk->used) {
 			if (dummyfs_cksz(chunk->size) != EOK) {
-				ret = -ENOMEM;
-				goto out;
+				object_put(o);
+				mutexUnlock(dummyfs_common.mutex);
+				return -ENOMEM;
 			}
 
 			chunk->data = malloc(chunk->size);
@@ -288,7 +311,6 @@ int dummyfs_write(oid_t *oid, offs_t offs, char *buff, unsigned int len)
 
 	} while (len && chunk != o->chunks);
 
-out:
 	object_put(o);
 	mutexUnlock(dummyfs_common.mutex);
 	return ret;

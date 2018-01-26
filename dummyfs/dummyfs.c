@@ -7,7 +7,7 @@
  *
  * Copyright 2012, 2016, 2018 Phoenix Systems
  * Copyright 2007 Pawel Pisarczyk
- * Author: Jacek Popko, Katarzyna Baranowska, Pawel Pisarczyk
+ * Author: Jacek Popko, Katarzyna Baranowska, Pawel Pisarczyk, Kamil Amanowicz
  *
  * This file is part of Phoenix-RTOS.
  *
@@ -318,29 +318,30 @@ int dummyfs_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int s
 	}
 
 	do {
-		if(diroffs >= offs) {
+		if (diroffs >= offs) {
 			if ((sizeof(struct dirent) + ei->len) > size) {
-				ret = -EINVAL;
-				goto out;
+				object_put(d);
+				mutexUnlock(dummyfs_common.mutex);
+				return 	-EINVAL;
 			}
 			dent->d_ino = ei->oid.id;
 			dent->d_reclen = sizeof(struct dirent) + ei->len;
 			dent->d_namlen = ei->len;
 			dent->d_type = ei->type;
 			memcpy(&(dent->d_name[0]), ei->name, ei->len);
-			ret = EOK;
 
 			o = object_get(ei->oid.id);
 			dent->d_type = (o->type == otDir) ? 4 : 0;
 			object_put(o);
 			
-			goto out;
+			object_put(d);
+			mutexUnlock(dummyfs_common.mutex);
+			return 	EOK;
 		}
 		diroffs += sizeof(struct dirent) + ei->len;
 		ei = ei->next;
 	} while (ei != d->entries);
 
-out:
 	object_put(d);
 	mutexUnlock(dummyfs_common.mutex);
 	return 	ret;

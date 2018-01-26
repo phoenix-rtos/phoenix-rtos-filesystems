@@ -1,4 +1,4 @@
-/* 
+/*
  * Phoenix-RTOS
  *
  * Operating system kernel
@@ -7,7 +7,7 @@
  *
  * Copyright 2012, 2018 Phoenix Systems
  * Copyright 2008 Pawel Pisarczyk
- * Author: Pawel Pisarczyk
+ * Author: Pawel Pisarczyk, Kamil Amanowicz
  *
  * This file is part of Phoenix-RTOS.
  *

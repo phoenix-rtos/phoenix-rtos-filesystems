@@ -6,7 +6,7 @@
  * dummyfs - directory operations
  *
  * Copyright 2018 Phoenix Systems
- * Author: Pawel Pisarczyk
+ * Author: Pawel Pisarczyk, Kamil Amanowicz
  *
  * This file is part of Phoenix-RTOS.
  *
