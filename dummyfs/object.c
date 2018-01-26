@@ -24,6 +24,7 @@
 #include "dummyfs.h"
 
 rbtree_t file_objects = { 0 };
+handle_t olock;
 
 static int object_cmp(rbnode_t *n1, rbnode_t *n2)
 {
@@ -115,20 +116,22 @@ static void object_augment(rbnode_t *node)
 }
 
 
-dummyfs_object_t *object_create(dummyfs_object_t *objects, unsigned int *id)
+dummyfs_object_t *object_create(void)
 {
+	mutexLock(olock);
 	dummyfs_object_t *r, t;
+	u32 id;
 
 	if (file_objects.root == NULL)
-		*id = 0;
+		id = 0;
 	else {
 		t.oid.id = 0;
 		r = lib_treeof(dummyfs_object_t, node, lib_rbFindEx(file_objects.root, &t.node, object_gapcmp));
 		if (r != NULL) {
 			if (r->lmaxgap > 0)
-				*id = r->oid.id - 1;
+				id = r->oid.id - 1;
 			else
-				*id = r->oid.id + 1;
+				id = r->oid.id + 1;
 		}
 		else {
 			return NULL;
@@ -137,10 +140,11 @@ dummyfs_object_t *object_create(dummyfs_object_t *objects, unsigned int *id)
 
 	r = (dummyfs_object_t *)malloc(sizeof(dummyfs_object_t));
 	memset(r, 0, sizeof(dummyfs_object_t));
-	r->oid.id = *id;
+	r->oid.id = id;
 	r->refs = 0;
 
 	lib_rbInsert(&file_objects, &r->node);
+	mutexUnlock(olock);
 
 	return r;
 }
@@ -148,10 +152,12 @@ dummyfs_object_t *object_create(dummyfs_object_t *objects, unsigned int *id)
 
 int object_destroy(dummyfs_object_t *o)
 {
+	mutexLock(olock);
 	if (o->refs > 1)
 		return -EBUSY;
 
 	lib_rbRemove(&file_objects, &o->node);
+	mutexUnlock(olock);
 
 	return EOK;
 }
@@ -163,8 +169,10 @@ dummyfs_object_t *object_get(unsigned int id)
 
 	t.oid.id = id;
 
+	mutexLock(olock);
 	if ((o = lib_treeof(dummyfs_object_t, node, lib_rbFind(&file_objects, &t.node))) != NULL)
 		o->refs++;
+	mutexUnlock(olock);
 
 	return o;
 }
@@ -172,12 +180,26 @@ dummyfs_object_t *object_get(unsigned int id)
 
 void object_put(dummyfs_object_t *o)
 {
+	mutexLock(olock);
 	if (o != NULL && o->refs)
 		o->refs--;
+	mutexUnlock(olock);
+
 	return;
+}
+
+void object_lock(dummyfs_object_t *o)
+{
+	mutexLock(dummyfs_common.mutex);
+}
+
+void object_unlock(dummyfs_object_t *o)
+{
+	mutexUnlock(dummyfs_common.mutex);
 }
 
 void object_init(void)
 {
 	lib_rbInit(&file_objects, object_cmp, object_augment);
+	mutexCreate(&olock);
 }

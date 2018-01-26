@@ -17,7 +17,7 @@
 #ifndef _DUMMYFS_OBJECT_H_
 #define _DUMMYFS_OBJECT_H_
 
-extern dummyfs_object_t *object_create(dummyfs_object_t *objects, unsigned int *id);
+extern dummyfs_object_t *object_create(void);
 
 
 extern dummyfs_object_t *object_get(unsigned int id);
@@ -29,7 +29,13 @@ extern void object_put(dummyfs_object_t *o);
 extern int object_destroy(dummyfs_object_t *o);
 
 
-void object_init(void);
+extern void object_lock(dummyfs_object_t *o);
+
+
+extern void object_unlock(dummyfs_object_t *o);
+
+
+extern void object_init(void);
 
 
 #endif

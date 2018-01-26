@@ -235,7 +235,6 @@ int dummyfs_unlink(oid_t *dir, const char *name)
 int dummyfs_create(oid_t *oid, int type, int mode)
 {
 	dummyfs_object_t *o;
-	unsigned int id;
 
 	mutexLock(dummyfs_common.mutex);
 
@@ -244,7 +243,7 @@ int dummyfs_create(oid_t *oid, int type, int mode)
 		return -ENOMEM;
 	}
 
-	o = object_create(NULL, &id);
+	o = object_create();
 
 	if (o == NULL)
 		return -EINVAL;
