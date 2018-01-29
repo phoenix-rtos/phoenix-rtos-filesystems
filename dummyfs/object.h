@@ -26,7 +26,7 @@ extern dummyfs_object_t *object_get(unsigned int id);
 extern void object_put(dummyfs_object_t *o);
 
 
-extern int object_destroy(dummyfs_object_t *o);
+extern int object_remove(dummyfs_object_t *o);
 
 
 extern void object_lock(dummyfs_object_t *o);

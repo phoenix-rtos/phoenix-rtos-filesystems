@@ -23,7 +23,8 @@
 
 enum {	otDir = 0,
 		otFile,
-		otDev
+		otDev,
+		otUnknown
 };
 
 typedef struct _dummyfs_dirent_t {
@@ -96,16 +97,11 @@ struct _dummyfs_common_t{
 extern struct _dummyfs_common_t dummyfs_common;
 
 
-static inline int dummyfs_cksz(int size) {
-
+static inline int dummyfs_incsz(int size) {
 	if (dummyfs_common.size + size > DUMMYFS_SIZE_MAX)
 		return -ENOMEM;
-	return EOK;
-}
-
-
-static inline void dummyfs_incsz(int size) {
 	dummyfs_common.size += size;
+	return EOK;
 }
 
 

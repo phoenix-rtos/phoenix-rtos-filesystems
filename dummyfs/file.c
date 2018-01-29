@@ -29,25 +29,22 @@ int dummyfs_truncate(oid_t *oid, unsigned int size)
 	unsigned int chunksz;
 	dummyfs_object_t *o;
 
-	mutexLock(dummyfs_common.mutex);
 	o = object_get(oid->id);
 
-	if (o == NULL) {
-		mutexUnlock(dummyfs_common.mutex);
+	if (o == NULL)
 		return -EINVAL;
-	}
 
 	if (o->type != otFile) {
 		object_put(o);
-		mutexUnlock(dummyfs_common.mutex);
 		return -EACCES;
 	}
 
 	if (o->size == size) {
 		object_put(o);
-		mutexUnlock(dummyfs_common.mutex);
 		return EOK;
 	}
+
+	object_lock(o);
 	chunk = o->chunks;
 
 	if (size > o->size) {
@@ -55,13 +52,20 @@ int dummyfs_truncate(oid_t *oid, unsigned int size)
 		/* expansion */
 		if (chunk == NULL) {
 			/* allocate new chunk */
-			if (dummyfs_cksz(sizeof(dummyfs_chunk_t)) != EOK) {
+			if (dummyfs_incsz(sizeof(dummyfs_chunk_t)) != EOK) {
+				object_unlock(o);
 				object_put(o);
-				mutexUnlock(dummyfs_common.mutex);
 				return -ENOMEM;
 			}
 
 			chunk = malloc(sizeof(dummyfs_chunk_t));
+
+			if (chunk == NULL) {
+				dummyfs_decsz(sizeof(dummyfs_chunk_t));
+				object_unlock(o);
+				object_put(o);
+				return -ENOMEM;
+			}
 
 			chunk->offs = 0;
 			chunk->size = size;
@@ -70,37 +74,36 @@ int dummyfs_truncate(oid_t *oid, unsigned int size)
 			chunk->next = chunk;
 			chunk->prev = chunk;
 			o->chunks = chunk;
-			dummyfs_incsz(sizeof(dummyfs_chunk_t));
 		}
 		else {
 			/* reallocate last chunk or alloc new one if reallocation fails */
 			chunk->prev->size += size - o->size;
 			if (chunk->prev->used) {
-				if (dummyfs_cksz(size - o->size) != EOK) {
+				if (dummyfs_incsz(size - o->size) != EOK) {
+					object_unlock(o);
 					object_put(o);
-					mutexUnlock(dummyfs_common.mutex);
 					return -ENOMEM;
 				}
 
 				tmp = realloc(chunk->prev->data, chunk->prev->size);
 				if (tmp == NULL) {
+					dummyfs_decsz(size - o->size);
 					chunk->prev->size -= size - o->size;
 
-					if (dummyfs_cksz(sizeof(dummyfs_chunk_t)) != EOK) {
+					if (dummyfs_incsz(sizeof(dummyfs_chunk_t)) != EOK) {
+						object_unlock(o);
 						object_put(o);
-						mutexUnlock(dummyfs_common.mutex);
 						return -ENOMEM;
 					}
 
 					chunk = malloc(sizeof(dummyfs_chunk_t));
 
 					if (chunk == NULL) {
+						dummyfs_decsz(sizeof(dummyfs_chunk_t));
+						object_unlock(o);
 						object_put(o);
-						mutexUnlock(dummyfs_common.mutex);
 						return -ENOMEM;
 					}
-
-					dummyfs_incsz(sizeof(dummyfs_chunk_t));
 
 					chunk->offs = o->size;
 					chunk->size = size - o->size;
@@ -112,7 +115,6 @@ int dummyfs_truncate(oid_t *oid, unsigned int size)
 					o->chunks->prev = chunk;
 				} else {
 					chunk->prev->data = tmp;
-					dummyfs_incsz(size + o->size);
 				}
 			}
 		}
@@ -133,8 +135,8 @@ int dummyfs_truncate(oid_t *oid, unsigned int size)
 			chunksz = size - chunk->offs;
 			tmp = realloc(chunk->data, chunksz);
 			if (tmp == NULL) {
+				object_unlock(o);
 				object_put(o);
-				mutexUnlock(dummyfs_common.mutex);
 				return -ENOMEM;
 			}
 
@@ -162,8 +164,9 @@ int dummyfs_truncate(oid_t *oid, unsigned int size)
 	}
 	o->size = size;
 
+	object_unlock(o);
 	object_put(o);
-	mutexUnlock(dummyfs_common.mutex);
+
 	return EOK;
 }
 
@@ -176,13 +179,10 @@ int dummyfs_read(oid_t *oid, offs_t offs, char *buff, unsigned int len)
 	dummyfs_chunk_t *chunk;
 	dummyfs_object_t *o;
 
-	mutexLock(dummyfs_common.mutex);
 	o = object_get(oid->id);
 
-	if (o == NULL) {
-		mutexUnlock(dummyfs_common.mutex);
+	if (o == NULL)
 		return -EINVAL;
-	}
 
 	if (o->type != otFile)
 		ret = -EINVAL;
@@ -195,16 +195,15 @@ int dummyfs_read(oid_t *oid, offs_t offs, char *buff, unsigned int len)
 
 	if (ret != EOK) {
 		object_put(o);
-		mutexUnlock(dummyfs_common.mutex);
 		return ret;
 	}
 
 	if (len == 0) {
 		object_put(o);
-		mutexUnlock(dummyfs_common.mutex);
 		return EOK;
 	}
 
+	object_lock(o);
 	for(chunk = o->chunks; chunk->next != o->chunks; chunk = chunk->next) {
 		if (chunk->offs + chunk->size > offs) {
 			break;
@@ -228,8 +227,9 @@ int dummyfs_read(oid_t *oid, offs_t offs, char *buff, unsigned int len)
 
 	} while (len && chunk != o->chunks);
 
+	object_unlock(o);
 	object_put(o);
-	mutexUnlock(dummyfs_common.mutex);
+
 	return ret;
 }
 
@@ -241,13 +241,10 @@ int dummyfs_write(oid_t *oid, offs_t offs, char *buff, unsigned int len)
 	int writesz, writeoffs;
 	int ret = EOK;
 
-	mutexLock(dummyfs_common.mutex);
 	o = object_get(oid->id);
 
-	if (o == NULL) {
-		mutexUnlock(dummyfs_common.mutex);
+	if (o == NULL)
 		return -EINVAL;
-	}
 
 	if (o->type != otFile)
 		ret = -EINVAL;
@@ -257,24 +254,22 @@ int dummyfs_write(oid_t *oid, offs_t offs, char *buff, unsigned int len)
 
 	if (ret != EOK) {
 		object_put(o);
-		mutexUnlock(dummyfs_common.mutex);
 		return ret;
 	}
 
 	if (len == 0) {
 		object_put(o);
-		mutexUnlock(dummyfs_common.mutex);
 		return EOK;
 	}
 
+	object_lock(o);
 	if (offs + len > o->size) {
-		mutexUnlock(dummyfs_common.mutex);
+		object_unlock(o);
 		if ((ret = dummyfs_truncate(oid, offs + len)) != EOK) {
-			mutexLock(dummyfs_common.mutex);
 			object_put(o);
-			mutexUnlock(dummyfs_common.mutex);
 			return ret;
 		}
+		object_lock(o);
 	}
 
 	for (chunk = o->chunks; chunk->next != o->chunks; chunk = chunk->next)
@@ -287,17 +282,24 @@ int dummyfs_write(oid_t *oid, offs_t offs, char *buff, unsigned int len)
 		writesz = len > chunk->size - writeoffs ? chunk->size - writeoffs : len;
 
 		if (!chunk->used) {
-			if (dummyfs_cksz(chunk->size) != EOK) {
+			if (dummyfs_incsz(chunk->size) != EOK) {
+				object_unlock(o);
 				object_put(o);
-				mutexUnlock(dummyfs_common.mutex);
 				return -ENOMEM;
 			}
 
 			chunk->data = malloc(chunk->size);
+
+			if (chunk->data == NULL) {
+				dummyfs_decsz(chunk->size);
+				object_unlock(o);
+				object_put(o);
+				return -ENOMEM;
+			}
+
 			memset(chunk->data, 0, writeoffs);
 			memset(chunk->data + writeoffs +  writesz, 0, chunk->size - writesz - writeoffs);
 			chunk->used = writesz;
-			dummyfs_incsz(chunk->size);
 		} else
 			chunk->used += writesz;
 		memcpy(chunk->data + writeoffs, buff, writesz);
@@ -311,7 +313,8 @@ int dummyfs_write(oid_t *oid, offs_t offs, char *buff, unsigned int len)
 
 	} while (len && chunk != o->chunks);
 
+	object_unlock(o);
 	object_put(o);
-	mutexUnlock(dummyfs_common.mutex);
+
 	return ret;
 }

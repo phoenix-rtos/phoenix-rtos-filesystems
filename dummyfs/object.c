@@ -138,10 +138,22 @@ dummyfs_object_t *object_create(void)
 		}
 	}
 
+	mutexLock(dummyfs_common.mutex);
+	if (dummyfs_incsz(sizeof(dummyfs_object_t)) != EOK)
+		return NULL;
+
 	r = (dummyfs_object_t *)malloc(sizeof(dummyfs_object_t));
+	if (r == NULL) {
+		dummyfs_decsz(sizeof(dummyfs_object_t));
+		mutexUnlock(dummyfs_common.mutex);
+		return NULL;
+	}
+	mutexUnlock(dummyfs_common.mutex);
+
 	memset(r, 0, sizeof(dummyfs_object_t));
 	r->oid.id = id;
-	r->refs = 0;
+	r->refs = 1;
+	r->type = otUnknown;
 
 	lib_rbInsert(&file_objects, &r->node);
 	mutexUnlock(olock);
@@ -150,7 +162,7 @@ dummyfs_object_t *object_create(void)
 }
 
 
-int object_destroy(dummyfs_object_t *o)
+int object_remove(dummyfs_object_t *o)
 {
 	mutexLock(olock);
 	if (o->refs > 1)

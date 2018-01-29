@@ -62,10 +62,15 @@ int dir_add(dummyfs_object_t *dir, const char *name, int type, oid_t *oid)
 	if (dir_find(dir, name, &res) >= 0)
 		return -EEXIST;
 
-	if (dummyfs_cksz(sizeof(dummyfs_dirent_t) + strlen(name) + 1) != EOK)
+	if (dummyfs_incsz(sizeof(dummyfs_dirent_t)) != EOK)
 		return -ENOMEM;
 
 	n = malloc(sizeof(dummyfs_dirent_t));
+
+	if (n == NULL) {
+		dummyfs_decsz(sizeof(dummyfs_dirent_t) + n->len);
+		return -ENOMEM;
+	}
 
 	if (e == NULL) {
 		dir->entries = n;
@@ -84,13 +89,26 @@ int dir_add(dummyfs_object_t *dir, const char *name, int type, oid_t *oid)
 	}
 
 	n->len = strlen(name) + 1;
+
+	if (dummyfs_incsz(sizeof(n->len)) != EOK) {
+		dummyfs_decsz(sizeof(dummyfs_dirent_t));
+		free(n);
+		return -ENOMEM;
+	}
+
 	n->name = malloc(n->len);
+
+	if (n->name == NULL) {
+		dummyfs_decsz(sizeof(dummyfs_dirent_t) + n->len);
+		free(n);
+		return -ENOMEM;
+	}
+
 	memcpy(n->name, name, n->len);
 	n->name[n->len - 1] = '\0';
 	memcpy(&n->oid, oid, sizeof(oid_t));
 	n->type = type;
 
-	dummyfs_incsz(sizeof(dummyfs_dirent_t) + n->len);
 	return EOK;
 }
 
@@ -130,9 +148,6 @@ int dir_empty(dummyfs_object_t *dir)
 {
 	if (dir->entries == NULL)
 		return EOK;
-
-	if (dir->refs > 1)
-		return -EBUSY;
 
 	if (dir->entries->next->next != dir->entries)
 		return -EBUSY;
