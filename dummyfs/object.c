@@ -134,13 +134,16 @@ dummyfs_object_t *object_create(void)
 				id = r->oid.id + 1;
 		}
 		else {
+			mutexLock(olock);
 			return NULL;
 		}
 	}
 
 	mutexLock(dummyfs_common.mutex);
-	if (dummyfs_incsz(sizeof(dummyfs_object_t)) != EOK)
+	if (dummyfs_incsz(sizeof(dummyfs_object_t)) != EOK) {
+		mutexUnlock(dummyfs_common.mutex);
 		return NULL;
+	}
 
 	r = (dummyfs_object_t *)malloc(sizeof(dummyfs_object_t));
 	if (r == NULL) {
@@ -165,8 +168,18 @@ dummyfs_object_t *object_create(void)
 int object_remove(dummyfs_object_t *o)
 {
 	mutexLock(olock);
-	if (o->refs > 1)
+	if (o->refs > 1) {
+		mutexUnlock(olock);
 		return -EBUSY;
+	}
+
+	mutexLock(dummyfs_common.mutex);
+		if (o->desc > 0) {
+			mutexUnlock(dummyfs_common.mutex);
+			mutexUnlock(olock);
+			return -EBUSY;
+		}
+	mutexUnlock(dummyfs_common.mutex);
 
 	lib_rbRemove(&file_objects, &o->node);
 	mutexUnlock(olock);

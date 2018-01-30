@@ -33,7 +33,7 @@ struct _dummyfs_common_t dummyfs_common;
 
 int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res)
 {
-	dummyfs_object_t *d;
+	dummyfs_object_t *o, *d;
 	int err;
 
 	if (dir == NULL)
@@ -49,8 +49,11 @@ int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res)
 	object_lock(d);
 
 	err = dir_find(d, name, res);
-	object_get(res->id);
+	o = object_get(res->id);
 
+	o->desc++;
+
+	object_put(o);
 	object_unlock(d);
 	object_put(d);
 
@@ -65,7 +68,7 @@ int dummyfs_setattr(oid_t *oid, int type, int attr)
 
 	if ((o = object_get(oid->id)) == NULL)
 		return -ENOENT;
-
+	object_lock(o);
 	switch (type) {
 		case (atUid):
 			o->uid = attr;
@@ -80,13 +83,16 @@ int dummyfs_setattr(oid_t *oid, int type, int attr)
 			break;
 
 		case (atSize):
+			object_unlock(o);
 			ret = dummyfs_truncate(oid, attr);
+			object_lock(o);
 			break;
 		case (atPort):
 			if (o->type == otDir)
 				o->oid.port = attr;
 			break;
 	}
+	object_unlock(o);
 	object_put(o);
 
 	return ret;
@@ -330,6 +336,35 @@ int dummyfs_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int s
 }
 
 
+static void dummyfs_open(oid_t *oid)
+{
+	dummyfs_object_t *o;
+
+	o = object_get(oid->id);
+
+	object_lock(o);
+	if (o->desc == 0)
+		o->desc++;
+
+	object_unlock(o);
+	object_put(o);
+}
+
+static void dummyfs_close(oid_t *oid)
+{
+	dummyfs_object_t *o;
+
+	o = object_get(oid->id);
+
+	object_lock(o);
+	if (o->desc > 0)
+		o->desc--;
+
+	object_unlock(o);
+	object_put(o);
+}
+
+
 int main(void)
 {
 	oid_t toid = { 0 };
@@ -371,13 +406,11 @@ int main(void)
 		switch (msg.type) {
 
 		case mtOpen:
-			//o = object_get(msg.i.open.oid.id);
+			dummyfs_open(&msg.i.openclose.oid);
 			break;
 
 		case mtClose:
-			o = object_get(msg.i.openclose.oid.id);
-			object_put(o);
-			object_put(o);
+			dummyfs_close(&msg.i.openclose.oid);
 			break;
 
 		case mtRead:
