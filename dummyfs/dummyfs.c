@@ -34,7 +34,8 @@ struct _dummyfs_common_t dummyfs_common;
 int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res)
 {
 	dummyfs_object_t *o, *d;
-	int err;
+	int len = 0;
+	int err = 0;
 
 	if (dir == NULL)
 		d = object_get(0);
@@ -48,7 +49,26 @@ int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res)
 
 	object_lock(d);
 
-	err = dir_find(d, name, res);
+	while (name[len] != '\0') {
+		if (name[len] == '/')
+			len++;
+		err = dir_find(d, name + len, res);
+		if (err <= 0)
+			break;
+		else {
+			len += err;
+			object_unlock(d);
+			object_put(d);
+			d = object_get(res->id);
+			object_lock(d);
+		}
+	}
+
+	if (err < 0) {
+		object_unlock(d);
+		object_put(d);
+		return err;
+	}
 	o = object_get(res->id);
 
 	o->desc++;
@@ -57,7 +77,7 @@ int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res)
 	object_unlock(d);
 	object_put(d);
 
-	return err;
+	return len;
 }
 
 int dummyfs_setattr(oid_t *oid, int type, int attr)
@@ -68,6 +88,7 @@ int dummyfs_setattr(oid_t *oid, int type, int attr)
 
 	if ((o = object_get(oid->id)) == NULL)
 		return -ENOENT;
+
 	object_lock(o);
 	switch (type) {
 		case (atUid):
@@ -332,6 +353,7 @@ int dummyfs_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int s
 
 	object_unlock(d);
 	object_put(d);
+
 	return 	ret;
 }
 
