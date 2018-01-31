@@ -59,7 +59,7 @@ typedef struct _dummyfs_object_t {
 	u32 mode;
 
 	int refs;
-	int desc;
+	int lock;
 
 	size_t lmaxgap;
 	size_t rmaxgap;

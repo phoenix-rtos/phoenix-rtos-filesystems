@@ -165,6 +165,18 @@ dummyfs_object_t *object_create(void)
 }
 
 
+void object_lock(dummyfs_object_t *o)
+{
+	mutexLock(dummyfs_common.mutex);
+}
+
+
+void object_unlock(dummyfs_object_t *o)
+{
+	mutexUnlock(dummyfs_common.mutex);
+}
+
+
 int object_remove(dummyfs_object_t *o)
 {
 	mutexLock(olock);
@@ -173,13 +185,14 @@ int object_remove(dummyfs_object_t *o)
 		return -EBUSY;
 	}
 
-	mutexLock(dummyfs_common.mutex);
-		if (o->desc > 0) {
+	/* object lock */
+	object_lock(o);
+		if (o->lock != 0) {
 			mutexUnlock(dummyfs_common.mutex);
 			mutexUnlock(olock);
 			return -EBUSY;
 		}
-	mutexUnlock(dummyfs_common.mutex);
+	object_unlock(o);
 
 	lib_rbRemove(&file_objects, &o->node);
 	mutexUnlock(olock);
@@ -211,16 +224,6 @@ void object_put(dummyfs_object_t *o)
 	mutexUnlock(olock);
 
 	return;
-}
-
-void object_lock(dummyfs_object_t *o)
-{
-	mutexLock(dummyfs_common.mutex);
-}
-
-void object_unlock(dummyfs_object_t *o)
-{
-	mutexUnlock(dummyfs_common.mutex);
 }
 
 void object_init(void)

@@ -71,7 +71,7 @@ int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res)
 	}
 	o = object_get(res->id);
 
-	o->desc++;
+	o->lock = 1;
 
 	object_put(o);
 	object_unlock(d);
@@ -365,11 +365,9 @@ static void dummyfs_open(oid_t *oid)
 	o = object_get(oid->id);
 
 	object_lock(o);
-	if (o->desc == 0)
-		o->desc++;
+	o->lock = 0;
 
 	object_unlock(o);
-	object_put(o);
 }
 
 static void dummyfs_close(oid_t *oid)
@@ -379,10 +377,10 @@ static void dummyfs_close(oid_t *oid)
 	o = object_get(oid->id);
 
 	object_lock(o);
-	if (o->desc > 0)
-		o->desc--;
+	o->lock = 0;
 
 	object_unlock(o);
+	object_put(o);
 	object_put(o);
 }
 
