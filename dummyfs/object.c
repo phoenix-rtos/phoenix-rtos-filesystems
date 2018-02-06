@@ -134,7 +134,7 @@ dummyfs_object_t *object_create(void)
 				id = r->oid.id + 1;
 		}
 		else {
-			mutexLock(olock);
+			mutexUnlock(olock);
 			return NULL;
 		}
 	}
@@ -142,6 +142,7 @@ dummyfs_object_t *object_create(void)
 	mutexLock(dummyfs_common.mutex);
 	if (dummyfs_incsz(sizeof(dummyfs_object_t)) != EOK) {
 		mutexUnlock(dummyfs_common.mutex);
+		mutexUnlock(olock);
 		return NULL;
 	}
 
@@ -149,6 +150,7 @@ dummyfs_object_t *object_create(void)
 	if (r == NULL) {
 		dummyfs_decsz(sizeof(dummyfs_object_t));
 		mutexUnlock(dummyfs_common.mutex);
+		mutexUnlock(olock);
 		return NULL;
 	}
 	mutexUnlock(dummyfs_common.mutex);
