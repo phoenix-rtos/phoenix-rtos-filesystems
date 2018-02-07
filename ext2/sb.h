@@ -1,0 +1,29 @@
+/*
+ * Phoenix-RTOS
+ *
+ * ext2
+ *
+ * sb.h
+ *
+ * Copyright 2017 Phoenix Systems
+ * Author: Kamil Amanowicz
+ *
+ * This file is part of Phoenix-RTOS.
+ *
+ * %LICENSE%
+ */
+
+#ifndef _SB_H_
+#define _SB_H_ /* sb.h */
+
+#define SUPERBLOCK_SIZE 1024
+
+extern int ext2_read_sb(u32 sect);
+
+
+extern int ext2_write_sb(void);
+
+
+extern int ext2_init(void);
+
+#endif /* sb.h */
