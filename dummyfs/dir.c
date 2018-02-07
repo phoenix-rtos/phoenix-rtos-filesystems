@@ -90,7 +90,7 @@ int dir_add(dummyfs_object_t *dir, const char *name, int type, oid_t *oid)
 
 	n->len = strlen(name) + 1;
 
-	if (dummyfs_incsz(sizeof(n->len)) != EOK) {
+	if (dummyfs_incsz(n->len) != EOK) {
 		dummyfs_decsz(sizeof(dummyfs_dirent_t));
 		free(n);
 		return -ENOMEM;
