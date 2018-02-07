@@ -68,7 +68,7 @@ int dir_add(dummyfs_object_t *dir, const char *name, int type, oid_t *oid)
 	n = malloc(sizeof(dummyfs_dirent_t));
 
 	if (n == NULL) {
-		dummyfs_decsz(sizeof(dummyfs_dirent_t) + n->len);
+		dummyfs_decsz(sizeof(dummyfs_dirent_t));
 		return -ENOMEM;
 	}
 
