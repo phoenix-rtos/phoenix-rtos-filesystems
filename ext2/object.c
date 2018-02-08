@@ -42,6 +42,23 @@ static int object_cmp(rbnode_t *n1, rbnode_t *n2)
 }
 
 
+int object_detroy(ext2_object_t *o)
+{
+	mutexLock(ext2_objects.ulock);
+
+	if (o->refs > 1) {
+		mutexUnlock(ext2_objects.ulock);
+		return -EBUSY;
+	}
+	lib_rbRemove(&ext2_objects.used, &o->node);
+
+	if (inode_free(o->oid.id, o->inode) == EOK)
+		free(o);
+
+	mutexUnlock(ext2_objects.ulock);
+	return EOK;
+}
+
 int object_remove(ext2_object_t *o)
 {
 	ext2_object_t *r;
@@ -56,11 +73,12 @@ int object_remove(ext2_object_t *o)
 
 	mutexLock(ext2_objects.clock);
 	r  = ext2_objects.cache[o->oid.id % CACHE_SIZE];
-	if (r->dirty)
-		inode_set(r->oid.id, r->inode);
-	inode_put(r->inode);
-
-	free(r);
+	if (r != NULL && r != o) {
+		if (r->dirty)
+			inode_set(r->oid.id, r->inode);
+		inode_put(r->inode);
+		free(r);
+	}
 	ext2_objects.cache[o->oid.id % CACHE_SIZE] = o;
 	mutexUnlock(ext2_objects.clock);
 
@@ -69,7 +87,7 @@ int object_remove(ext2_object_t *o)
 	return EOK;
 }
 
-static ext2_object_t *object_create(id_t id, ext2_inode_t *inode)
+ext2_object_t *object_create(id_t id, ext2_inode_t *inode)
 {
 	ext2_object_t *o, t;
 
@@ -99,6 +117,11 @@ static ext2_object_t *object_create(id_t id, ext2_inode_t *inode)
 	o->oid.id = id;
 	o->inode = inode;
 
+	if (inode->mode & (EXT2_S_IFBLK | EXT2_S_IFSOCK | EXT2_S_IFCHR))
+		o->oid.port = inode->block[0];
+	else
+		o->oid.port = ext2->port;
+
 	lib_rbInsert(&ext2_objects.used, &o->node);
 	ext2_objects.used_cnt++;
 
@@ -123,13 +146,13 @@ ext2_object_t *object_get(unsigned int id)
 	} else {
 		/* check recently closed cache */
 		mutexLock(ext2_objects.clock);
-			if ((o = ext2_objects.cache[id % CACHE_SIZE]) != NULL && o->oid.id == id) {
-				o->refs++;
-				lib_rbInsert(&ext2_objects.used, &o->node);
-				mutexUnlock(ext2_objects.clock);
-				mutexUnlock(ext2_objects.ulock);
-				return o;
-			}
+		if ((o = ext2_objects.cache[id % CACHE_SIZE]) != NULL && o->oid.id == id) {
+			o->refs++;
+			lib_rbInsert(&ext2_objects.used, &o->node);
+			mutexUnlock(ext2_objects.clock);
+			mutexUnlock(ext2_objects.ulock);
+			return o;
+		}
 		mutexUnlock(ext2_objects.clock);
 	}
 	inode = inode_get(id);
@@ -137,20 +160,10 @@ ext2_object_t *object_get(unsigned int id)
 	if (inode != NULL) {
 
 		mutexUnlock(ext2_objects.ulock);
-
 		o = object_create(id, inode);
-		if (o == NULL)
-			return NULL;
 
-		mutexLock(ext2_objects.ulock);
-
-
-		if (inode->mode & (EXT2_S_IFBLK | EXT2_S_IFSOCK | EXT2_S_IFCHR))
-			o->oid.port = inode->block[0];
-		else
-			o->oid.port = ext2->port;
+		return o;
 	}
-
 	mutexUnlock(ext2_objects.ulock);
 
 	return o;
@@ -166,7 +179,7 @@ void object_put(ext2_object_t *o)
 	if(!o->refs) {
 		mutexUnlock(ext2_objects.ulock);
 		object_remove(o);
-		mutexLock(ext2_objects.ulock);
+		return;
 	}
 	mutexUnlock(ext2_objects.ulock);
 

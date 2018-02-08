@@ -45,11 +45,11 @@ enum { ATA_BMR_CMD_WRENABLE = 0, ATA_BMR_CMD_RDENABLE = (1 << 3),
 /* Error status register bits */
 enum { ATA_ER_BBK = 0x80, ATA_ER_UNC = 0x40, ATA_ER_MC = 0x20,
 	ATA_ER_IDNF	= 0x10, ATA_ER_MCR = 0x08, ATA_ER_ABRT	= 0x04,
-   	ATA_ER_TK0NF = 0x02, ATA_ER_AMNF = 0x01 };
+	ATA_ER_TK0NF = 0x02, ATA_ER_AMNF = 0x01 };
 
 /* ATA commands */
 enum { ATA_CMD_READ_PIO = 0x20, ATA_CMD_WRITE_PIO = 0x30,
-   	ATA_CMD_CACHE_FLUSH = 0xE7, ATA_CMD_PACKET = 0xA0,
+	ATA_CMD_CACHE_FLUSH = 0xE7, ATA_CMD_PACKET = 0xA0,
 	ATA_CMD_IDENTIFY_PACKET = 0xA1, ATA_CMD_IDENTIFY = 0xEC };
 
 /* ATA register definitions */
@@ -60,7 +60,7 @@ enum { ATA_REG_DATA = 0x00, ATA_REG_ERROR = 0x01, ATA_REG_FEATURES = 0x01,
 
 /* eo. hob */
 enum { ATA_REG_CONTROL = 0x0C, ATA_REG_ALTSTATUS = 0x0C,
-   	ATA_REG_DEVADDRESS = 0x0D, ATA_REG_BMPRIMARY = 0x00,
+	ATA_REG_DEVADDRESS = 0x0D, ATA_REG_BMPRIMARY = 0x00,
 	ATA_REG_BMSECONDARY = 0x08, ATA_REG_BMCOMMAND = 0x0E,
 	ATA_REG_BMSTATUS = 0x10, ATA_REG_BMPRD = 0x12 };
 
@@ -127,12 +127,12 @@ struct ata_bus {
 };
 
 typedef struct _ata_msg_t {
-    u16 bus;
-    u16 channel;
-    u16 device;
-    offs_t offset;
-    u16 len;
-    char data[];
+	u16 bus;
+	u16 channel;
+	u16 device;
+	offs_t offset;
+	u16 len;
+	char data[];
 } __attribute__((packed)) ata_msg_t;
 
 

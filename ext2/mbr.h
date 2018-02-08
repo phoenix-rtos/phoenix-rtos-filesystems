@@ -22,21 +22,21 @@
 
 /* partition entry structure */
 struct pentry_t {
-    u8      status;
-    u8      first_sect[3]; /* chs */
-    u8      type;
-    u8      last_sect[3];  /* chs */
-    u32     first_sect_lba;
-    u32     sector_count;
+	u8      status;
+	u8      first_sect[3]; /* chs */
+	u8      type;
+	u8      last_sect[3];  /* chs */
+	u32     first_sect_lba;
+	u32     sector_count;
 } __attribute__((packed));
 
 #define MBR_SIGNATURE 0xAA55
 
 /* master boot record structure */
 struct mbr_t {
-    char            bca[446];   /* bootstrap code area */
-    struct pentry_t pent[4];    /* partition entries */
-    u16             boot_sign;  /* mbr signature */
+	char            bca[446];   /* bootstrap code area */
+	struct pentry_t pent[4];    /* partition entries */
+	u16             boot_sign;  /* mbr signature */
 } __attribute__((packed));
 
 struct mbr_t *read_mbr(void);

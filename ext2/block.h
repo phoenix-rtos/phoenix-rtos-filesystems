@@ -37,16 +37,16 @@ extern u32 new_block(u32 ino, ext2_inode_t *inode, u32 bno);
 
 
 extern void get_block(ext2_inode_t *inode, u32 block, void *data,
-               u32 off[4], u32 prev_off[4], u32 *buff[3]);
+		u32 off[4], u32 prev_off[4], u32 *buff[3]);
 
 
 extern void set_block(u32 ino, ext2_inode_t *inode, u32 block, void *data,
-               u32 off[4], u32 prev_off[4], u32 *buff[3]);
+		u32 off[4], u32 prev_off[4], u32 *buff[3]);
 
 
 static inline u32 block_offset(u32 block_no)
 {
-    return ext2->first_block + (ext2->block_size * (block_no - 1));
+	return ext2->first_block + (ext2->block_size * (block_no - 1));
 }
 
 #endif /* block.h */

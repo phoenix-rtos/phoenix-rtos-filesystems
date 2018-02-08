@@ -20,6 +20,6 @@
 extern int dir_find(ext2_object_t *dir, const char *name, u32 len, oid_t *res);
 
 
-extern int dir_add(ext2_object_t *dir, const char *name);
+extern int dir_add(ext2_object_t *dir, const char *name, int type, oid_t *oid);
 
 #endif /* dir.h */
