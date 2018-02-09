@@ -19,6 +19,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/msg.h>
+#include <dirent.h>
 
 #include "ext2.h"
 #include "inode.h"
@@ -98,10 +99,11 @@ static int ext2_getattr(oid_t *oid, int type, int *attr)
 static int ext2_link(oid_t *dir, const char *name, oid_t *oid)
 {
 	ext2_object_t *d, *o;
+	oid_t toid;
+	int res;
 
 	if (dir == NULL || oid == NULL)
 		return -EINVAL;
-	printf("dir = %llu object= %llu\n", dir->id, oid->id);
 
 	if (dir->id < 2 || oid->id < 2)
 		return -EINVAL;
@@ -109,21 +111,31 @@ static int ext2_link(oid_t *dir, const char *name, oid_t *oid)
 	d = object_get(dir->id);
 	o = object_get(oid->id);
 
-
 	if (o == NULL || d == NULL)
 		return -EINVAL;
 
-	if (!(d->inode->mode & EXT2_S_IFDIR))
+	if (!(d->inode->mode & EXT2_S_IFDIR)) {
+		object_put(o);
+		object_put(d);
 		return -ENOTDIR;
+	}
 
-	if((o->inode->mode & EXT2_S_IFDIR) && o->inode->links_count)
+	if (dir_find(d, name, strlen(name), &toid) == EOK) {
+		object_put(o);
+		object_put(d);
+		return -EEXIST;
+	}
+
+	if((o->inode->mode & EXT2_S_IFDIR) && o->inode->links_count) {
+		object_put(o);
+		object_put(d);
 		return -EMLINK;
+	}
 
-	if (dir_add(d, name, o->inode->mode, oid) == EOK) {
+	if ((res = dir_add(d, name, o->inode->mode, oid)) == EOK) {
 		o->inode->links_count++;
 		o->inode->uid = 0;
 		o->inode->gid = 0;
-		printf("ino = %u links = %u\n",(u32)o->oid.id, o->inode->links_count);
 		if(o->inode->mode & EXT2_S_IFDIR) {
 			dir_add(o, ".", EXT2_FT_DIR, oid);
 			o->inode->links_count++;
@@ -136,7 +148,7 @@ static int ext2_link(oid_t *dir, const char *name, oid_t *oid)
 
 	object_put(o);
 	object_put(d);
-	return EOK;
+	return res;
 }
 
 
@@ -167,6 +179,7 @@ static int ext2_create(oid_t *oid, int type, int mode, u32 port)
 		break;
 	}
 
+	/* this section should be locked */
 	ino = inode_create(inode, mode);
 
 	/*TODO: this should be cached not written to drive */

@@ -94,8 +94,15 @@ int ext2_write(oid_t *oid, offs_t offs, char *data, u32 len)
 	u32 *ind[3]; /* indirection blocks */
 	void *tmp;
 
-	if (len == 0)
-		return 0;
+	if (len == 0) {
+		object_put(o);
+		return EOK;
+	}
+
+	if (!o->inode->links_count) {
+		object_put(o);
+		return -EINVAL;
+	}
 
 	write_len = len;
 

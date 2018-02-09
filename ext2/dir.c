@@ -22,10 +22,12 @@
 int dir_find(ext2_object_t *d, const char *name, u32 len, oid_t *res)
 {
 	u32 offs = 0;
-	void *data = malloc(ext2->block_size);
+	void *data;
 
 	if (!(d->inode->mode & EXT2_S_IFDIR))
 		return -ENOTDIR;
+
+	data = malloc(ext2->block_size);
 
 	while (offs < d->inode->size) {
 		ext2_read(&d->oid, offs, data, ext2->block_size);
