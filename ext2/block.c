@@ -275,7 +275,6 @@ void set_block(u32 ino, ext2_inode_t *inode, u32 block, void *data,
 {
 	int depth = block_off(block, off);
 
-
 	//printf("off 1 = %u 2 = %u 3 = %u 4 = %u\n", off[0], off[1], off[2], off[3]);
 	if (depth >= 4 && prev_off[3] != off[3]) {
 		if(!inode->block[off[3]]) {
@@ -296,14 +295,16 @@ void set_block(u32 ino, ext2_inode_t *inode, u32 block, void *data,
 			read_block(0, buff[1]);
 		} else
 			read_block(inode->block[off[2]], buff[1]);
-
 		prev_off[2] = off[2];
 	}
 	if (depth >= 2 && prev_off[1] != off[1]) {
 		if (depth >= 3) {
 			if(!*(buff[1] + off[1])) {
 				*(buff[1] + off[1]) = new_block(ino, inode, 0);
-				write_block(*(buff[2] + off[2]), buff[1]);
+				if (depth > 3)
+					write_block(*(buff[2] + off[2]), buff[1]);
+				else
+					write_block(inode->block[off[2]], buff[1]);
 				read_block(0, buff[0]);
 			} else read_block(*(buff[1] + off[1]), buff[0]);
 		} else if(!inode->block[off[1]]) {
@@ -311,14 +312,16 @@ void set_block(u32 ino, ext2_inode_t *inode, u32 block, void *data,
 			read_block(0, buff[0]);
 		} else
 			read_block(inode->block[off[1]], buff[0]);
-
 		prev_off[1] = off[1];
 	}
 
 	if (depth > 1) {
 		if (!*(buff[0] + off[0])) {
 			*(buff[0] + off[0]) = new_block(ino, inode, 0);
-			write_block(*(buff[1] + off[1]), buff[0]);
+			if (depth > 2)
+				write_block(*(buff[1] + off[1]), buff[0]);
+			else
+				write_block(inode->block[off[1]], buff[0]);
 			inode->blocks += ext2->block_size / 512;
 		}
 		write_block(*(buff[0] + off[0]), data);
