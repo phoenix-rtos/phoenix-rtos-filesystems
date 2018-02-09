@@ -93,7 +93,7 @@ int dir_add(ext2_object_t *d, const char *name, int type, oid_t *oid)
 	memcpy(dentry->name, name, strlen(name));
 	dentry->name_len = strlen(name);
 
-	if (d->inode->mode & EXT2_S_IFDIR)
+	if (type & EXT2_S_IFDIR)
 		dentry->file_type = EXT2_FT_DIR;
 	else
 		dentry->file_type = EXT2_FT_REG_FILE;

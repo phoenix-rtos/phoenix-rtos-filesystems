@@ -169,7 +169,6 @@ u32 inode_create(ext2_inode_t *inode, u32 mode)
 
 	inode_bmp = malloc(ext2->block_size);
 
-	printf("group = %u inode_bitmap = %u\n", group, ext2->gdt[group].inode_bitmap);
 	read_block(ext2->gdt[group].inode_bitmap, inode_bmp);
 
 	ino = find_zero_bit(inode_bmp, ext2->inodes_in_group);
@@ -190,7 +189,6 @@ u32 inode_create(ext2_inode_t *inode, u32 mode)
 	write_block(ext2->gdt[group].inode_bitmap, inode_bmp);
 	ext2_write_sb();
 	free(inode_bmp);
-	printf("exit create  ino = %u\n", group * ext2->inodes_in_group + ino);
 
 	return group * ext2->inodes_in_group + ino;
 }

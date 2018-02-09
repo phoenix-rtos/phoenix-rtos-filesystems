@@ -49,8 +49,8 @@ static int ext2_lookup(oid_t *dir, const char *name, oid_t *res)
 	if (d == NULL)
 		return -ENOENT;
 
-	mutexLock(d->lock);
-	while (start != len)
+//	mutexLock(d->lock);
+	while (start < len)
 	{
 		split_path(name, &start, &end, len);
 		if (start == end)
@@ -58,22 +58,23 @@ static int ext2_lookup(oid_t *dir, const char *name, oid_t *res)
 
 		err = dir_find(d, name + start, end - start, res);
 
-		mutexUnlock(d->lock);
+//		mutexUnlock(d->lock);
 		object_put(d);
 
-		if (err <= 0)
+		if (err < 0)
 			return err;
 
 		o = object_get(res->id);
 
 		/* this should not happen */
-		if (o == NULL)
+		if (o == NULL) {
+			object_put(o);
 			return -ENOENT;
-
-		if (o->inode->mode & (EXT2_S_IFBLK | EXT2_S_IFSOCK | EXT2_S_IFCHR))
-			res->port = o->oid.port;
-		else
-			res->port = ext2->port;
+		}
+	//	if (o->inode->mode & (EXT2_S_IFBLK | EXT2_S_IFSOCK | EXT2_S_IFCHR))
+	//		res->port = o->oid.port;
+	//	else
+		res->port = ext2->port;
 
 		d = o;
 		start = end;
@@ -137,9 +138,9 @@ static int ext2_link(oid_t *dir, const char *name, oid_t *oid)
 		o->inode->uid = 0;
 		o->inode->gid = 0;
 		if(o->inode->mode & EXT2_S_IFDIR) {
-			dir_add(o, ".", EXT2_FT_DIR, oid);
+			dir_add(o, ".", EXT2_S_IFDIR, oid);
 			o->inode->links_count++;
-			dir_add(o, "..", EXT2_FT_DIR, dir);
+			dir_add(o, "..", EXT2_S_IFDIR, dir);
 			d->inode->links_count++;
 		}
 		inode_set(o->oid.id, o->inode);
@@ -202,7 +203,41 @@ static int ext2_destroy(oid_t *oid)
 
 static int ext2_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int size)
 {
-	return EOK;
+	ext2_object_t *d;
+	ext2_dir_entry_t *dentry;
+
+	d = object_get(dir->id);
+
+	if (d == NULL)
+		return -EINVAL;
+
+	if (!(d->inode->mode & EXT2_S_IFDIR)) {
+		object_put(d);
+		return -ENOTDIR;
+	}
+
+	if (!d->inode->links_count) {
+		object_put(d);
+		return -ENOENT;
+	}
+
+	dentry = malloc(size);
+	if (offs < d->inode->size) {
+		ext2_read(dir, offs, (void *)dentry, size);
+
+		dent->d_ino = dentry->inode;
+		dent->d_reclen = dentry->rec_len;
+		dent->d_namlen = dentry->name_len;
+		dent->d_type = dentry->file_type & EXT2_FT_DIR ? 0 : 1;
+		memcpy(&(dent->d_name[0]), dentry->name, dentry->name_len);
+		dent->d_name[dentry->name_len] = '\0';
+
+		object_put(d);
+		return 	EOK;
+	}
+
+	free(dentry);
+	return -ENOENT;
 }
 
 
@@ -225,7 +260,6 @@ int main(void)
 
 	ata_init();
 
-	printf("ext2: initialization %s\n", "");
 	if (ext2_init()) {
 		printf("ext2: init error %s\n", "");
 		return 0;
@@ -244,21 +278,11 @@ int main(void)
 	ext2->port = port;
 
 	object_init();
-/*
-	ext2_inode_t *inode = inode_get(11);
-		printf("ph inode\nmode: 0x%x\nuid: %u\nsize: %u\natime: %u\nctime: %u\nmtime: %u\ndtime: %u\ngid: %u\nlinks_count: %u\nblocks: %u\nflags: 0x%x\n", inode->mode, inode->uid, inode->size, inode->atime, 
-		inode->ctime, inode->mtime, inode->dtime, inode->gid, inode->links_count,
-		inode->blocks, inode->flags);
-		inode = inode_get(12);
-		printf("ph inode\nmode: 0x%x\nuid: %u\nsize: %u\natime: %u\nctime: %u\nmtime: %u\ndtime: %u\ngid: %u\nlinks_count: %u\nblocks: %u\nflags: 0x%x\n", inode->mode, inode->uid, inode->size, inode->atime, 
-		inode->ctime, inode->mtime, inode->dtime, inode->gid, inode->links_count,
-		inode->blocks, inode->flags);
-*/
 
+	printf("ext2: initialized %s\n", "");
 	for (;;) {
 		/* message handling loop */
 		msgRecv(port, &msg, &rid);
-		printf("ext2: msg type %d\n", msg.type);
 		switch (msg.type) {
 
 			case mtOpen:
@@ -307,7 +331,6 @@ int main(void)
 
 			case mtLink:
 				msg.o.io.err = ext2_link(&msg.i.ln.dir, msg.i.data, &msg.i.ln.oid);
-				printf("link result %d\n", msg.o.io.err);
 				break;
 
 			case mtUnlink:
