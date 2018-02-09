@@ -117,10 +117,7 @@ ext2_object_t *object_create(id_t id, ext2_inode_t *inode)
 	o->oid.id = id;
 	o->inode = inode;
 
-	if (inode->mode & (EXT2_S_IFBLK | EXT2_S_IFSOCK | EXT2_S_IFCHR))
-		o->oid.port = inode->block[0];
-	else
-		o->oid.port = ext2->port;
+	o->oid.port = ext2->port;
 
 	lib_rbInsert(&ext2_objects.used, &o->node);
 	ext2_objects.used_cnt++;

@@ -319,15 +319,13 @@ void set_block(u32 ino, ext2_inode_t *inode, u32 block, void *data,
 		if (!*(buff[0] + off[0])) {
 			*(buff[0] + off[0]) = new_block(ino, inode, 0);
 			write_block(*(buff[1] + off[1]), buff[0]);
-			inode->blocks += 2;
-			inode->size += ext2->block_size;
+			inode->blocks += ext2->block_size / 512;
 		}
 		write_block(*(buff[0] + off[0]), data);
 	} else {
 		if(!inode->block[off[0]]) {
 			inode->block[off[0]] = new_block(ino, inode, 0);
-			inode->blocks += 2;
-			inode->size += ext2->block_size;
+			inode->blocks += ext2->block_size / 512;
 		}
 		write_block(inode->block[off[0]], data);
 	}

@@ -23,6 +23,7 @@
 #include "object.h"
 #include "block.h"
 
+#include "inode.h"
 /* reads a file */
 int ext2_read(oid_t *oid, offs_t offs, char *data, unsigned int len)
 {
@@ -115,22 +116,26 @@ int ext2_write(oid_t *oid, offs_t offs, char *data, u32 len)
 	memcpy(tmp + block_off, data, write_sz);
 
 	set_block(o->oid.id, o->inode, start_block, tmp, off, prev_off, ind);
-	o->inode->size += write_sz;
 
 	while (current_block < end_block) {
 		set_block(o->oid.id, o->inode, current_block, data + write_sz, off, prev_off, ind);
 		current_block++;
 		write_sz += ext2->block_size;
-		o->inode->size += ext2->block_size;
 	}
 
 	if (start_block != end_block && write_len > write_sz) {
 		get_block(o->inode, end_block, tmp, off, prev_off, ind);
 		memcpy(tmp, data + write_sz, write_len - write_sz);
 		set_block(o->oid.id, o->inode, end_block, tmp, off, prev_off, ind);
-		o->inode->size += write_len - write_sz;
 	}
 
+
+	if (offs > o->inode->size)
+		o->inode->size += (offs - o->inode->size) + len;
+	else if (offs + len > o->inode->size)
+		o->inode->size += (offs + len) - o->inode->size;
+
+	inode_set(o->oid.id, o->inode);
 	object_put(o);
 	free(ind[0]);
 	free(ind[1]);

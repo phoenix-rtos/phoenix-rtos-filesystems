@@ -119,17 +119,19 @@ static int ext2_link(oid_t *dir, const char *name, oid_t *oid)
 	if((o->inode->mode & EXT2_S_IFDIR) && o->inode->links_count)
 		return -EMLINK;
 
-	if (dir_add(d, name, EXT2_FT_DIR, oid) == EOK) {
-		o->inode->links_count = 2;
-		o->inode->size = 1024;
-		o->inode->blocks = 2;
+	if (dir_add(d, name, o->inode->mode, oid) == EOK) {
+		o->inode->links_count++;
 		o->inode->uid = 0;
 		o->inode->gid = 0;
-		o->inode->mode = 0x41ed;
 		printf("ino = %u links = %u\n",(u32)o->oid.id, o->inode->links_count);
-		dir_add(o, ".", EXT2_FT_DIR, oid);
-		dir_add(o, "..", EXT2_FT_DIR, dir);
+		if(o->inode->mode & EXT2_S_IFDIR) {
+			dir_add(o, ".", EXT2_FT_DIR, oid);
+			o->inode->links_count++;
+			dir_add(o, "..", EXT2_FT_DIR, dir);
+			d->inode->links_count++;
+		}
 		inode_set(o->oid.id, o->inode);
+		inode_set(d->oid.id, d->inode);
 	}
 
 	object_put(o);
@@ -152,7 +154,22 @@ static int ext2_create(oid_t *oid, int type, int mode, u32 port)
 	u32 ino;
 
 	inode = malloc(ext2->inode_size);
+
+	switch (type) {
+	case 0: /* dir */
+		mode = EXT2_S_IFDIR;
+		break;
+	case 1: /* file */
+		mode = EXT2_S_IFREG;
+		break;
+	case 2: /* dev */
+		mode = EXT2_S_IFCHR;
+		break;
+	}
+
 	ino = inode_create(inode, mode);
+
+	/*TODO: this should be cached not written to drive */
 	if (type & 3) /* Device */
 		inode->block[0] = port;
 
@@ -214,16 +231,17 @@ int main(void)
 	ext2->port = port;
 
 	object_init();
+/*
+	ext2_inode_t *inode = inode_get(11);
+		printf("ph inode\nmode: 0x%x\nuid: %u\nsize: %u\natime: %u\nctime: %u\nmtime: %u\ndtime: %u\ngid: %u\nlinks_count: %u\nblocks: %u\nflags: 0x%x\n", inode->mode, inode->uid, inode->size, inode->atime, 
+		inode->ctime, inode->mtime, inode->dtime, inode->gid, inode->links_count,
+		inode->blocks, inode->flags);
+		inode = inode_get(12);
+		printf("ph inode\nmode: 0x%x\nuid: %u\nsize: %u\natime: %u\nctime: %u\nmtime: %u\ndtime: %u\ngid: %u\nlinks_count: %u\nblocks: %u\nflags: 0x%x\n", inode->mode, inode->uid, inode->size, inode->atime, 
+		inode->ctime, inode->mtime, inode->dtime, inode->gid, inode->links_count,
+		inode->blocks, inode->flags);
+*/
 
-	/*	ext2_inode_t *inode = inode_get(23);
-		printf("ph inode\nmode: 0x%x\nuid: %u\nsize: %u\natime: %u\nctime: %u\nmtime: %u\ndtime: %u\ngid: %u\nlinks_count: %u\nblocks: %u\nflags: 0x%x\n", inode->mode, inode->uid, inode->size, inode->atime, 
-		inode->ctime, inode->mtime, inode->dtime, inode->gid, inode->links_count,
-		inode->blocks, inode->flags);
-		inode = inode_get(86017);
-		printf("ph inode\nmode: 0x%x\nuid: %u\nsize: %u\natime: %u\nctime: %u\nmtime: %u\ndtime: %u\ngid: %u\nlinks_count: %u\nblocks: %u\nflags: 0x%x\n", inode->mode, inode->uid, inode->size, inode->atime, 
-		inode->ctime, inode->mtime, inode->dtime, inode->gid, inode->links_count,
-		inode->blocks, inode->flags);
-		*/
 	for (;;) {
 		/* message handling loop */
 		msgRecv(port, &msg, &rid);
@@ -243,7 +261,7 @@ int main(void)
 				break;
 
 			case mtWrite:
-				//msg.o.io.err = ext2_write(&msg.i.io.oid, msg.i.io.offs, msg.i.data, msg.i.size);
+				msg.o.io.err = ext2_write(&msg.i.io.oid, msg.i.io.offs, msg.i.data, msg.i.size);
 				break;
 
 			case mtTruncate:
