@@ -73,7 +73,10 @@ void ext2_init_sb(int pentry)
 	ext2->inodes_in_group = ext2->sb->inodes_in_group;
 	ext2->gdt_size = 1 + (ext2->sb->blocks_count - 1) / ext2->sb->blocks_in_group;
 	ext2->gdt =  malloc(ext2->gdt_size * sizeof(group_desc_t));
-	ext2->first_block = (ext2->mbr->pent[pentry].first_sect_lba * SECTOR_SIZE) + BLOCKBASE;
+	if(ext2->mbr != NULL)
+		ext2->first_block = (ext2->mbr->pent[pentry].first_sect_lba * SECTOR_SIZE) + BLOCKBASE;
+	else
+		ext2->first_block = BLOCKBASE;
 
 	read_blocks(2, ext2->gdt, ext2->gdt_size * sizeof(group_desc_t));
 
