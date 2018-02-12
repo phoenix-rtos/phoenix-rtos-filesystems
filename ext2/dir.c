@@ -30,7 +30,7 @@ int dir_find(ext2_object_t *d, const char *name, u32 len, oid_t *res)
 	data = malloc(ext2->block_size);
 
 	while (offs < d->inode->size) {
-		ext2_read(&d->oid, offs, data, ext2->block_size);
+		ext2_read_locked(&d->oid, offs, data, ext2->block_size);
 		offs += ext2->block_size;
 		res->id = search_block(data, name, len);
 		if (res->id)
@@ -54,7 +54,7 @@ int dir_add(ext2_object_t *d, const char *name, int type, oid_t *oid)
 	 * and we need only last block of entries */
 	data = malloc(ext2->block_size);
 
-	ext2_read(&d->oid, d->inode->size ? d->inode->size - ext2->block_size : 0, data, ext2->block_size);
+	ext2_read_locked(&d->oid, d->inode->size ? d->inode->size - ext2->block_size : 0, data, ext2->block_size);
 
 	while (offs < ext2->block_size) {
 		dentry = data + offs;
@@ -68,8 +68,7 @@ int dir_add(ext2_object_t *d, const char *name, int type, oid_t *oid)
 			offs += dentry->rec_len;
 			rec_len = strlen(name) + sizeof(ext2_dir_entry_t);
 
-			if (rec_len % 4)
-				rec_len = (rec_len + 4) & ~3;
+			rec_len = (rec_len + 3) & ~3;
 
 			if (rec_len >= ext2->block_size - offs) {
 				offs = ext2->block_size;
@@ -85,10 +84,10 @@ int dir_add(ext2_object_t *d, const char *name, int type, oid_t *oid)
 	if (offs >= ext2->block_size) {
 		/* block alloc */
 		d->inode->size += ext2->block_size;
-		d->inode->blocks += ext2->block_size / 512;
 		offs = 0;
 	}
 
+	memset(data, 0, ext2->block_size);
 	dentry = data + offs;
 	memcpy(dentry->name, name, strlen(name));
 	dentry->name_len = strlen(name);
@@ -101,7 +100,7 @@ int dir_add(ext2_object_t *d, const char *name, int type, oid_t *oid)
 	dentry->rec_len = rec_len ? rec_len : ext2->block_size;
 	dentry->inode = oid->id;
 
-	ext2_write(&d->oid, d->inode->size - ext2->block_size, data, ext2->block_size);
+	ext2_write_locked(&d->oid, d->inode->size - ext2->block_size, data, ext2->block_size);
 
 	free(data);
 	return EOK;

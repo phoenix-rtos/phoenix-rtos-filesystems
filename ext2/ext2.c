@@ -49,7 +49,7 @@ static int ext2_lookup(oid_t *dir, const char *name, oid_t *res)
 	if (d == NULL)
 		return -ENOENT;
 
-//	mutexLock(d->lock);
+	mutexLock(d->lock);
 	while (start < len)
 	{
 		split_path(name, &start, &end, len);
@@ -58,7 +58,7 @@ static int ext2_lookup(oid_t *dir, const char *name, oid_t *res)
 
 		err = dir_find(d, name + start, end - start, res);
 
-//		mutexUnlock(d->lock);
+		mutexUnlock(d->lock);
 		object_put(d);
 
 		if (err < 0)
@@ -66,20 +66,19 @@ static int ext2_lookup(oid_t *dir, const char *name, oid_t *res)
 
 		o = object_get(res->id);
 
-		/* this should not happen */
 		if (o == NULL) {
 			object_put(o);
 			return -ENOENT;
 		}
-	//	if (o->inode->mode & (EXT2_S_IFBLK | EXT2_S_IFSOCK | EXT2_S_IFCHR))
-	//		res->port = o->oid.port;
-	//	else
+
 		res->port = ext2->port;
 
 		d = o;
 		start = end;
+		mutexLock(d->lock);
 	}
 
+	mutexUnlock(d->lock);
 	object_put(d);
 	return end;
 }
@@ -133,6 +132,7 @@ static int ext2_link(oid_t *dir, const char *name, oid_t *oid)
 		return -EMLINK;
 	}
 
+	mutexLock(d->lock);
 	if ((res = dir_add(d, name, o->inode->mode, oid)) == EOK) {
 		o->inode->links_count++;
 		o->inode->uid = 0;
@@ -146,7 +146,7 @@ static int ext2_link(oid_t *dir, const char *name, oid_t *oid)
 		inode_set(o->oid.id, o->inode);
 		inode_set(d->oid.id, d->inode);
 	}
-
+	mutexUnlock(d->lock);
 	object_put(o);
 	object_put(d);
 	return res;
@@ -222,8 +222,11 @@ static int ext2_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned i
 	}
 
 	dentry = malloc(size);
+
+	mutexLock(d->lock);
 	if (offs < d->inode->size) {
-		ext2_read(dir, offs, (void *)dentry, size);
+		mutexUnlock(d->lock);
+		ext2_read_locked(dir, offs, (void *)dentry, size);
 
 		dent->d_ino = dentry->inode;
 		dent->d_reclen = dentry->rec_len;
@@ -235,6 +238,7 @@ static int ext2_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned i
 		object_put(d);
 		return 	EOK;
 	}
+	mutexUnlock(d->lock);
 
 	free(dentry);
 	return -ENOENT;
@@ -243,11 +247,15 @@ static int ext2_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned i
 
 static void ext2_open(oid_t *oid)
 {
+	object_get(oid->id);
 }
 
 
 static void ext2_close(oid_t *oid)
 {
+	ext2_object_t *o = object_get(oid->id);
+	object_put(o);
+	object_put(o);
 }
 
 int main(void)

@@ -189,10 +189,9 @@ typedef struct _ext2_object_t {
 	u32 refs;
 	u8  dirty;
 	u8  locked;
-	handle_t lock;
 
 	rbnode_t node;
-	handle_t mutex;
+	handle_t lock;
 
 	ext2_inode_t *inode;
 } ext2_object_t;
@@ -247,7 +246,7 @@ ext2_info_t     *ext2;
 static inline void split_path(const char *path, u32 *start, u32 *end, u32 len)
 {
 	const char *s = path + *start;
-	while(*s++ == '/' && *start < len)
+	while (*s++ == '/' && *start < len)
 		(*start)++;
 
 	s--;
@@ -262,12 +261,12 @@ static inline u32 find_zero_bit(u32 *addr, u32 size)
 	u32 len = size / (sizeof(u32) * 8);
 	u32 i;
 
-	for(i = 0; i < len; i++) {
+	for (i = 0; i < len; i++) {
 		tmp = addr[i] ^ ~0UL;
 		if (tmp)
 			break;
 	}
-	if(i == len)
+	if (i == len)
 		return 0;
 
 	return (i * (sizeof(u32) * 8)) + (u32)__builtin_ffsl(tmp);

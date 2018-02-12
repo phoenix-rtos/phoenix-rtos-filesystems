@@ -118,6 +118,7 @@ ext2_object_t *object_create(id_t id, ext2_inode_t *inode)
 	o->inode = inode;
 
 	o->oid.port = ext2->port;
+	mutexCreate(&o->lock);
 
 	lib_rbInsert(&ext2_objects.used, &o->node);
 	ext2_objects.used_cnt++;
