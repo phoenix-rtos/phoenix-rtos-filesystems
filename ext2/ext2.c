@@ -161,6 +161,51 @@ static int ext2_getattr(oid_t *oid, int type, int *attr)
 }
 
 
+static int ext2_create(oid_t *oid, int type, int mode, u32 port)
+{
+
+	ext2_object_t *o;
+	ext2_inode_t *inode;
+	u32 ino;
+
+	inode = malloc(ext2->inode_size);
+
+	switch (type) {
+	case 0: /* dir */
+		mode = EXT2_S_IFDIR;
+		break;
+	case 1: /* file */
+		mode = EXT2_S_IFREG;
+		break;
+	case 2: /* dev */
+		mode = EXT2_S_IFCHR;
+		break;
+	}
+
+	/* this section should be locked */
+	ino = inode_create(inode, mode);
+
+	/*TODO: this should be cached not written to drive */
+	if (type & 3) /* Device */
+		inode->block[0] = port;
+
+	o = object_create(ino, inode);
+
+	*oid = o->oid;
+	o->type = type;
+
+	object_put(o);
+
+	return EOK;
+}
+
+
+static int ext2_destroy(oid_t *oid)
+{
+	return EOK;
+}
+
+
 static int ext2_link(oid_t *dir, const char *name, oid_t *oid)
 {
 	ext2_object_t *d, *o;
@@ -223,9 +268,9 @@ static int ext2_unlink(oid_t *dir, const char *name)
 	ext2_object_t *d, *o;
 	oid_t toid;
 
-	d = object_get(d->id);
+	d = object_get(dir->id);
 
-	if (d == NULL);
+	if (d == NULL)
 		return -EINVAL;
 
 	if (!(d->inode->mode & EXT2_S_IFDIR)) {
@@ -262,48 +307,6 @@ static int ext2_unlink(oid_t *dir, const char *name)
 }
 
 
-static int ext2_create(oid_t *oid, int type, int mode, u32 port)
-{
-
-	ext2_object_t *o;
-	ext2_inode_t *inode;
-	u32 ino;
-
-	inode = malloc(ext2->inode_size);
-
-	switch (type) {
-	case 0: /* dir */
-		mode = EXT2_S_IFDIR;
-		break;
-	case 1: /* file */
-		mode = EXT2_S_IFREG;
-		break;
-	case 2: /* dev */
-		mode = EXT2_S_IFCHR;
-		break;
-	}
-
-	/* this section should be locked */
-	ino = inode_create(inode, mode);
-
-	/*TODO: this should be cached not written to drive */
-	if (type & 3) /* Device */
-		inode->block[0] = port;
-
-	o = object_create(ino, inode);
-
-	*oid = o->oid;
-	o->type = type;
-
-	object_put(o);
-
-	return EOK;
-}
-
-static int ext2_destroy(oid_t *oid)
-{
-	return EOK;
-}
 
 static int ext2_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int size)
 {

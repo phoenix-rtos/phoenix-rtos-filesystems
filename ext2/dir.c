@@ -109,7 +109,6 @@ int dir_add(ext2_object_t *d, const char *name, int type, oid_t *oid)
 
 int dir_remove(ext2_object_t *d, const char *name)
 {
-	u32	rec_len = 0;
 	u32 offs = 0;
 	u32 block_offs;
 	u32 prev_offs = 0;
@@ -154,7 +153,7 @@ int dir_remove(ext2_object_t *d, const char *name)
 			dentry->rec_len = dtemp->rec_len;
 			dentry->file_type = dtemp->file_type;
 			dentry->inode = dtemp->inode;
-			memcpy(dentry->name, dtemp->name, dtemo->name_len)
+			memcpy(dentry->name, dtemp->name, dtemp->name_len);
 		}
 	} else {
 		/* just add the rec_len to the previous dentry */
