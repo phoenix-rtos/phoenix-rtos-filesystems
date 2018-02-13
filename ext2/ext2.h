@@ -187,6 +187,7 @@ typedef struct _ext2_object_t {
 	oid_t oid;
 
 	u32 refs;
+	u32 type;
 	u8  dirty;
 	u8  locked;
 

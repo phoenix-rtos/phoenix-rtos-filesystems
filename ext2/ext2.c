@@ -86,12 +86,77 @@ static int ext2_lookup(oid_t *dir, const char *name, oid_t *res)
 
 static int ext2_setattr(oid_t *oid, int type, int attr)
 {
-	return EOK;
+	ext2_object_t *o = object_get(oid->id);
+	int res = EOK;
+
+	if (o == NULL)
+		return -EINVAL;
+
+	mutexLock(o->lock);
+
+	switch(type) {
+
+	case 0:
+		o->inode->mode |= (attr & 0x1FF);
+		break;
+	case 1:
+		o->inode->uid = attr;
+		break;
+	case 2:
+		o->inode->gid = attr;
+		break;
+	case 3:
+		mutexUnlock(o->lock);
+		ext2_truncate(oid, attr);
+		mutexLock(o->lock);
+		break;
+	case 4:
+		res = -EINVAL;
+		break;
+	case 5:
+		o->oid.port = attr;
+		break;
+	}
+
+	mutexUnlock(o->lock);
+	object_put(o);
+	return res;
 }
 
 
 static int ext2_getattr(oid_t *oid, int type, int *attr)
 {
+	ext2_object_t *o = object_get(oid->id);
+
+	if (o == NULL)
+		return -EINVAL;
+
+	mutexLock(o->lock);
+
+	switch(type) {
+
+	case 0:
+		*attr = o->inode->size;
+		break;
+	case 1:
+		*attr = o->inode->uid;
+		break;
+	case 2:
+		*attr = o->inode->gid;
+		break;
+	case 3:
+		*attr = o->inode->size;
+		break;
+	case 4:
+		*attr = o->type;
+		break;
+	case 5:
+		*attr = o->oid.port;
+		break;
+	}
+
+	mutexUnlock(o->lock);
+	object_put(o);
 	return EOK;
 }
 
@@ -190,6 +255,7 @@ static int ext2_create(oid_t *oid, int type, int mode, u32 port)
 	o = object_create(ino, inode);
 
 	*oid = o->oid;
+	o->type = type;
 
 	object_put(o);
 
