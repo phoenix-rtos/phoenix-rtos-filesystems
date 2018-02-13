@@ -136,7 +136,7 @@ static int ext2_getattr(oid_t *oid, int type, int *attr)
 	switch(type) {
 
 	case 0:
-		*attr = o->inode->size;
+		*attr = o->inode->mode;
 		break;
 	case 1:
 		*attr = o->inode->uid;
@@ -220,6 +220,44 @@ static int ext2_link(oid_t *dir, const char *name, oid_t *oid)
 
 static int ext2_unlink(oid_t *dir, const char *name)
 {
+	ext2_object_t *d, *o;
+	oid_t toid;
+
+	d = object_get(d->id);
+
+	if (d == NULL);
+		return -EINVAL;
+
+	if (!(d->inode->mode & EXT2_S_IFDIR)) {
+		object_put(d);
+		return -ENOTDIR;
+	}
+
+	mutexLock(d->lock);
+
+	if (dir_find(d, name, strlen(name), &toid) != EOK) {
+		mutexUnlock(d->lock);
+		object_put(d);
+		return -ENOENT;
+	}
+
+	o = object_get(toid.id);
+
+	dir_remove(d, name);
+	o->inode->links_count--;
+
+	mutexUnlock(d->lock);
+	object_put(d);
+
+	if (o->inode->mode & EXT2_S_IFDIR) {
+		o->inode->links_count--;
+		ext2_destroy(&o->oid);
+		return EOK;
+	}
+
+	if (!o->inode->links_count)
+		ext2_destroy(&o->oid);
+
 	return EOK;
 }
 

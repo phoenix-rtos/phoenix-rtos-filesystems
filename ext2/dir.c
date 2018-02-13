@@ -105,3 +105,63 @@ int dir_add(ext2_object_t *d, const char *name, int type, oid_t *oid)
 	free(data);
 	return EOK;
 }
+
+
+int dir_remove(ext2_object_t *d, const char *name)
+{
+	u32	rec_len = 0;
+	u32 offs = 0;
+	u32 block_offs;
+	u32 prev_offs = 0;
+	ext2_dir_entry_t *dentry, *dtemp;
+	void *data = malloc(ext2->block_size);
+
+	while (offs < d->inode->size) {
+		ext2_read_locked(&d->oid, offs, data, ext2->block_size);
+		block_offs = 0;
+		while (block_offs < ext2->block_size) {
+			dentry = data + block_offs;
+
+			if (strlen(name) == dentry->name_len
+				&& !strncmp(name, dentry->name, dentry->name_len)) {
+				break;
+			}
+			prev_offs = block_offs;
+			block_offs += dentry->rec_len;
+		}
+		offs += ext2->block_size; 
+	}
+
+	if (offs >= d->inode->size) {
+		free(data);
+		return -ENOENT;
+	}
+
+	/* entry at the start of the block */
+	if (!block_offs) {
+		/* last entry in directory */
+		if (dentry->rec_len == ext2->block_size) {
+			/* free last block and adjust inode size */
+
+			d->inode->size -= ext2->block_size;
+			d->inode->blocks -= ext2->block_size / 512;
+			free(data);
+			return EOK;
+		} else {
+			/* move next dentry to the start of the block */
+			dtemp = data + dentry->rec_len;
+			dentry->name_len = dtemp->name_len;
+			dentry->rec_len = dtemp->rec_len;
+			dentry->file_type = dtemp->file_type;
+			dentry->inode = dtemp->inode;
+			memcpy(dentry->name, dtemp->name, dtemo->name_len)
+		}
+	} else {
+		/* just add the rec_len to the previous dentry */
+		((ext2_dir_entry_t *)(data + prev_offs))->rec_len += dentry->rec_len;
+	}
+
+	ext2_write_locked(&d->oid, offs, data, ext2->block_size);
+	free(data);
+	return EOK;
+}
