@@ -85,9 +85,9 @@ int dir_add(ext2_object_t *d, const char *name, int type, oid_t *oid)
 		/* block alloc */
 		d->inode->size += ext2->block_size;
 		offs = 0;
+		memset(data, 0, ext2->block_size);
 	}
 
-	memset(data, 0, ext2->block_size);
 	dentry = data + offs;
 	memcpy(dentry->name, name, strlen(name));
 	dentry->name_len = strlen(name);
