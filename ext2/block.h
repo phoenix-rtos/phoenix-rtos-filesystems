@@ -30,7 +30,10 @@ extern int read_blocks(u32 block, void *data, u32 size);
 extern u32 search_block(void *data, const char *name, u8 len);
 
 
-extern u32 get_block_no(ext2_inode_t *inode, u32 block);
+extern u32 get_block_no(ext2_inode_t *inode, u32 block, u32 *buff[3]);
+
+
+extern int free_inode_block(ext2_inode_t *inode, u32 block, u32 *buff[3]);
 
 
 extern u32 new_block(u32 ino, ext2_inode_t *inode, u32 bno);

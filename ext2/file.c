@@ -22,7 +22,7 @@
 #include "file.h"
 #include "object.h"
 #include "block.h"
-
+#include "sb.h"
 #include "inode.h"
 
 
@@ -177,6 +177,7 @@ static int _ext2_write(oid_t *oid, offs_t offs, char *data, u32 len, int lock)
 	free(ind[1]);
 	free(ind[2]);
 	free(tmp);
+	ext2_write_sb();
 	return write_len;
 }
 
@@ -196,20 +197,53 @@ int ext2_write_locked(oid_t *oid, offs_t offs, char *data, u32 len)
 int ext2_truncate(oid_t *oid, u32 size)
 {
 	ext2_object_t *o = object_get(oid->id);
+	u32 target_block = size / ext2->block_size;
+	u32 end_block = o->inode->size / ext2->block_size;
+	u32 *ind[3];
 
 	if (o == NULL)
 		return -EINVAL;
 
 	mutexLock(o->lock);
 
-	if (o->inode->size <= size)
-		o->inode->size = size;
-	else {
+	if (o->inode->size > size) {
+		ind[0] = malloc(ext2->block_size);
+		ind[1] = malloc(ext2->block_size);
+		ind[2] = malloc(ext2->block_size);
 
+		while (target_block < end_block) {
+
+			free_inode_block(o->inode, end_block, ind);
+			o->inode->blocks -= ext2->block_size / 512;
+
+			end_block--;
+		}
+
+		if (!size) {
+			o->inode->size = 0;
+			o->inode->blocks = 0;
+			free_inode_block(o->inode, 0, ind);
+
+			inode_set(o->oid.id, o->inode);
+			mutexUnlock(o->lock);
+			object_put(o);
+			ext2_write_sb();
+			free(ind[0]);
+			free(ind[1]);
+			free(ind[2]);
+			return EOK;
+		}
 	}
 
+	o->inode->size = size;
+
+	inode_set(o->oid.id, o->inode);
 	mutexUnlock(o->lock);
 	object_put(o);
+	ext2_write_sb();
+	free(ind[0]);
+	free(ind[1]);
+	free(ind[2]);
 	return EOK;
 }
 

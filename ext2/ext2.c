@@ -288,6 +288,7 @@ int main(void)
 	object_init();
 
 	printf("ext2: initialized %s\n", "");
+
 	for (;;) {
 		/* message handling loop */
 		msgRecv(port, &msg, &rid);

@@ -122,20 +122,16 @@ static int block_off(long block_no, u32 off[4])
 	return n;
 }
 
-u32 get_block_no(ext2_inode_t *inode, u32 block)
+u32 get_block_no(ext2_inode_t *inode, u32 block, u32 *buff[3])
 {
 	u32 off[4];
-	u32 *buff[3];
-	buff[0] = malloc(ext2->block_size);
-	buff[1] = malloc(ext2->block_size);
-	buff[2] = malloc(ext2->block_size);
 	u32 ret;
 	int depth = block_off(block, off);
 	//printf("off 1 = %u 2 = %u 3 = %u 4 = %u\n", off[0], off[1], off[2], off[3]);
-	if (depth >= 4)
+	if (depth == 4)
 		read_block(inode->block[off[3]], buff[2]);
 	if (depth >= 3) {
-		if (depth >= 4)
+		if (depth == 4)
 			read_block(*(buff[2] + off[2]), buff[1]);
 		else
 			read_block(inode->block[off[2]], buff[1]);
@@ -148,48 +144,85 @@ u32 get_block_no(ext2_inode_t *inode, u32 block)
 	}
 
 	ret = depth > 1 ? *(buff[0] + off[0]) : inode->block[off[0]];
-	free(buff[0]);
-	free(buff[1]);
-	free(buff[2]);
 	return ret;
 }
 
-/*
-   int set_block_no(ext2_inode_t *inode, u32 boff, u32 bno)
-   {
-   u32 off[4];
-   int depth = 0;
 
-   depth = block_off(boff, off);
-   buff[0] = malloc(ext2->block_size);
-   buff[1] = malloc(ext2->block_size);
-   buff[2] = malloc(ext2->block_size);
-   u32 ret;
-   int depth = block_off(block, off);
-//printf("off 1 = %u 2 = %u 3 = %u 4 = %u\n", off[0], off[1], off[2], off[3]);
-if (depth >= 4) {
-read_block(inode->block[off[3]], buff[2]);
-}
-if (depth >= 3) {
-if (depth >= 4)
-read_block(*(buff[2] + off[2]), buff[1]);
-else
-read_block(inode->block[off[2]], buff[1]);
-}
-if (depth >= 2) {
-if (depth >= 3)
-read_block(*(buff[1] + off[1]), buff[0]);
-else
-read_block(inode->block[off[1]], buff[0]);
+void free_block(u32 bno)
+{
+	u32 group;
+	u32 off;
+	void *block_bmp = malloc(ext2->block_size);
+
+	group = (bno - 1) / ext2->blocks_in_group;
+	off = ((bno - 1)  % ext2->blocks_in_group) + 1;
+
+	read_block(ext2->gdt[group].block_bitmap, block_bmp);
+	toggle_bit(block_bmp, off);
+	write_block(ext2->gdt[group].block_bitmap, block_bmp);
+	ext2->sb->free_blocks_count--;
+
+	free(block_bmp);
 }
 
-ret = depth > 1 ? *(buff[0] + off[0]) : inode->block[off[0]];
-free(buff[0]);
-free(buff[1]);
-free(buff[2]);
-return ret;
 
-}*/
+int free_inode_block(ext2_inode_t *inode, u32 block, u32 *buff[3])
+{
+	u32 off[4];
+	int depth = block_off(block, off);
+	//printf("off 1 = %u 2 = %u 3 = %u 4 = %u\n", off[0], off[1], off[2], off[3]);
+	if (depth == 4)
+		read_block(inode->block[off[3]], buff[2]);
+	if (depth >= 3) {
+		if (depth == 4)
+			read_block(*(buff[2] + off[2]), buff[1]);
+		else
+			read_block(inode->block[off[2]], buff[1]);
+	}
+	if (depth >= 2) {
+		if (depth >= 3)
+			read_block(*(buff[1] + off[1]), buff[0]);
+		else
+			read_block(inode->block[off[1]], buff[0]);
+	}
+
+	*(buff[0] + off[0]) = 0;
+	if (depth == 1) {
+		free_block(inode->block[off[0]]);
+		inode->block[off[0]] = 0;
+	} else if (depth == 2) {
+		write_block(inode->block[off[1]], buff[0]);
+		if (!off[0]) {
+			free_block(inode->block[off[1]]);
+			inode->block[off[1]] = 0;
+		}
+	} else if (depth == 3) {
+		write_block(*(buff[1] + off[1]), buff[0]);
+		if (!off[0]) {
+			*(buff[1] + off[1]) = 0;
+			write_block(inode->block[off[2]], buff[1]);
+			if(!off[1]) {
+				free_block(inode->block[off[2]]);
+				inode->block[off[2]] = 0;
+			}
+		}
+	} else if (depth == 4) {
+		write_block(*(buff[1] + off[1]), buff[0]);
+		if (!off[0]) {
+			*(buff[1] + off[1]) = 0;
+			write_block(*(buff[2] + off[2]), buff[1]);
+			if(!off[1]) {
+				*(buff[2] + off[2]) = 0;
+				write_block(*(buff[2] + off[2]), buff[1]);
+				if(!off[2]) {
+					free_block(inode->block[off[3]]);
+					inode->block[off[3]] = 0;
+				}
+			}
+		}
+	}
+	return EOK;
+}
 
 u32 new_block(u32 ino, ext2_inode_t *inode, u32 bno)
 {
@@ -228,7 +261,6 @@ found:
 	toggle_bit(block_bmp, off);
 	write_block(ext2->gdt[group].block_bitmap, block_bmp);
 	ext2->sb->free_blocks_count--;
-	ext2_write_sb();
 	free(block_bmp);
 	return group * ext2->blocks_in_group + off;
 
@@ -237,18 +269,20 @@ out:
 	return 0;
 }
 
+
+
 /* gets block of a given number (relative to inode) */
 void get_block(ext2_inode_t *inode, u32 block, void *data,
 		u32 off[4], u32 prev_off[4], u32 *buff[3])
 {
 	int depth = block_off(block, off);
 	//printf("off 1 = %u 2 = %u 3 = %u 4 = %u\n", off[0], off[1], off[2], off[3]);
-	if (depth >= 4 && prev_off[3] != off[3]) {
+	if (depth == 4 && prev_off[3] != off[3]) {
 		read_block(inode->block[off[3]], buff[2]);
 		prev_off[3] = off[3];
 	}
 	if (depth >= 3 && prev_off[2] != off[2]) {
-		if (depth >= 4)
+		if (depth == 4)
 			read_block(*(buff[2] + off[2]), buff[1]);
 		else
 			read_block(inode->block[off[2]], buff[1]);
