@@ -79,7 +79,7 @@ void ext2_init_sb(int pentry)
 	else
 		ext2->first_block = BLOCKBASE;
 
-	read_blocks(2, ext2->gdt, ext2->gdt_size * sizeof(group_desc_t));
+	read_blocks(2, (ext2->gdt_size * sizeof(group_desc_t)) / ext2->block_size, ext2->gdt);
 
 	//TODO: features check
 }

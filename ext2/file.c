@@ -162,13 +162,13 @@ static int _ext2_write(oid_t *oid, offs_t offs, char *data, u32 len, int lock)
 		set_block(o->oid.id, o->inode, end_block, tmp, off, prev_off, ind);
 	}
 
-
 	if (offs > o->inode->size)
 		o->inode->size += (offs - o->inode->size) + len;
 	else if (offs + len > o->inode->size)
 		o->inode->size += (offs + len) - o->inode->size;
 
-	inode_set(o->oid.id, o->inode);
+	inode_set(o->oid.id, o->inode); //temp
+	o->dirty = 1;
 
 	if (lock) mutexUnlock(o->lock);
 
@@ -223,17 +223,18 @@ int ext2_truncate(oid_t *oid, u32 size)
 			o->inode->blocks = 0;
 			free_inode_block(o->inode, 0, ind);
 		}
+		free(ind[0]);
+		free(ind[1]);
+		free(ind[2]);
 	}
 
 	o->inode->size = size;
 
 	inode_set(o->oid.id, o->inode);
+	o->dirty = 1;
 	mutexUnlock(o->lock);
 	object_put(o);
 	ext2_write_sb();
-	free(ind[0]);
-	free(ind[1]);
-	free(ind[2]);
 	return EOK;
 }
 

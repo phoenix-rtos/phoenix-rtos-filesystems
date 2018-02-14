@@ -39,10 +39,24 @@ int write_block(u32 block, void *data)
 	return -EINVAL;
 }
 
-int read_block(u32 block, void *data)
+int write_blocks(u32 start_block, u32 count, void *data)
 {
 	int ret;
 
+	if(!start_block)
+		return EOK;
+
+	ret = ata_write(block_offset(start_block), data, ext2->block_size * count);
+
+	if (ret == ext2->block_size * count)
+		return EOK;
+	return -EINVAL;
+}
+
+
+int read_block(u32 block, void *data)
+{
+	int ret;
 
 	if(!block) {
 		memset(data, 0, ext2->block_size);
@@ -57,20 +71,20 @@ int read_block(u32 block, void *data)
 }
 
 /* reads from starting block */
-int read_blocks(u32 block, void *data, u32 size)
+int read_blocks(u32 start_block, u32 count, void *data)
 {
-	int len = 0;
-	if (size % ext2->block_size)
-		return -EINVAL;
+	int ret;
 
-	while(len < size) {
-		if(!read_block(block, data + len)) {
-			len += ext2->block_size;
-			block++;
-		}
-		else return -EINVAL;
+	if(!start_block) {
+		memset(data, 0, ext2->block_size * count);
+		return EOK;
 	}
-	return EOK;
+
+	ret = ata_read(block_offset(start_block), data, ext2->block_size * count);
+
+	if (ret == ext2->block_size)
+		return EOK;
+	return ret;
 }
 
 /* search block for a given file name */
@@ -245,8 +259,9 @@ u32 new_block(u32 ino, ext2_inode_t *inode, u32 bno)
 		if (!off)
 			off = find_zero_bit(block_bmp, ext2->blocks_in_group);
 		else {
-			if (!check_bit(block_bmp, off))
+			if (!check_bit(block_bmp, off)) {
 				break;
+			}
 			off = find_zero_bit(block_bmp, ext2->blocks_in_group);
 		}
 
@@ -348,7 +363,7 @@ void set_block(u32 ino, ext2_inode_t *inode, u32 block, void *data,
 
 	if (depth > 1) {
 		if (!*(buff[0] + off[0])) {
-			*(buff[0] + off[0]) = new_block(ino, inode, prev_off[0] != 2048 ? *(buff[0] + prev_off[0] + 1) : 0);
+			*(buff[0] + off[0]) = new_block(ino, inode, prev_off[0] != 2048 ? *(buff[0] + prev_off[0]) + 1 : 0);
 			if (depth > 2)
 				write_block(*(buff[1] + off[1]), buff[0]);
 			else

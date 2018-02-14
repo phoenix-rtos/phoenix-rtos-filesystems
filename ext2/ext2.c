@@ -31,7 +31,8 @@
 #include "object.h"
 #include "pc-ata.h"
 
-#include "time.h"
+#include "../../phoenix-rtos-kernel/include/sysinfo.h"
+
 
 static int ext2_lookup(oid_t *dir, const char *name, oid_t *res)
 {
@@ -247,14 +248,16 @@ static int ext2_link(oid_t *dir, const char *name, oid_t *oid)
 		o->inode->links_count++;
 		o->inode->uid = 0;
 		o->inode->gid = 0;
+		o->dirty = 1;
 		if(o->inode->mode & EXT2_S_IFDIR) {
 			dir_add(o, ".", EXT2_S_IFDIR, oid);
 			o->inode->links_count++;
 			dir_add(o, "..", EXT2_S_IFDIR, dir);
 			d->inode->links_count++;
+			d->dirty = 1;
 		}
-		inode_set(o->oid.id, o->inode);
-		inode_set(d->oid.id, d->inode);
+		inode_set(o->oid.id, o->inode); //temp
+		inode_set(d->oid.id, d->inode); //temp
 	}
 	mutexUnlock(d->lock);
 	object_put(o);
@@ -369,34 +372,61 @@ int main(void)
 {
 	u32 port;
 	oid_t toid;
+	oid_t root;
+	oid_t sysoid;
 	msg_t msg;
+	void *prog_addr;
+	syspageprog_t prog;
+	int i, progsz;
 	unsigned int rid;
 
 	ext2 = malloc(sizeof(ext2_info_t));
 
 	ata_init();
 
+	printf("ext2: Starting ext2 server %s\n", "");
 	if (ext2_init()) {
 		printf("ext2: init error %s\n", "");
+		free(ext2);
 		return 0;
+	}
+
+	object_init();
+
+	progsz = syspageprog(NULL, -1);
+	root.id = 2;
+	if (ext2_lookup(&root, "syspage", &sysoid) < 0) {
+		ext2_create(&sysoid, 0, 0, 0);
+		ext2_link(&root, "syspage", &sysoid);
+	}
+
+	for (i = 0; i < progsz; i++) {
+		syspageprog(&prog, i);
+		prog_addr = (void *)mmap(NULL, (prog.size + 0xfff) & ~0xfff, 0x1 | 0x2, 0, -1, prog.addr);
+
+		if (ext2_lookup(&sysoid, prog.name, &toid) < 0) {
+			ext2_create(&toid, 1, 0, 0);
+			ext2_link(&sysoid, prog.name, &toid);
+		} else
+			ext2_truncate(&toid, prog.size);
+		ext2_write(&toid, 0, prog_addr, prog.size);
+
+		munmap(prog_addr, (prog.size + 0xfff) & ~0xfff);
 	}
 
 	if (portCreate(&port) < 0) {
 		printf("ext2: creating port failed %s\n", "");
+		free(ext2);
 		return 0;
 	}
 
 	toid.id = 2;
 	if(portRegister(port, "/", &toid) < 0) {
 		printf("ext2: registering port failed %s\n", "");
+		free(ext2);
 		return 0;
 	}
 	ext2->port = port;
-
-	object_init();
-
-	printf("ext2: initialized %s\n", "");
-
 
 
 	for (;;) {
