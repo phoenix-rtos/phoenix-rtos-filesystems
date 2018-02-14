@@ -220,18 +220,8 @@ int ext2_truncate(oid_t *oid, u32 size)
 		}
 
 		if (!size) {
-			o->inode->size = 0;
 			o->inode->blocks = 0;
 			free_inode_block(o->inode, 0, ind);
-
-			inode_set(o->oid.id, o->inode);
-			mutexUnlock(o->lock);
-			object_put(o);
-			ext2_write_sb();
-			free(ind[0]);
-			free(ind[1]);
-			free(ind[2]);
-			return EOK;
 		}
 	}
 

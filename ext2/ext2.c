@@ -31,7 +31,7 @@
 #include "object.h"
 #include "pc-ata.h"
 
-#define READ_MAX 2048
+#include "time.h"
 
 static int ext2_lookup(oid_t *dir, const char *name, oid_t *res)
 {
@@ -371,6 +371,7 @@ int main(void)
 	oid_t toid;
 	msg_t msg;
 	unsigned int rid;
+
 	ext2 = malloc(sizeof(ext2_info_t));
 
 	ata_init();
@@ -395,6 +396,8 @@ int main(void)
 	object_init();
 
 	printf("ext2: initialized %s\n", "");
+
+
 
 	for (;;) {
 		/* message handling loop */
@@ -459,7 +462,6 @@ int main(void)
 				break;
 		}
 		msgRespond(port, &msg, rid);
-
 	}
 
 	if(ext2) {

@@ -33,20 +33,20 @@ int ext2_read_sb(u32 sect)
 
 	if (ret != SUPERBLOCK_SIZE) {
 		printf("ext2: superblock read error %d\n", ret);
-		goto error;
+		free(ext2->sb);
+		ext2->sb = NULL;
+		return -EFAULT;
 	}
 	if (ext2->sb->magic != EXT2_MAGIC) {
 		printf("ext2: not an ext2 partition 0x%x\n", ext2->sb->magic);
-		goto error;
+		free(ext2->sb);
+		ext2->sb = NULL;
+		return -EFAULT;
 	}
 
 	return EOK;
-
-error:
-	free(ext2->sb);
-	ext2->sb = NULL;
-	return -EFAULT;
 }
+
 
 int ext2_write_sb(void)
 {
@@ -61,6 +61,7 @@ int ext2_write_sb(void)
 
 	return EOK;
 }
+
 
 void ext2_init_sb(int pentry)
 {

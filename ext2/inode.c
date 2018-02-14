@@ -105,21 +105,21 @@ static int find_group_dir(u32 pino)
 			continue;
 	}
 	if(group >= 0)
-		goto out;
+		return group;
 
-retry:
-	for(i = 0; i < ext2->gdt_size; i++) {
-		group = (pgroup + i) % ext2->gdt_size;
-		if (ext2->gdt[group].free_inodes_count >= avefreei)
-			goto out;
-	}
+	do {
+		for(i = 0; i < ext2->gdt_size; i++) {
+			group = (pgroup + i) % ext2->gdt_size;
+			if (ext2->gdt[group].free_inodes_count >= avefreei)
+				return group;
+		}
 
-	if (avefreei) {
-		avefreei = 0;
-		goto retry;
-	}
+		if (avefreei)
+			avefreei = 0;
+		else
+			break;
+	} while (!group);
 
-out:
 	return group;
 }
 
@@ -143,6 +143,7 @@ static int find_group_file(u32 pino)
 	}
 
 	group = pgroup;
+
 	for (i = 0; i < ngroups; i++) {
 		group++;
 		group = group % ngroups;
@@ -164,10 +165,12 @@ u32 inode_create(ext2_inode_t *inode, u32 mode)
 	else
 		group = find_group_file(2);
 
+
 	if (group == -1)
 		return 0;
 
 	inode_bmp = malloc(ext2->block_size);
+
 
 	read_block(ext2->gdt[group].inode_bitmap, inode_bmp);
 

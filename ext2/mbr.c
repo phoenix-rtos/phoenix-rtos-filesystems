@@ -30,17 +30,15 @@ struct mbr_t *read_mbr(void)
 	ret = ata_read(0, (char *)mbr, sizeof(struct mbr_t));
 	if (ret != sizeof(struct mbr_t)) {
 		printf("mbr: invalid mbr size %s\n", "");
-		goto error;
+		free(mbr);
+		return NULL;
 	}
 
 	if (mbr->boot_sign != MBR_SIGNATURE) {
 		printf("mbr: invalid mbr singature %x\n", mbr->boot_sign);
-		goto error;
+		free(mbr);
+		return NULL;
 	}
 
 	return mbr;
-
-error:
-	free(mbr);
-	return NULL;
 }

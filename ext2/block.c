@@ -239,34 +239,31 @@ u32 new_block(u32 ino, ext2_inode_t *inode, u32 bno)
 
 	pgroup = group;
 
-again:
-	read_block(ext2->gdt[group].block_bitmap, block_bmp);
+	do {
+		read_block(ext2->gdt[group].block_bitmap, block_bmp);
 
-	if (!off)
-		off = find_zero_bit(block_bmp, ext2->blocks_in_group);
-	else {
-		if (!check_bit(block_bmp, off))
-			goto found;
-		off = find_zero_bit(block_bmp, ext2->blocks_in_group);
-	}
+		if (!off)
+			off = find_zero_bit(block_bmp, ext2->blocks_in_group);
+		else {
+			if (!check_bit(block_bmp, off))
+				break;
+			off = find_zero_bit(block_bmp, ext2->blocks_in_group);
+		}
 
-	if (off <= 0 || off > ext2->blocks_in_group) {
-		group = (group + 1) % ext2->gdt_size;
-		if (group == pgroup)
-			goto out;
-		goto again;
-	}
+		if (off <= 0 || off > ext2->blocks_in_group) {
+			group = (group + 1) % ext2->gdt_size;
+			if (group == pgroup) {
+				free(block_bmp);
+				return 0;
+			}
+		}
+	} while (off <= 0);
 
-found:
 	toggle_bit(block_bmp, off);
 	write_block(ext2->gdt[group].block_bitmap, block_bmp);
 	ext2->sb->free_blocks_count--;
 	free(block_bmp);
 	return group * ext2->blocks_in_group + off;
-
-out:
-	free(block_bmp);
-	return 0;
 }
 
 
@@ -351,7 +348,7 @@ void set_block(u32 ino, ext2_inode_t *inode, u32 block, void *data,
 
 	if (depth > 1) {
 		if (!*(buff[0] + off[0])) {
-			*(buff[0] + off[0]) = new_block(ino, inode, 0);
+			*(buff[0] + off[0]) = new_block(ino, inode, prev_off[0] != 2048 ? *(buff[0] + prev_off[0] + 1) : 0);
 			if (depth > 2)
 				write_block(*(buff[1] + off[1]), buff[0]);
 			else
