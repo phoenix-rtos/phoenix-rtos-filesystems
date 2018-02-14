@@ -26,7 +26,7 @@
 #include "dir.h"
 #include "file.h"
 #include "object.h"
-
+#include "../../phoenix-rtos-kernel/include/sysinfo.h"
 
 struct _dummyfs_common_t dummyfs_common;
 
@@ -389,7 +389,11 @@ int main(void)
 {
 	oid_t toid = { 0 };
 	oid_t root = { 0 };
+	oid_t sysoid;
 	msg_t msg;
+	void *prog_addr;
+	syspageprog_t prog;
+	int i, progsz;
 	dummyfs_object_t *o;
 	unsigned int rid;
 
@@ -419,6 +423,22 @@ int main(void)
 	o = object_get(root.id);
 	dir_add(o, ".", otDir, &root);
 	dir_add(o, "..", otDir, &root);
+
+
+	progsz = syspageprog(NULL, -1);
+	dummyfs_create(&sysoid, otDir, 0, 0);
+	dummyfs_link(&root, "syspage", &sysoid);
+
+	for (i = 0; i < progsz; i++) {
+		syspageprog(&prog, i);
+		prog_addr = (void *)mmap(NULL, (prog.size + 0xfff) & ~0xfff, 0x1 | 0x2, 0, -1, prog.addr);
+
+		dummyfs_create(&toid, otFile, 0, 0);
+		dummyfs_link(&sysoid, prog.name, &toid);
+		dummyfs_write(&toid, 0, prog_addr, prog.size);
+
+		munmap(prog_addr, (prog.size + 0xfff) & ~0xfff);
+	}
 
 	for (;;) {
 		msgRecv(dummyfs_common.port, &msg, &rid);
