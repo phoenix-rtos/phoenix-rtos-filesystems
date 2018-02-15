@@ -291,13 +291,12 @@ static int ata_io(struct ata_dev *ad, offs_t offs, char *buff, unsigned int len,
 	begin_lba = (u32)offs / ad->sector_size; // starting sector
 	sectors = len / ad->sector_size;
 
-	for (; sectors >= ATA_MAX_PIO_DRQ; sectors -= ATA_MAX_PIO_DRQ) {
-		// sectors actually read
-		ata_access(direction, ad, begin_lba, (u8)ATA_MAX_PIO_DRQ, buff); // FIXME: BUG: TODO: ATA_MAX_PIO_DRQ is getting squashed to 8bits here!!!
+	for (; sectors >= ATA_MAX_PIO_DRQ - 1; sectors -= ATA_MAX_PIO_DRQ - 1) {
+		ata_access(direction, ad, begin_lba, (u8)ATA_MAX_PIO_DRQ - 1, buff);
 
-		begin_lba += ATA_MAX_PIO_DRQ;
-		buff += ATA_MAX_PIO_DRQ * ad->sector_size;
-		ret += ATA_MAX_PIO_DRQ * ad->sector_size;
+		begin_lba += ATA_MAX_PIO_DRQ - 1;
+		buff += (ATA_MAX_PIO_DRQ - 1) * ad->sector_size;
+		ret += (ATA_MAX_PIO_DRQ - 1) * ad->sector_size;
 	}
 
 	if (sectors) {
