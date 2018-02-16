@@ -65,7 +65,7 @@ typedef struct _superblock_t {
 typedef struct _group_desc_t {
 	u32 block_bitmap;           /* block number of block bitmap */
 	u32 inode_bitmap;           /* block number of inode bitmap */
-	u32 ext2_inode_table;            /* block number of inode table */
+	u32 ext2_inode_table;       /* block number of inode table */
 	u16 free_blocks_count;      /* free block in the group */
 	u16 free_inodes_count;      /* free inodes in the group */
 	u16 used_dirs_count;        /* directories in the group */
@@ -256,13 +256,13 @@ static inline void split_path(const char *path, u32 *start, u32 *end, u32 len)
 		(*end)++;
 }
 
-static inline u32 find_zero_bit(u32 *addr, u32 size)
+static inline u32 find_zero_bit(u32 *addr, u32 size, u32 off)
 {
 	u32 tmp = 0;
 	u32 len = size / (sizeof(u32) * 8);
 	u32 i;
 
-	for (i = 0; i < len; i++) {
+	for (i = off / (sizeof(u32) * 8); i < len; i++) {
 		tmp = addr[i] ^ ~0UL;
 		if (tmp)
 			break;

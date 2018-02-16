@@ -174,7 +174,7 @@ u32 inode_create(ext2_inode_t *inode, u32 mode)
 
 	read_block(ext2->gdt[group].inode_bitmap, inode_bmp);
 
-	ino = find_zero_bit(inode_bmp, ext2->inodes_in_group);
+	ino = find_zero_bit(inode_bmp, ext2->inodes_in_group, 0);
 
 	if (ino > ext2->inodes_in_group || ino <= 0)
 		return 0;

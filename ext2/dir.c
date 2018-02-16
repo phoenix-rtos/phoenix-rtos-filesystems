@@ -128,7 +128,7 @@ int dir_remove(ext2_object_t *d, const char *name)
 			prev_offs = block_offs;
 			block_offs += dentry->rec_len;
 		}
-		offs += ext2->block_size; 
+		offs += ext2->block_size;
 	}
 
 	if (offs >= d->inode->size) {
@@ -141,9 +141,8 @@ int dir_remove(ext2_object_t *d, const char *name)
 		/* last entry in directory */
 		if (dentry->rec_len == ext2->block_size) {
 			/* free last block and adjust inode size */
-
 			d->inode->size -= ext2->block_size;
-			d->inode->blocks -= ext2->block_size / 512;
+			ext2_truncate(&d->oid, d->inode->size);
 			free(data);
 			return EOK;
 		} else {
