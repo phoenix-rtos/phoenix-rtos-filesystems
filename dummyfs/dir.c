@@ -29,6 +29,9 @@ int dir_find(dummyfs_object_t *dir, const char *name, oid_t *res)
 	char *end = strchr(dirname, '/');
 	int len;
 
+	if (dir->type != otDir)
+		return -EINVAL;
+
 	if (e == NULL)
 		return -ENOENT;
 
