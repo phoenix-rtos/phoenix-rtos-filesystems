@@ -30,24 +30,22 @@ extern int read_blocks(u32 block, u32 count, void *data);
 extern u32 search_block(void *data, const char *name, u8 len);
 
 
-extern u32 get_block_no(ext2_inode_t *inode, u32 block, u32 *buff[3]);
+extern void free_blocks(u32 start, u32 count);
 
 
-extern int free_inode_block(ext2_inode_t *inode, u32 block, u32 *buff[3]);
+extern int free_inode_blocks(ext2_object_t *o, u32 block, u32 count);
 
 
-extern u32 new_block(u32 ino, ext2_inode_t *inode, u32 bno);
+extern void get_block(ext2_object_t *o, u32 block, void *data);
 
 
-extern void get_block(ext2_inode_t *inode, u32 block, void *data,
-		u32 off[4], u32 prev_off[4], u32 *buff[3]);
+extern u32 get_block_no(ext2_object_t *o, u32 block);
 
 
-extern void set_block(u32 ino, ext2_inode_t *inode, u32 block, void *data,
-		u32 off[4], u32 prev_off[4], u32 *buff[3]);
+extern void set_block(ext2_object_t *o, u32 block, void *data);
 
 
-extern int set_blocks(u32 ino, ext2_inode_t *inode, u32 start_block, u32 count, void *data);
+extern int set_blocks(ext2_object_t *o, u32 start_block, u32 count, void *data);
 
 
 static inline u32 block_offset(u32 block_no)

@@ -23,6 +23,9 @@ extern ext2_object_t *object_get(unsigned int id);
 extern void object_put(ext2_object_t *o);
 
 
+extern void object_sync(ext2_object_t *o);
+
+
 extern ext2_object_t *object_create(id_t id, ext2_inode_t *inode);
 
 

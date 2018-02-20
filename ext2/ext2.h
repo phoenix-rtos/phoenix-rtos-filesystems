@@ -183,8 +183,14 @@ typedef struct _ext2_inode_t {
 	} osd2;                     /* OS dependent 2 */
 } ext2_inode_t;
 
+typedef struct _ext2_block_t {
+	u32 bno;
+	u32 *data;
+} ext2_block_t;
+
 typedef struct _ext2_object_t {
 	oid_t oid;
+	u32 ino;
 
 	u32 refs;
 	u32 type;
@@ -195,6 +201,7 @@ typedef struct _ext2_object_t {
 	handle_t lock;
 
 	ext2_inode_t *inode;
+	ext2_block_t ind[3];
 } ext2_object_t;
 
 #define EXT2_NAME_LEN 255

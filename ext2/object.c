@@ -18,6 +18,7 @@
 #include <sys/threads.h>
 
 #include "ext2.h"
+#include "block.h"
 #include "inode.h"
 
 #define MAX_FILES 512
@@ -74,6 +75,17 @@ int object_remove(ext2_object_t *o)
 	mutexLock(ext2_objects.clock);
 	r  = ext2_objects.cache[o->oid.id % CACHE_SIZE];
 	if (r != NULL && r != o) {
+
+		if(r->ind[0].data)
+			write_block(r->ind[0].bno, r->ind[0].data);
+		if(r->ind[1].data)
+			write_block(r->ind[1].bno, r->ind[1].data);
+		if(r->ind[2].data)
+			write_block(r->ind[2].bno, r->ind[2].data);
+
+		free(r->ind[0].data);
+		free(r->ind[1].data);
+		free(r->ind[2].data);
 		if (r->dirty)
 			inode_set(r->oid.id, r->inode);
 		inode_put(r->inode);
@@ -116,7 +128,7 @@ ext2_object_t *object_create(id_t id, ext2_inode_t *inode)
 	o->refs = 1;
 	o->oid.id = id;
 	o->inode = inode;
-
+	o->ino = id;
 	o->oid.port = ext2->port;
 	mutexCreate(&o->lock);
 
@@ -167,6 +179,16 @@ ext2_object_t *object_get(unsigned int id)
 	return o;
 }
 
+void object_sync(ext2_object_t *o)
+{
+	//mutexLock(o->lock);
+	if (o->dirty)
+		inode_set(o->ino, o->inode);
+	write_block(o->ind[0].bno, o->ind[0].data);
+	write_block(o->ind[1].bno, o->ind[1].data);
+	write_block(o->ind[2].bno, o->ind[2].data);
+	//mutexUnlock(o->lock);
+}
 
 void object_put(ext2_object_t *o)
 {
@@ -183,6 +205,7 @@ void object_put(ext2_object_t *o)
 
 	return;
 }
+
 
 void object_init(void)
 {
