@@ -123,6 +123,7 @@ static int find_group_dir(u32 pino)
 	return group;
 }
 
+
 static int find_group_file(u32 pino)
 {
 	int i;
@@ -190,11 +191,13 @@ u32 inode_create(ext2_inode_t *inode, u32 mode)
 	inode->mode = mode | EXT2_S_IRUSR | EXT2_S_IWUSR;
 
 	write_block(ext2->gdt[group].inode_bitmap, inode_bmp);
+	gdt_sync(group);
 	ext2_write_sb();
 	free(inode_bmp);
 
 	return group * ext2->inodes_in_group + ino;
 }
+
 
 int inode_free(u32 ino, ext2_inode_t *inode)
 {
@@ -202,11 +205,18 @@ int inode_free(u32 ino, ext2_inode_t *inode)
 	u32 group = (ino - 1) / ext2->inodes_in_group;
 	void *inode_bmp = malloc(ext2->block_size);
 
+	ext2->gdt[group].free_inodes_count++;
+	if (inode->mode & EXT2_S_IFDIR)
+		ext2->gdt[group].used_dirs_count--;
+	ext2->sb->free_inodes_count++;
+
 	ino = (ino - 1) % ext2->inodes_in_group;
 
 	read_block(ext2->gdt[group].inode_bitmap, inode_bmp);
 	toggle_bit(inode_bmp, ino);
 	write_block(ext2->gdt[group].inode_bitmap, inode_bmp);
+	gdt_sync(group);
+	ext2_write_sb();
 
 	free(inode);
 

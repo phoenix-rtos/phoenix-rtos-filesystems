@@ -22,6 +22,13 @@
 #include "pc-ata.h"
 
 
+void gdt_sync(int group)
+{
+	u32 bno = (group * sizeof(group_desc_t)) / ext2->block_size;
+
+	write_block(2 + bno, &(ext2->gdt[bno * (ext2->block_size / sizeof(group_desc_t))]));
+}
+
 int ext2_read_sb(u32 sect)
 {
 

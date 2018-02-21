@@ -76,12 +76,9 @@ int object_remove(ext2_object_t *o)
 	r  = ext2_objects.cache[o->oid.id % CACHE_SIZE];
 	if (r != NULL && r != o) {
 
-		if(r->ind[0].data)
-			write_block(r->ind[0].bno, r->ind[0].data);
-		if(r->ind[1].data)
-			write_block(r->ind[1].bno, r->ind[1].data);
-		if(r->ind[2].data)
-			write_block(r->ind[2].bno, r->ind[2].data);
+		write_block(r->ind[0].bno, r->ind[0].data);
+		write_block(r->ind[1].bno, r->ind[1].data);
+		write_block(r->ind[2].bno, r->ind[2].data);
 
 		free(r->ind[0].data);
 		free(r->ind[1].data);
@@ -127,9 +124,9 @@ ext2_object_t *object_create(id_t id, ext2_inode_t *inode)
 	memset(o, 0, sizeof(ext2_object_t));
 	o->refs = 1;
 	o->oid.id = id;
+	o->oid.port = ext2->port;
 	o->inode = inode;
 	o->ino = id;
-	o->oid.port = ext2->port;
 	mutexCreate(&o->lock);
 
 	lib_rbInsert(&ext2_objects.used, &o->node);

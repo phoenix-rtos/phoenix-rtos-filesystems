@@ -30,7 +30,7 @@ int write_block(u32 block, void *data)
 {
 	int ret;
 
-	if(!block)
+	if(!block || data == NULL)
 		return EOK;
 
 	ret = ata_write(block_offset(block), data, ext2->block_size);
@@ -180,6 +180,7 @@ static u32 new_block(u32 ino, ext2_inode_t *inode, u32 bno)
 	write_block(ext2->gdt[group].block_bitmap, block_bmp);
 	ext2->sb->free_blocks_count--;
 	ext2->gdt[group].free_blocks_count--;
+	gdt_sync(group);
 	free(block_bmp);
 	return group * ext2->blocks_in_group + off;
 }
@@ -283,6 +284,7 @@ void free_block(u32 bno)
 	write_block(ext2->gdt[group].block_bitmap, block_bmp);
 	ext2->sb->free_blocks_count++;
 	ext2->gdt[group].free_blocks_count++;
+	gdt_sync(group);
 
 	free(block_bmp);
 }
@@ -319,6 +321,7 @@ void free_blocks(u32 start, u32 count)
 
 	write_block(ext2->gdt[group].block_bitmap, block_bmp);
 	ext2_write_sb();
+	gdt_sync(group);
 	free(block_bmp);
 }
 
@@ -520,6 +523,7 @@ u32 alloc_blocks(ext2_object_t *o, u32 start_block, u32 goal, u32 bno)
 	}
 
 	write_block(ext2->gdt[group].block_bitmap, block_bmp);
+	gdt_sync(group);
 	free(block_bmp);
 	return count;
 }
