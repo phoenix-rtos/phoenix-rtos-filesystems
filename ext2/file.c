@@ -159,7 +159,7 @@ static int _ext2_write(oid_t *oid, offs_t offs, char *data, u32 len, int lock)
 
 	if (lock) mutexUnlock(o->lock);
 
-	object_sync(o);
+	//object_sync(o);
 	object_put(o);
 	free(tmp);
 	ext2_write_sb();

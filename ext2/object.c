@@ -19,10 +19,13 @@
 
 #include "ext2.h"
 #include "block.h"
+#include "dir.h"
 #include "inode.h"
+#include "object.h"
 
 #define MAX_FILES 512
 #define CACHE_SIZE 128
+
 
 struct {
 	int i;
@@ -32,6 +35,7 @@ struct {
 	u32	used_cnt;
 	ext2_object_t *cache[CACHE_SIZE];
 } ext2_objects;
+
 
 static int object_cmp(rbnode_t *n1, rbnode_t *n2)
 {
@@ -43,7 +47,7 @@ static int object_cmp(rbnode_t *n1, rbnode_t *n2)
 }
 
 
-int object_detroy(ext2_object_t *o)
+int object_destroy(ext2_object_t *o)
 {
 	mutexLock(ext2_objects.ulock);
 
@@ -51,14 +55,29 @@ int object_detroy(ext2_object_t *o)
 		mutexUnlock(ext2_objects.ulock);
 		return -EBUSY;
 	}
+
+	if (o->type == 0 && dir_is_empty(o) != EOK)
+		return -EBUSY;
+
 	lib_rbRemove(&ext2_objects.used, &o->node);
 
-	if (inode_free(o->oid.id, o->inode) == EOK)
-		free(o);
+	mutexLock(ext2_objects.clock);
+	if (ext2_objects.cache[o->oid.id % CACHE_SIZE] == o)
+		ext2_objects.cache[o->oid.id % CACHE_SIZE] = NULL;
+	mutexUnlock(ext2_objects.clock);
+
+	inode_free(o->oid.id, o->inode);
+	free(o->ind[0].data);
+	free(o->ind[1].data);
+	free(o->ind[2].data);
+	/*mutex destroy */
+	free(o);
 
 	mutexUnlock(ext2_objects.ulock);
+
 	return EOK;
 }
+
 
 int object_remove(ext2_object_t *o)
 {
@@ -74,35 +93,41 @@ int object_remove(ext2_object_t *o)
 
 	mutexLock(ext2_objects.clock);
 	r  = ext2_objects.cache[o->oid.id % CACHE_SIZE];
+	ext2_objects.cache[o->oid.id % CACHE_SIZE] = o;
+
 	if (r != NULL && r != o) {
-
-		write_block(r->ind[0].bno, r->ind[0].data);
-		write_block(r->ind[1].bno, r->ind[1].data);
-		write_block(r->ind[2].bno, r->ind[2].data);
-
+		object_sync(r);
+		inode_put(r->inode);
 		free(r->ind[0].data);
 		free(r->ind[1].data);
 		free(r->ind[2].data);
-		if (r->dirty)
-			inode_set(r->oid.id, r->inode);
-		inode_put(r->inode);
+		/*mutex destroy */
 		free(r);
 	}
-	ext2_objects.cache[o->oid.id % CACHE_SIZE] = o;
+
 	mutexUnlock(ext2_objects.clock);
-
 	mutexUnlock(ext2_objects.ulock);
-
 	return EOK;
 }
 
-ext2_object_t *object_create(id_t id, ext2_inode_t *inode)
+ext2_object_t *object_create(id_t id, ext2_inode_t **inode, int mode)
 {
 	ext2_object_t *o, t;
 
-	t.oid.id = id;
-
 	mutexLock(ext2_objects.ulock);
+
+	if (*inode == NULL) {
+		*inode = malloc(ext2->inode_size);
+
+		id = inode_create(*inode, mode);
+
+		if (!id) {
+			free(*inode);
+			*inode = NULL;
+			return NULL;
+		}
+	}
+	t.oid.id = id;
 
 	if (ext2_objects.used_cnt >= MAX_FILES) {
 		mutexUnlock(ext2_objects.ulock);
@@ -125,7 +150,7 @@ ext2_object_t *object_create(id_t id, ext2_inode_t *inode)
 	o->refs = 1;
 	o->oid.id = id;
 	o->oid.port = ext2->port;
-	o->inode = inode;
+	o->inode = *inode;
 	o->ino = id;
 	mutexCreate(&o->lock);
 
@@ -154,6 +179,8 @@ ext2_object_t *object_get(unsigned int id)
 		/* check recently closed cache */
 		mutexLock(ext2_objects.clock);
 		if ((o = ext2_objects.cache[id % CACHE_SIZE]) != NULL && o->oid.id == id) {
+
+			ext2_objects.cache[id % CACHE_SIZE] = NULL;
 			o->refs++;
 			lib_rbInsert(&ext2_objects.used, &o->node);
 			mutexUnlock(ext2_objects.clock);
@@ -167,7 +194,7 @@ ext2_object_t *object_get(unsigned int id)
 	if (inode != NULL) {
 
 		mutexUnlock(ext2_objects.ulock);
-		o = object_create(id, inode);
+		o = object_create(id, &inode, inode->mode);
 
 		return o;
 	}
@@ -178,13 +205,13 @@ ext2_object_t *object_get(unsigned int id)
 
 void object_sync(ext2_object_t *o)
 {
-	//mutexLock(o->lock);
+
 	if (o->dirty)
 		inode_set(o->ino, o->inode);
 	write_block(o->ind[0].bno, o->ind[0].data);
 	write_block(o->ind[1].bno, o->ind[1].data);
 	write_block(o->ind[2].bno, o->ind[2].data);
-	//mutexUnlock(o->lock);
+	o->dirty = 0;
 }
 
 void object_put(ext2_object_t *o)

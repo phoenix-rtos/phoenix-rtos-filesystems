@@ -166,19 +166,19 @@ u32 inode_create(ext2_inode_t *inode, u32 mode)
 	else
 		group = find_group_file(2);
 
-
 	if (group == -1)
 		return 0;
 
 	inode_bmp = malloc(ext2->block_size);
 
-
 	read_block(ext2->gdt[group].inode_bitmap, inode_bmp);
 
 	ino = find_zero_bit(inode_bmp, ext2->inodes_in_group, 0);
 
-	if (ino > ext2->inodes_in_group || ino <= 0)
+	if (ino > ext2->inodes_in_group || ino <= 0) {
+		free(inode_bmp);
 		return 0;
+	}
 
 	toggle_bit(inode_bmp, ino);
 
@@ -205,9 +205,10 @@ int inode_free(u32 ino, ext2_inode_t *inode)
 	u32 group = (ino - 1) / ext2->inodes_in_group;
 	void *inode_bmp = malloc(ext2->block_size);
 
-	ext2->gdt[group].free_inodes_count++;
 	if (inode->mode & EXT2_S_IFDIR)
 		ext2->gdt[group].used_dirs_count--;
+
+	ext2->gdt[group].free_inodes_count++;
 	ext2->sb->free_inodes_count++;
 
 	ino = (ino - 1) % ext2->inodes_in_group;

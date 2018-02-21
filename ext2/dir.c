@@ -13,6 +13,7 @@
  * %LICENSE%
  */
 #include <stdlib.h>
+#include <sys/threads.h>
 
 #include "ext2.h"
 #include "block.h"
@@ -62,8 +63,8 @@ int dir_add(ext2_object_t *d, const char *name, int type, oid_t *oid)
 			break;
 		if (dentry->rec_len + offs == ext2->block_size) {
 			dentry->rec_len = dentry->name_len + sizeof(ext2_dir_entry_t);
-			if (dentry->rec_len % 4)
-				dentry->rec_len = (dentry->rec_len + 4) & ~3;
+
+			dentry->rec_len = (dentry->rec_len + 3) & ~3;
 
 			offs += dentry->rec_len;
 			rec_len = strlen(name) + sizeof(ext2_dir_entry_t);
@@ -71,8 +72,8 @@ int dir_add(ext2_object_t *d, const char *name, int type, oid_t *oid)
 			rec_len = (rec_len + 3) & ~3;
 
 			if (rec_len >= ext2->block_size - offs) {
-				offs = ext2->block_size;
 				dentry->rec_len += ext2->block_size - offs;
+				offs = ext2->block_size;
 			} else rec_len = ext2->block_size - offs;
 
 			break;
@@ -162,4 +163,51 @@ int dir_remove(ext2_object_t *d, const char *name)
 	ext2_write_locked(&d->oid, offs, data, ext2->block_size);
 	free(data);
 	return EOK;
+}
+
+int dir_is_empty(ext2_object_t *d)
+{
+
+	u32 offs = 0;
+	void *data = NULL;
+	ext2_dir_entry_t *dentry;
+
+	if (!d->inode->size)
+		return EOK;
+
+	if (d->inode->size > ext2->block_size)
+		return -EBUSY;
+
+	mutexLock(d->lock);
+
+	data = malloc(ext2->block_size);
+
+	ext2_read_locked(&d->oid, 0, data, ext2->block_size);
+
+	dentry = data;
+
+	if (strncmp(dentry->name, ".", dentry->name_len) || dentry->name_len != 1) {
+		free(data);
+		mutexUnlock(d->lock);
+		return -EINVAL;
+	}
+
+	offs += dentry->rec_len;
+	dentry = data + offs;
+
+	if (strncmp(dentry->name, "..", dentry->name_len) || dentry->name_len != 2) {
+		free(data);
+		mutexUnlock(d->lock);
+		return -EINVAL;
+	}
+
+	if (dentry->rec_len + offs == ext2->block_size) {
+		free(data);
+		mutexUnlock(d->lock);
+		return EOK;
+	}
+
+	free(data);
+	mutexUnlock(d->lock);
+	return -EINVAL;
 }

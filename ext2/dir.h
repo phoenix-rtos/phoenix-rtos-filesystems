@@ -17,6 +17,9 @@
 #define _DIR_H_ /* dir.h */
 
 
+extern int dir_is_empty(ext2_object_t *dir);
+
+
 extern int dir_find(ext2_object_t *dir, const char *name, u32 len, oid_t *res);
 
 

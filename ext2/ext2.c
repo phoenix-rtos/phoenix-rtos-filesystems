@@ -115,10 +115,13 @@ static int ext2_setattr(oid_t *oid, int type, int attr)
 		res = -EINVAL;
 		break;
 	case 5:
-		o->oid.port = attr;
+		if (o->type == 2) /* dev */
+			o->oid.port = attr;
 		break;
 	}
 
+	o->dirty = 1;
+	object_sync(o);
 	mutexUnlock(o->lock);
 	object_put(o);
 	return res;
@@ -166,10 +169,7 @@ static int ext2_create(oid_t *oid, int type, int mode, u32 port)
 {
 
 	ext2_object_t *o;
-	ext2_inode_t *inode;
-	u32 ino;
-
-	inode = malloc(ext2->inode_size);
+	ext2_inode_t *inode = NULL;
 
 	switch (type) {
 	case 0: /* dir */
@@ -183,17 +183,20 @@ static int ext2_create(oid_t *oid, int type, int mode, u32 port)
 		break;
 	}
 
-	/* this section should be locked */
-	ino = inode_create(inode, mode);
+	o = object_create(0, &inode, mode);
 
-	/*TODO: this should be cached not written to drive */
-	if (type & 3) /* Device */
-		inode->block[0] = port;
+	if (o == NULL) {
+		if (inode == NULL)
+			return -ENOSPC;
 
-	o = object_create(ino, inode);
+		free(inode);
+		return -ENOMEM;
+	}
 
-	*oid = o->oid;
 	o->type = type;
+	if (o->type == 2)
+		o->oid.port = port;
+	*oid = o->oid;
 
 	object_put(o);
 
@@ -203,6 +206,12 @@ static int ext2_create(oid_t *oid, int type, int mode, u32 port)
 
 static int ext2_destroy(oid_t *oid)
 {
+	ext2_object_t *o = object_get(oid->id);
+
+	if (o == NULL)
+		return -EINVAL;
+
+	object_destroy(o);
 	return EOK;
 }
 
@@ -245,20 +254,40 @@ static int ext2_link(oid_t *dir, const char *name, oid_t *oid)
 
 	mutexLock(d->lock);
 	if ((res = dir_add(d, name, o->inode->mode, oid)) == EOK) {
+
+		mutexUnlock(d->lock);
+
+		mutexLock(o->lock);
 		o->inode->links_count++;
 		o->inode->uid = 0;
 		o->inode->gid = 0;
 		o->dirty = 1;
+
 		if(o->inode->mode & EXT2_S_IFDIR) {
+
 			dir_add(o, ".", EXT2_S_IFDIR, oid);
 			o->inode->links_count++;
 			dir_add(o, "..", EXT2_S_IFDIR, dir);
+			object_sync(o);
+			mutexUnlock(o->lock);
+
+			mutexLock(d->lock);
 			d->inode->links_count++;
 			d->dirty = 1;
+			object_sync(d);
+			mutexUnlock(d->lock);
+
+			object_put(o);
+			object_put(d);
+			return res;
 		}
-		inode_set(o->oid.id, o->inode); //temp
-		inode_set(d->oid.id, d->inode); //temp
+
+		mutexUnlock(o->lock);
+		object_put(o);
+		object_put(d);
+		return res;
 	}
+
 	mutexUnlock(d->lock);
 	object_put(o);
 	object_put(d);
@@ -289,14 +318,14 @@ static int ext2_unlink(oid_t *dir, const char *name)
 		return -ENOENT;
 	}
 
-	o = object_get(toid.id);
-
 	dir_remove(d, name);
-	o->inode->links_count--;
 
 	mutexUnlock(d->lock);
 	object_put(d);
 
+	o = object_get(toid.id);
+	mutexLock(o->lock);
+	o->inode->links_count--;
 	if (o->inode->mode & EXT2_S_IFDIR) {
 		o->inode->links_count--;
 		ext2_destroy(&o->oid);
@@ -335,8 +364,8 @@ static int ext2_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned i
 
 	mutexLock(d->lock);
 	if (offs < d->inode->size) {
-		mutexUnlock(d->lock);
 		ext2_read_locked(dir, offs, (void *)dentry, size);
+		mutexUnlock(d->lock);
 
 		dent->d_ino = dentry->inode;
 		dent->d_reclen = dentry->rec_len;
@@ -364,6 +393,10 @@ static void ext2_open(oid_t *oid)
 static void ext2_close(oid_t *oid)
 {
 	ext2_object_t *o = object_get(oid->id);
+
+	mutexLock(o->lock);
+	object_sync(o);
+	mutexUnlock(o->lock);
 	object_put(o);
 	object_put(o);
 }
@@ -494,7 +527,7 @@ int main(void)
 		msgRespond(port, &msg, rid);
 	}
 
-	if(ext2) {
+	if (ext2) {
 		free(ext2->mbr);
 		free(ext2->sb);
 		free(ext2->gdt);

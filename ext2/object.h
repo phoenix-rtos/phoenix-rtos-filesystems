@@ -26,7 +26,10 @@ extern void object_put(ext2_object_t *o);
 extern void object_sync(ext2_object_t *o);
 
 
-extern ext2_object_t *object_create(id_t id, ext2_inode_t *inode);
+extern ext2_object_t *object_create(id_t id, ext2_inode_t **inode, int mode);
+
+
+extern int object_destroy(ext2_object_t *o);
 
 
 extern void object_init(void);
