@@ -71,6 +71,7 @@ int object_destroy(ext2_object_t *o)
 	free(o->ind[1].data);
 	free(o->ind[2].data);
 	/*mutex destroy */
+	resourceDestroy(o->lock);
 	free(o);
 
 	mutexUnlock(ext2_objects.ulock);
@@ -102,6 +103,7 @@ int object_remove(ext2_object_t *o)
 		free(r->ind[1].data);
 		free(r->ind[2].data);
 		/*mutex destroy */
+		resourceDestroy(r->lock);
 		free(r);
 	}
 
