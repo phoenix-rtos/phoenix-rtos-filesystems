@@ -28,8 +28,8 @@ all: dummyfs
 	$(CC) $(CFLAGS) $<
 
 dummyfs: $(OBJS) $(LIBPHOENIX)
-	$(LD) $(LDFLAGS) -o $(BIN) $(OBJS) $(LIBPHOENIX) $(GCCLIB)
-	$(STRIP) $(BIN)
+	$(LD) $(LDFLAGS) -o $(BIN)_unstripped $(OBJS) $(LIBPHOENIX) $(GCCLIB)
+	$(STRIP) $(BIN)_unstripped -o $(BIN)
 
 clean:
 	rm -f *.o *~ core

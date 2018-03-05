@@ -441,7 +441,10 @@ int main(void)
 	}
 
 	for (;;) {
-		msgRecv(dummyfs_common.port, &msg, &rid);
+		if (msgRecv(dummyfs_common.port, &msg, &rid) < 0) {
+			msgRespond(dummyfs_common.port, &msg, rid);
+			continue;
+		}
 
 		switch (msg.type) {
 
