@@ -38,7 +38,7 @@ static void _flash_waitBusy(void)
 		if (!(status & 1))
 			break;
 		usleep(sleep);
-		if (sleep < 1000000)
+		if (sleep < 100000)
 			sleep <<= 1;
 	}
 }

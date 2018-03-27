@@ -35,6 +35,9 @@ extern int node_findMount(oid_t *oid, const char *name);
 extern int node_claim(const char *name, unsigned int *id);
 
 
+extern void node_cleanAll(void);
+
+
 extern void node_init(void);
 
 

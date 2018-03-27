@@ -269,6 +269,25 @@ int node_claim(const char *name, unsigned int *id)
 }
 
 
+void node_cleanAll(void)
+{
+	node_t *p;
+
+	p = lib_treeof(node_t, linkage, lib_rbMinimum(tree.root));
+
+	while (p != NULL) {
+		if (p->type == NODE_FILE) {
+			lib_rbRemove(&tree, &p->linkage);
+			free(p);
+			p = lib_treeof(node_t, linkage, lib_rbMinimum(tree.root));
+		}
+		else {
+			p = lib_treeof(node_t, linkage, lib_rbNext(&p->linkage));
+		}
+	}
+}
+
+
 void node_init(void)
 {
 	lib_rbInit(&tree, node_cmp, node_augment);
