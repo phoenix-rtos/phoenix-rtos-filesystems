@@ -19,6 +19,8 @@
 #include <sys/threads.h>
 #include <sys/msg.h>
 #include <sys/list.h>
+#include <sys/mman.h>
+#include <string.h>
 #include <unistd.h>
 #include <dirent.h>
 
@@ -431,8 +433,7 @@ int main(void)
 
 	for (i = 0; i < progsz; i++) {
 		syspageprog(&prog, i);
-		prog_addr = (void *)mmap(NULL, (prog.size + 0xfff) & ~0xfff, 0x1 | 0x2, 0, -1, prog.addr);
-
+		prog_addr = (void *)mmap(NULL, (prog.size + 0xfff) & ~0xfff, 0x1 | 0x2, 0, OID_PHYSMEM, prog.addr);
 		dummyfs_create(&toid, otFile, 0, 0);
 		dummyfs_link(&sysoid, prog.name, &toid);
 		dummyfs_write(&toid, 0, prog_addr, prog.size);

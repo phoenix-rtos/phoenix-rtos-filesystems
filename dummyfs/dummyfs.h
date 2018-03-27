@@ -18,6 +18,7 @@
 #define _DUMMYFS_H_
 
 #include <sys/rb.h>
+#include <errno.h>
 
 #define DUMMYFS_SIZE_MAX 4 * 1024 * 1024
 

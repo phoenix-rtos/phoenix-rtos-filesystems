@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <sys/msg.h>
 #include <sys/threads.h>
+#include <string.h>
 
 #include "dummyfs.h"
 #include "object.h"
