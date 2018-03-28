@@ -575,11 +575,6 @@ int fetch_modules(void)
 	if (dc.base == NULL)
 		return -ENOMEM;
 
-	if (mutexCreate(&dc.exec_lock) != EOK)
-		return 0;
-	if (condCreate(&dc.exec_cond) != EOK)
-		return 0;
-
 	if (mutexCreate(&dc.lock) != EOK)
 		return 0;
 	if (condCreate(&dc.cond) != EOK)
