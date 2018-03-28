@@ -328,11 +328,6 @@ static int dtd_exec_chain(int endpt, void *vaddr, int sz, int dir)
 	dc.endptqh[qh].dtd_token &= ~(1 << 6);
 	dc.endptqh[qh].dtd_token &= ~(1 << 7);
 
-//	printf("prime 0x%x\n", *(dc.base + endptprime));
-//	printf("setupstat 0x%x\n", *(dc.base + endptsetupstat));
-//	printf("stat 0x%x\n", *(dc.base + endptstat));
-//	printf("sts 0x%x\n", *(dc.base + usbsts));
-//	usleep(100000);
 	/* prime the endpoint and wait for it to prime */
 	while ((*(dc.base + endptprime) & (1 << shift)));
 	*(dc.base + endptprime) |= 1 << shift;
@@ -368,6 +363,7 @@ static int dtd_exec(int endpt, u32 paddr, u32 sz, int dir)
 	dc.endptqh[qh].dtd_token &= ~(1 << 7);
 
 	/* prime the endpoint and wait for it to prime */
+	while ((*(dc.base + endptprime) & (1 << shift)));
 	*(dc.base + endptprime) |= 1 << shift;
 	while (!(*(dc.base + endptprime) & (1 << shift)) && (*(dc.base + endptstat) & (1 << shift)));
 
