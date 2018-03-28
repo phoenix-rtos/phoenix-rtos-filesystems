@@ -28,6 +28,7 @@
 #include "dir.h"
 #include "file.h"
 #include "object.h"
+#include "usb.h"
 #include "../../phoenix-rtos-kernel/include/sysinfo.h"
 
 struct _dummyfs_common_t dummyfs_common;
@@ -386,46 +387,16 @@ static void dummyfs_close(oid_t *oid)
 	object_put(o);
 }
 
+#ifdef TARGET_IA32
 
-int main(void)
+void fetch_modules()
 {
-	oid_t toid = { 0 };
-	oid_t root = { 0 };
+	oid_t root;
+	oid_t toid;
 	oid_t sysoid;
-	msg_t msg;
 	void *prog_addr;
 	syspageprog_t prog;
 	int i, progsz;
-	dummyfs_object_t *o;
-	unsigned int rid;
-
-	dummyfs_common.size = 0;
-
-	/* Wait for console to start */
-	while (write(0, "", 1) < 0)
-		usleep(5000);
-
-	portCreate(&dummyfs_common.port);
-	printf("dummyfs: Starting dummyfs server at port %d\n", dummyfs_common.port);
-
-	/* Try to mount fs as root */
-	if (portRegister(dummyfs_common.port, "/", &toid) < 0) {
-		printf("dummyfs: Can't mount on directory %s\n", "/");
-		return -1;
-	}
-
-	object_init();
-
-	mutexCreate(&dummyfs_common.mutex);
-
-	/* Create root directory */
-	if (dummyfs_create(&root, otDir, 0, 0) != EOK)
-		return -1;
-
-	o = object_get(root.id);
-	dir_add(o, ".", otDir, &root);
-	dir_add(o, "..", otDir, &root);
-
 
 	progsz = syspageprog(NULL, -1);
 	dummyfs_create(&sysoid, otDir, 0, 0);
@@ -440,6 +411,49 @@ int main(void)
 
 		munmap(prog_addr, (prog.size + 0xfff) & ~0xfff);
 	}
+}
+
+#endif
+
+int main(void)
+{
+	oid_t toid = { 0 };
+	oid_t root = { 0 };
+	msg_t msg;
+	dummyfs_object_t *o;
+	unsigned int rid;
+
+	u32 reserved;
+
+	dummyfs_common.size = 0;
+
+	portCreate(&reserved);
+	portRegister(reserved, "/reserved", &toid);
+
+	portCreate(&dummyfs_common.port);
+
+	/* Try to mount fs as root */
+	if (portRegister(dummyfs_common.port, "/", &toid) < 0) {
+		printf("dummyfs: Can't mount on directory %s\n", "/");
+		return -1;
+	}
+	portDestroy(reserved);
+
+	printf("dummyfs: Starting dummyfs server at port %d\n", dummyfs_common.port);
+
+	object_init();
+
+	mutexCreate(&dummyfs_common.mutex);
+
+	/* Create root directory */
+	if (dummyfs_create(&root, otDir, 0, 0) != EOK)
+		return -1;
+
+	o = object_get(root.id);
+	dir_add(o, ".", otDir, &root);
+	dir_add(o, "..", otDir, &root);
+
+	fetch_modules();
 
 	for (;;) {
 		if (msgRecv(dummyfs_common.port, &msg, &rid) < 0) {
@@ -449,62 +463,62 @@ int main(void)
 
 		switch (msg.type) {
 
-		case mtOpen:
-			dummyfs_open(&msg.i.openclose.oid);
-			break;
+			case mtOpen:
+				dummyfs_open(&msg.i.openclose.oid);
+				break;
 
-		case mtClose:
-			dummyfs_close(&msg.i.openclose.oid);
-			break;
+			case mtClose:
+				dummyfs_close(&msg.i.openclose.oid);
+				break;
 
-		case mtRead:
-			msg.o.io.err = dummyfs_read(&msg.i.io.oid, msg.i.io.offs, msg.o.data, msg.o.size);
-			break;
+			case mtRead:
+				msg.o.io.err = dummyfs_read(&msg.i.io.oid, msg.i.io.offs, msg.o.data, msg.o.size);
+				break;
 
-		case mtWrite:
-			msg.o.io.err = dummyfs_write(&msg.i.io.oid, msg.i.io.offs, msg.i.data, msg.i.size);
-			break;
+			case mtWrite:
+				msg.o.io.err = dummyfs_write(&msg.i.io.oid, msg.i.io.offs, msg.i.data, msg.i.size);
+				break;
 
-		case mtTruncate:
-			msg.o.io.err = dummyfs_truncate(&msg.i.io.oid, msg.i.io.len);
-			break;
+			case mtTruncate:
+				msg.o.io.err = dummyfs_truncate(&msg.i.io.oid, msg.i.io.len);
+				break;
 
-		case mtDevCtl:
-			msg.o.io.err = -EINVAL;
-			break;
+			case mtDevCtl:
+				msg.o.io.err = -EINVAL;
+				break;
 
-		case mtCreate:
-			dummyfs_create(&msg.o.create.oid, msg.i.create.type, msg.i.create.mode, msg.i.create.port);
-			break;
+			case mtCreate:
+				dummyfs_create(&msg.o.create.oid, msg.i.create.type, msg.i.create.mode, msg.i.create.port);
+				break;
 
-		case mtDestroy:
-			msg.o.io.err = dummyfs_destroy(&msg.i.destroy.oid);
-			break;
+			case mtDestroy:
+				msg.o.io.err = dummyfs_destroy(&msg.i.destroy.oid);
+				break;
 
-		case mtSetAttr:
-			dummyfs_setattr(&msg.i.attr.oid, msg.i.attr.type, msg.i.attr.val);
-			break;
+			case mtSetAttr:
+				dummyfs_setattr(&msg.i.attr.oid, msg.i.attr.type, msg.i.attr.val);
+				break;
 
-		case mtGetAttr:
-			dummyfs_getattr(&msg.i.attr.oid, msg.i.attr.type, &msg.o.attr.val);
-			break;
+			case mtGetAttr:
+				dummyfs_getattr(&msg.i.attr.oid, msg.i.attr.type, &msg.o.attr.val);
+				break;
 
-		case mtLookup:
-			msg.o.lookup.err = dummyfs_lookup(&msg.i.lookup.dir, msg.i.data, &msg.o.lookup.res);
-			break;
+			case mtLookup:
+				msg.o.lookup.err = dummyfs_lookup(&msg.i.lookup.dir, msg.i.data, &msg.o.lookup.res);
+				break;
 
-		case mtLink:
-			msg.o.io.err = dummyfs_link(&msg.i.ln.dir, msg.i.data, &msg.i.ln.oid);
-			break;
+			case mtLink:
+				msg.o.io.err = dummyfs_link(&msg.i.ln.dir, msg.i.data, &msg.i.ln.oid);
+				break;
 
-		case mtUnlink:
-			msg.o.io.err = dummyfs_unlink(&msg.i.ln.dir, msg.i.data);
-			break;
+			case mtUnlink:
+				msg.o.io.err = dummyfs_unlink(&msg.i.ln.dir, msg.i.data);
+				break;
 
-		case mtReaddir:
-			msg.o.io.err = dummyfs_readdir(&msg.i.readdir.dir, msg.i.readdir.offs,
-										msg.o.data, msg.o.size);
-			break;
+			case mtReaddir:
+				msg.o.io.err = dummyfs_readdir(&msg.i.readdir.dir, msg.i.readdir.offs,
+						msg.o.data, msg.o.size);
+				break;
 		}
 		msgRespond(dummyfs_common.port, &msg, rid);
 	}
