@@ -13,8 +13,8 @@
 #ifndef __LINUX_JFFS2_H__
 #define __LINUX_JFFS2_H__
 
-#include "os-phoenix.h"
-#include "os.h"
+//#include <linux/types.h>
+//#include <linux/magic.h>
 
 /* You must include something which defines the C99 uintXX_t types. 
    We don't do it from here because this file is used in too many
@@ -34,9 +34,6 @@
    we don't want it confused with a real length. Hence max 254.
 */
 #define JFFS2_MAX_NAME_LEN 254
-
-/* Symlink can have only one data node */
-#define JFFS2_MAX_SYMLINK_LEN (0xFFFFFFFF - sizeof(struct jffs2_raw_inode))
 
 /* How small can we sensibly write nodes? */
 #define JFFS2_MIN_DATA_LEN 128
@@ -131,7 +128,7 @@ struct jffs2_raw_dirent
 	__u8 unused[2];
 	jint32_t node_crc;
 	jint32_t name_crc;
-	char name[0];
+	__u8 name[0];
 };
 
 /* The JFFS2 raw inode structure: Used for storage on physical media.  */
@@ -215,6 +212,12 @@ union jffs2_node_union
 	struct jffs2_raw_xref r;
 	struct jffs2_raw_summary s;
 	struct jffs2_unknown_node u;
+};
+
+/* Data payload for device nodes. */
+union jffs2_device_node {
+	jint16_t old_id;
+	jint32_t new_id;
 };
 
 #endif /* __LINUX_JFFS2_H__ */

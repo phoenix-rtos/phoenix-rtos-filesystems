@@ -12,20 +12,23 @@
 #ifndef __JFFS2_NODELIST_H__
 #define __JFFS2_NODELIST_H__
 
-#include <linux/fs.h>
-#include <linux/types.h>
-#include <linux/jffs2.h>
+//#include <linux/fs.h>
+//#include <linux/types.h>
+#include "os-phoenix.h"
+#include "jffs2.h"
 #include "jffs2_fs_sb.h"
 #include "jffs2_fs_i.h"
 #include "xattr.h"
 #include "acl.h"
 #include "summary.h"
 
+/*
 #ifdef __ECOS
 #include "os-ecos.h"
 #else
 #include "os-linux.h"
 #endif
+*/
 
 #define JFFS2_NATIVE_ENDIAN
 

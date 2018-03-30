@@ -13,15 +13,7 @@
 #ifndef _JFFS2_FS_SB
 #define _JFFS2_FS_SB
 
-#include <linux/types.h>
-#include <linux/spinlock.h>
-#include <linux/workqueue.h>
-#include <linux/completion.h>
-#include <linux/mutex.h>
-#include <linux/timer.h>
-#include <linux/wait.h>
-#include <linux/list.h>
-#include <linux/rwsem.h>
+#include "os-phoenix.h"
 
 #define JFFS2_SB_FLAG_RO 1
 #define JFFS2_SB_FLAG_SCANNING 2 /* Flash scanning is in progress */
