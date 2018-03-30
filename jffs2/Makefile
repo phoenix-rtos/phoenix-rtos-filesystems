@@ -1,22 +1,81 @@
-# SPDX-License-Identifier: GPL-2.0
 #
-# Makefile for the Linux Journalling Flash File System v2 (JFFS2)
+# Phoenix-RTOS
 #
+# jffs2 - jffs2 filesystem driver
+#
+# Copyright 2018 Phoenix Systems
+# Author: Kamil Amanowicz
 #
 
-obj-$(CONFIG_JFFS2_FS) += jffs2.o
+CC = arm-phoenix-gcc
+CFLAGS = -mthumb -c -Wall -Os -nostartfiles -nostdlib -mno-unaligned-access -mcpu=cortex-a7 -mtune=cortex-a7 -mfloat-abi=hard -fomit-frame-pointer -ffreestanding -I. -I../../libphoenix/ -I../../phoenix-rtos-kernel/src/ -DARCH=\"arch/arm-imx/arch.h\"
 
-jffs2-y	:= compr.o dir.o file.o ioctl.o nodelist.o malloc.o
-jffs2-y	+= read.o nodemgmt.o readinode.o write.o scan.o gc.o
-jffs2-y	+= symlink.o build.o erase.o background.o fs.o writev.o
-jffs2-y	+= super.o debug.o
 
-jffs2-$(CONFIG_JFFS2_FS_WRITEBUFFER)	+= wbuf.o
-jffs2-$(CONFIG_JFFS2_FS_XATTR)		+= xattr.o xattr_trusted.o xattr_user.o
-jffs2-$(CONFIG_JFFS2_FS_SECURITY)	+= security.o
-jffs2-$(CONFIG_JFFS2_FS_POSIX_ACL)	+= acl.o
-jffs2-$(CONFIG_JFFS2_RUBIN)	+= compr_rubin.o
-jffs2-$(CONFIG_JFFS2_RTIME)	+= compr_rtime.o
-jffs2-$(CONFIG_JFFS2_ZLIB)	+= compr_zlib.o
-jffs2-$(CONFIG_JFFS2_LZO)	+= compr_lzo.o
-jffs2-$(CONFIG_JFFS2_SUMMARY)   += summary.o
+LD = arm-phoenix-gcc
+LDFLAGS = -nostdlib -z max-page-size=0x1000
+
+
+STRIP = arm-phoenix-strip
+
+
+SRCS = compr.c dir.c file.c ioctl.c nodelist.c malloc.c read.c nodemgmt.c \
+	   readinode.c write.c scan.c gc.c symlink.c build.c erase.c \
+	   background.c fs.c writev.c
+
+
+ifdef $(CONFIG_JFFS2_FS_WRITEBUFFER)
+	SRCS += wbuf.c
+endif
+
+ifdef $(CONFIG_JFFS2_FS_XATTR)
+	SRCS += xattr.c xattr_trusted.c xattr_user.c
+endif
+
+ifdef $(CONFIG_JFFS2_FS_SECURITY)
+	SRCS += security.c
+endif
+
+ifdef $(CONFIG_JFFS2_FS_POSIX_ACL)
+	SRCS += acl.c
+endif
+
+ifdef $(CONFIG_JFFS2_RUBIN)
+	SRCS += compr_rubin.c
+endif
+
+ifdef $(CONFIG_JFFS2_RTIME)
+	SRCS += compr_rtime.c
+endif
+
+ifdef $(CONFIG_JFFS2_ZLIB)
+	SRCS += compr_zlib.c
+endif
+
+ifdef $(CONFIG_JFFS2_LZO)
+	SRCS += compr_lzo.c
+endif
+
+ifdef $(CONFIG_JFFS2_SUMMARY)
+	SRCS += summary.c
+endif
+
+OBJS = $(SRCS:.c=.o)
+
+LIBPHOENIX = ../../../libphoenix/libphoenix.a
+GCCLIB := $(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
+BIN = jffs2
+
+all: jffs2 jffs2.debug
+
+.c.o:
+	$(CC) $(CFLAGS) $<
+
+jffs2: $(OBJS) $(LIBPHOENIX)
+	$(LD) $(LDFLAGS) -o $(BIN) $(OBJS) $(LIBPHOENIX) $(GCCLIB)
+	$(STRIP) $(BIN)
+
+jffs2.debug: $(OBJS) $(LIBPHOENIX)
+	$(LD) $(LDFLAGS) -o $(BIN).debug $(OBJS) $(LIBPHOENIX) $(GCCLIB)
+
+clean:
+	rm -f *.o *~ core
