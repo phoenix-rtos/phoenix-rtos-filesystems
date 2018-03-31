@@ -6,13 +6,13 @@
 # Copyright 2017 Phoenix Systems
 # Author: Pawel Pisarczyk
 #
-CROSS ?= i386-phoenix-
+CROSS ?= i386-pc-phoenix-
 
 CC = $(CROSS)gcc
 CFLAGS = -c -Wall -O2 -g -I. -I../../libphoenix/ -DARCH=\"arch/ia32/arch.h\"\
 			-DHAL=\"hal//ia32//hal.h\" \
                         -I../../phoenix-rtos-kernel/src/\
-		     	-I../../phoenix-rtos-devices/bus/pci/pc-pci/
+		     	-I../../phoenix-rtos-devices/pci/pc-pci/
 
 LD = $(CROSS)gcc
 LDFLAGS = -nostdlib -nostartfiles
