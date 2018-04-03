@@ -1,38 +1,47 @@
 #
-# Phoenix-RTOS
+# Makefile for Phoenix-RTOS dummyfs
 #
-# dummyfs - dummy filesystem driver
-#
-# Copyright 2018 Phoenix Systems
-# Author: Pawel Pisarczyk
+# Copyright 2017, 2018 Phoenix Systems
 #
 
-CC = arm-phoenix-gcc
-CFLAGS = -mthumb -c -Wall -Os -nostartfiles -mno-unaligned-access -nostdlib -mcpu=cortex-a7 -mtune=cortex-a7 -mfloat-abi=hard -fomit-frame-pointer -ffreestanding -I. -I../../libphoenix/ -DARCH=\"arch/arm-imx/arch.h\"
-
-LD = arm-phoenix-gcc
-LDFLAGS = -nostdlib -z max-page-size=0x1000
-
-STRIP = arm-phoenix-strip
-
-SRCS = dummyfs.c file.c dir.c object.c usb.c
+SRCS = dummyfs.c file.c dir.c object.c
+#usb.c
 OBJS = $(SRCS:.c=.o)
-
-LIBPHOENIX = ../../libphoenix/libphoenix.a
-GCCLIB := $(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
 BIN = dummyfs
 
-all: dummyfs dummyfs.debug
+CFLAGS += -I. -I../../libphoenix
+
+
+all: check $(BIN)
+
+
+check:
+	@(if test -z "$(TARGET)"; then\
+		echo "Error: Only main Makefile can be used for compilation!";\
+		exit 1;\
+	fi;)
+
 
 .c.o:
-	$(CC) $(CFLAGS) $<
+	@(printf " CC    %-24s  \n" "$<"; $(CC) -c $(CFLAGS) $<)
 
-dummyfs: $(OBJS) $(LIBPHOENIX)
-	$(LD) $(LDFLAGS) -o $(BIN) $(OBJS) $(LIBPHOENIX) $(GCCLIB)
-	$(STRIP) $(BIN) -o $(BIN)
+-include .depend
 
-dummyfs.debug: $(OBJS) $(LIBPHOENIX)
-	$(LD) $(LDFLAGS) -o $(BIN).debug $(OBJS) $(LIBPHOENIX) $(GCCLIB)
 
-clean:
-	rm -f *.o *~ core
+$(BIN): $(OBJS)
+	@echo " LD    $@"
+	$(SIL)$(LD) -o $(BIN) $(OBJS) ../../libphoenix/libphoenix.a $(GCCLIB)
+	@echo " STRIP $@"
+	$(SIL)$(STRIP) $(BIN) 2>/dev/null
+
+
+depend: check
+	$(SIL)$(MKDEP) $(MKDEPFLAGS) $(SRCS) >.depend
+
+
+clean: check
+	$(SIL)rm -f core *.o $(ARCH)
+
+
+.PHONY: clean
+# DO NOT DELETE

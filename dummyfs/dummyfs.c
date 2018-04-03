@@ -389,7 +389,7 @@ static void dummyfs_close(oid_t *oid)
 
 #ifdef TARGET_IA32
 
-void fetch_modules()
+int fetch_modules(void)
 {
 	oid_t root;
 	oid_t toid;
@@ -411,6 +411,7 @@ void fetch_modules()
 
 		munmap(prog_addr, (prog.size + 0xfff) & ~0xfff);
 	}
+	return EOK;
 }
 
 #endif

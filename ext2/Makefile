@@ -1,38 +1,47 @@
 #
-# Phoenix-RTOS
+# Makefile for Phoenix-RTOS ext2
 #
-# descriptions
+# Copyright 2017, 2018 Phoenix Systems
 #
-# Copyright 2017 Phoenix Systems
-# Author: Pawel Pisarczyk
-#
-CROSS ?= i386-pc-phoenix-
-
-CC = $(CROSS)gcc
-CFLAGS = -c -Wall -O2 -g -I. -I../../libphoenix/ -DARCH=\"arch/ia32/arch.h\"\
-			-DHAL=\"hal//ia32//hal.h\" \
-                        -I../../phoenix-rtos-kernel/src/\
-		     	-I../../phoenix-rtos-devices/pci/pc-pci/
-
-LD = $(CROSS)gcc
-LDFLAGS = -nostdlib -nostartfiles
-#-z max-page-size=0x10000
-
-STRIP = $(CROSS)strip
 
 SRCS = ext2.c mbr.c inode.c block.c file.c pc-ata.c dir.c object.c sb.c
 OBJS = $(SRCS:.c=.o)
-GCCLIB := $(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
 BIN = ext2
 
-all: ext2
+CFLAGS += -I. -I../../libphoenix/ -DARCH=\"arch/ia32/arch.h\" -I../../phoenix-rtos-devices/pci/pc-pci
+#CFLAGS += -mthumb
+
+
+all: check $(BIN)
+
+
+check:
+	@(if test -z "$(TARGET)"; then\
+		echo "Error: Only main Makefile can be used for compilation!";\
+		exit 1;\
+	fi;)
+
 
 .c.o:
-	$(CC) $(CFLAGS) $<
+	@(printf " CC    %-24s  \n" "$<"; $(CC) -c $(CFLAGS) $<)
 
-ext2: $(OBJS)
-	$(LD) $(LDFLAGS) -o $(BIN) $(OBJS) ../../libphoenix/libphoenix.a $(GCCLIB)
-	$(STRIP) $(BIN)
+-include .depend
 
-clean:
-	rm -f *.o *~ core $(BIN)
+
+$(BIN): $(OBJS)
+	@echo " LD    $@"
+	$(SIL)$(LD) -o $(BIN) $(OBJS) ../../libphoenix/libphoenix.a $(GCCLIB)
+	@echo " STRIP $@"
+	$(SIL)$(STRIP) $(BIN) 2>/dev/null
+
+
+depend: check
+	$(SIL)$(MKDEP) $(MKDEPFLAGS) $(SRCS) >.depend
+
+
+clean: check
+	$(SIL)rm -f core *.o $(ARCH)
+
+
+.PHONY: clean
+# DO NOT DELETE
