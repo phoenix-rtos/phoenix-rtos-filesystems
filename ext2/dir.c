@@ -62,6 +62,7 @@ int dir_add(ext2_object_t *d, const char *name, int type, oid_t *oid)
 		dentry = data + offs;
 		if(!dentry->rec_len)
 			break;
+
 		if (dentry->rec_len + offs == ext2->block_size) {
 			dentry->rec_len = dentry->name_len + sizeof(ext2_dir_entry_t);
 
@@ -102,7 +103,7 @@ int dir_add(ext2_object_t *d, const char *name, int type, oid_t *oid)
 	dentry->rec_len = rec_len ? rec_len : ext2->block_size;
 	dentry->inode = oid->id;
 
-	ext2_write_locked(&d->oid, d->inode->size - ext2->block_size, data, ext2->block_size);
+	ext2_write_locked(&d->oid, d->inode->size ? d->inode->size - ext2->block_size : 0, data, ext2->block_size);
 
 	free(data);
 	return EOK;

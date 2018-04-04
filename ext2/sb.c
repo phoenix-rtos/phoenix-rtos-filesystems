@@ -72,22 +72,36 @@ int ext2_write_sb(void)
 
 void ext2_init_sb(int pentry)
 {
+	int size;
+	void *buff;
 
 	ext2->block_size = SUPERBLOCK_SIZE << ext2->sb->log_block_size;
 	ext2->blocks_count = ext2->sb->blocks_count;
 	ext2->blocks_in_group = ext2->sb->blocks_in_group;
 	ext2->inode_size = ext2->sb->inode_size;
+	if (ext2->inode_size > 128)
+		printf("ext2: Invalid partition (inode size > 128)\n");
 	ext2->inodes_count = ext2->sb->inodes_count;
 	ext2->inodes_in_group = ext2->sb->inodes_in_group;
 	ext2->gdt_size = 1 + (ext2->sb->blocks_count - 1) / ext2->sb->blocks_in_group;
+	ext2->gdt_size = 1 + (ext2->sb->inodes_count - 1) / ext2->sb->inodes_in_group;
 	ext2->gdt =  malloc(ext2->gdt_size * sizeof(group_desc_t));
 	if(ext2->mbr != NULL)
-		ext2->first_block = (ext2->mbr->pent[pentry].first_sect_lba * SECTOR_SIZE) + BLOCKBASE;
+		ext2->first_block = (ext2->mbr->pent[pentry].first_sect_lba * SECTOR_SIZE) + ext2->sb->first_data_block * ext2->block_size;
 	else
-		ext2->first_block = BLOCKBASE;
+		ext2->first_block = ext2->sb->first_data_block * ext2->block_size;
 
-	read_blocks(2, (ext2->gdt_size * sizeof(group_desc_t)) / ext2->block_size, ext2->gdt);
+	size = (ext2->gdt_size * sizeof(group_desc_t)) / ext2->block_size;
 
+	if (size)
+		read_blocks(ext2->sb->first_data_block + 1, (ext2->gdt_size * sizeof(group_desc_t)) / ext2->block_size, ext2->gdt);
+	else {
+		buff = malloc(ext2->block_size);
+		size = (ext2->gdt_size * sizeof(group_desc_t));
+		ata_read(ext2->first_block + ext2->block_size, buff, ext2->block_size);
+		memcpy(ext2->gdt, buff, size);
+		free(buff);
+	}
 	//TODO: features check
 }
 

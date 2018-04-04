@@ -436,7 +436,7 @@ int main(void)
 
 	for (i = 0; i < progsz; i++) {
 		syspageprog(&prog, i);
-		prog_addr = (void *)mmap(NULL, (prog.size + 0xfff) & ~0xfff, 0x1 | 0x2, 0, (void *)-1, prog.addr);
+		prog_addr = (void *)mmap(NULL, (prog.size + 0xfff) & ~0xfff, 0x1 | 0x2, 0, OID_PHYSMEM, prog.addr);
 
 		if (ext2_lookup(&sysoid, prog.name, &toid) < 0) {
 			ext2_create(&toid, 1, 0, 0);

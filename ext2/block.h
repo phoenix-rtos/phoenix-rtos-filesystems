@@ -50,7 +50,7 @@ extern int set_blocks(ext2_object_t *o, u32 start_block, u32 count, void *data);
 
 static inline u32 block_offset(u32 block_no)
 {
-	return ext2->first_block + (ext2->block_size * (block_no - 1));
+	return ext2->first_block + (ext2->block_size * (block_no - ext2->sb->first_data_block));
 }
 
 #endif /* block.h */
