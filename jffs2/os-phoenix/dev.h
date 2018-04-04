@@ -17,9 +17,7 @@
 #ifndef _OS_PHOENIX_DEV_H_
 #define _OS_PHOENIX_DEV_H_
 
-
-typedef u32 dev_t;
-
+#include <sys/stat.h>
 
 int old_valid_dev(dev_t dev)
 {
