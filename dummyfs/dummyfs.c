@@ -424,12 +424,19 @@ int main(void)
 	dummyfs_object_t *o;
 	unsigned int rid;
 
+#ifndef TARGET_IA32
 	u32 reserved;
+#endif
 
 	dummyfs_common.size = 0;
 
+#ifdef TARGET_IA32
+	while(write(0, "", 1) < 0)
+		usleep(500000);
+#else
 	portCreate(&reserved);
 	portRegister(reserved, "/reserved", &toid);
+#endif
 
 	portCreate(&dummyfs_common.port);
 
@@ -438,7 +445,10 @@ int main(void)
 		printf("dummyfs: Can't mount on directory %s\n", "/");
 		return -1;
 	}
+
+#ifndef TARGET_IA32
 	portDestroy(reserved);
+#endif
 
 	printf("dummyfs: Starting dummyfs server at port %d\n", dummyfs_common.port);
 

@@ -5,7 +5,11 @@
 #
 
 SRCS = dummyfs.c file.c dir.c object.c
-#usb.c
+
+ifneq (, $(findstring arm-imx, $(TARGET)))
+	SRCS += usb.c
+endif
+
 OBJS = $(SRCS:.c=.o)
 BIN = dummyfs
 
@@ -30,7 +34,7 @@ check:
 
 $(BIN): $(OBJS)
 	@echo " LD    $@"
-	$(SIL)$(LD) -o $(BIN) $(OBJS) ../../libphoenix/libphoenix.a $(GCCLIB)
+	$(SIL)$(LD) $(LDFLAGS) -o $(BIN) $(OBJS) ../../libphoenix/libphoenix.a $(GCCLIB)
 	@echo " STRIP $@"
 	$(SIL)$(STRIP) $(BIN) 2>/dev/null
 
