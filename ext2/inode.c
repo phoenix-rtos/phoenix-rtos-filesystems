@@ -27,7 +27,7 @@
 
 ext2_inode_t *inode_get(u32 ino)
 {
-	ext2_inode_t *inode_block;
+	void *inode_block;
 	ext2_inode_t *inode;
 	u32 group;
 	u32 block;
@@ -48,8 +48,7 @@ ext2_inode_t *inode_get(u32 ino)
 
 	inode = malloc(ext2->inode_size);
 
-	memcpy(inode, inode_block + ((ino - 1) % inodes_in_block), ext2->inode_size);
-
+	memcpy(inode, inode_block + (((ino - 1) % inodes_in_block) * ext2->inode_size), ext2->inode_size);
 	free(inode_block);
 	return inode;
 }
@@ -62,7 +61,7 @@ int inode_put(ext2_inode_t *inode)
 
 int inode_set(u32 ino, ext2_inode_t *inode)
 {
-	ext2_inode_t *inode_block;
+	void *inode_block;
 	u32 group;
 	u32 block;
 	u32 inodes_in_block;
@@ -80,7 +79,7 @@ int inode_set(u32 ino, ext2_inode_t *inode)
 
 	read_block(ext2->gdt[group].ext2_inode_table + block, inode_block);
 
-	memcpy(inode_block + ((ino - 1) % inodes_in_block), inode, ext2->inode_size);
+	memcpy(inode_block + (((ino - 1) % inodes_in_block) * ext2->inode_size), inode, ext2->inode_size);
 	write_block(ext2->gdt[group].ext2_inode_table + block, inode_block);
 
 	free(inode_block);

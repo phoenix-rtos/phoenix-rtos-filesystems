@@ -79,8 +79,6 @@ void ext2_init_sb(int pentry)
 	ext2->blocks_count = ext2->sb->blocks_count;
 	ext2->blocks_in_group = ext2->sb->blocks_in_group;
 	ext2->inode_size = ext2->sb->inode_size;
-	if (ext2->inode_size > 128)
-		printf("ext2: Invalid partition (inode size > 128)\n");
 	ext2->inodes_count = ext2->sb->inodes_count;
 	ext2->inodes_in_group = ext2->sb->inodes_in_group;
 	ext2->gdt_size = 1 + (ext2->sb->blocks_count - 1) / ext2->sb->blocks_in_group;
