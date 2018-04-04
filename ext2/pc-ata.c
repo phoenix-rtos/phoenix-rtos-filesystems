@@ -1,11 +1,9 @@
 /*
  * Phoenix-RTOS
  *
- * Operating system kernel
- *
  * Generic ata controller driver
  *
- * Copyright 2012 Phoenix Systems
+ * Copyright 2018 Phoenix Systems
  * Author: Marcin Stragowski, Kamil Amanowicz
  *
  * This file is part of Phoenix-RTOS.
