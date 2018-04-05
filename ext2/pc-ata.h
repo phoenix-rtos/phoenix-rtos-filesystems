@@ -17,8 +17,9 @@
 #include <stdint.h>
 #include <sys/threads.h>
 
+#include "../../phoenix-rtos-kernel/include/arch/ia32.h"
+
 #include "pc-ata_info.h"
-#include "pc-pci.h"
 
 #define ATA_MAX_PIO_DRQ 256
 #define ATA_DEF_SECTOR_SIZE 512
