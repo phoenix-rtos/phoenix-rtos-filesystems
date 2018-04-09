@@ -8,7 +8,7 @@
 
 ifneq (, $(findstring armv7, $(TARGET)))
 	CROSS ?= arm-phoenix-
-	SUBDIRS = arch/armv7 $(SUBSYSTEMS)
+	SUBDIRS = meterfs
 
 	MKDEP = $(CROSS)gcc -MM
 	MKDEPFLAGS = $(CFLAGS)

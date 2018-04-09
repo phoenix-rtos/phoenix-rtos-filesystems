@@ -20,9 +20,6 @@ include Makefile.ia32
 include Makefile.armv7
 include Makefile.arm
 
-SUBDIRS = dummyfs ext2
-
-
 export SIL TARGET CC CFLAGS MKDEP MKDEPFLAGS AR ARFLAGS LD LDFLAGS GCCLIB OBJDUMP STRIP
 
 
