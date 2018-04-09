@@ -497,10 +497,11 @@ void exec_modules(void *arg)
 	char *argv[16] = { 0 };
 	int argc;
 	int cnt = 0;
+	int x;
 
 	oid_t toid = { 0 };
 	oid_t root = { 0 };
-	oid_t init;
+	oid_t init = { 0 };
 
 	memcpy(path, "/init/", 6);
 	dummyfs_lookup(NULL, "/", &root);
@@ -510,25 +511,36 @@ void exec_modules(void *arg)
 	while (cnt < dc.mods_cnt) {
 		argc = 0;
 
+		x = 0;
+		if (dc.mods[cnt].name[0] == 'X')
+			x++;
+
 		dummyfs_create(&toid, otFile, 0, 0);
-		dummyfs_link(&init, dc.mods[cnt].name, &toid);
-		dummyfs_write(&toid, 0, dc.mods[cnt].data, dc.mods[cnt].size);
+		if (dummyfs_link(&init, dc.mods[cnt].name + 1, &toid) == EOK)
+			dummyfs_write(&toid, 0, dc.mods[cnt].data, dc.mods[cnt].size);
 
-		arg_tok = strtok(dc.mods[cnt].args, ",");
+		if (x) {
 
-		while (arg_tok != NULL && argc < 15){
-			argv[argc] = arg_tok;
-			arg_tok = strtok(NULL, ",");
+			argv[argc] = dc.mods[cnt].name;
 			argc++;
-		}
-		argv[argc] = NULL;
 
-		memcpy(&path[6], dc.mods[cnt].name, strlen(dc.mods[cnt].name) + 1);
-		if (vfork() == 0) {
-			if(execve(path, argv, NULL) != EOK)
-				printf("Failed to start %s\n", &path[6]);
-			return;
+			arg_tok = strtok(dc.mods[cnt].args, ",");
+
+			while (arg_tok != NULL && argc < 15){
+				argv[argc] = arg_tok;
+				arg_tok = strtok(NULL, ",");
+				argc++;
+			}
+			argv[argc] = NULL;
+
+			memcpy(&path[6], dc.mods[cnt].name + 1, strlen(dc.mods[cnt].name));
+			if (vfork() == 0) {
+				if(execve(path, argv, NULL) != EOK)
+					printf("Failed to start %s\n", &path[6]);
+				endthread(); //prevent crash if execve fails
+			}
 		}
+
 		munmap(dc.mods[cnt].data, (dc.mods[dc.mods_cnt].size + 0xfff) & ~0xfff);
 		cnt++;
 	}

@@ -55,6 +55,7 @@ int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res)
 	while (name[len] != '\0') {
 		if (name[len] == '/')
 			len++;
+
 		err = dir_find(d, name + len, res);
 		if (err <= 0)
 			break;
@@ -72,6 +73,7 @@ int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res)
 		object_put(d);
 		return err;
 	}
+
 	o = object_get(res->id);
 
 	o->lock = 1;
@@ -197,12 +199,11 @@ int dummyfs_link(oid_t *dir, const char *name, oid_t *oid)
 	}
 
 	object_lock(d);
-
 	ret = dir_add(d, name, o->type, oid);
 
 	if (ret != EOK) {
 		object_unlock(d);
-		if (o->type != otDir) {
+		if (o->type == otDir) {
 			object_lock(o);
 			dir_destroy(o);
 			object_unlock(o);
@@ -391,9 +392,9 @@ static void dummyfs_close(oid_t *oid)
 
 int fetch_modules(void)
 {
-	oid_t root;
-	oid_t toid;
-	oid_t sysoid;
+	oid_t root = { 0 };
+	oid_t toid = { 0 };
+	oid_t sysoid = { 0 };
 	void *prog_addr;
 	syspageprog_t prog;
 	int i, progsz;
