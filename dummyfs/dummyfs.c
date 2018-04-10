@@ -113,9 +113,9 @@ int dummyfs_setattr(oid_t *oid, int type, int attr)
 			ret = dummyfs_truncate(oid, attr);
 			object_lock(o);
 			break;
+
 		case (atPort):
-			if (o->type == otDir)
-				o->oid.port = attr;
+			o->oid.port = attr;
 			break;
 	}
 	object_unlock(o);
@@ -153,6 +153,10 @@ int dummyfs_getattr(oid_t *oid, int type, int *attr)
 
 		case (atType):
 			*attr = o->type;
+			break;
+
+		case (atPort):
+			*attr = o->oid.port;
 			break;
 	}
 	object_unlock(o);
