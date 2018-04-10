@@ -509,7 +509,7 @@ void exec_modules(void *arg)
 	dummyfs_link(&root, "init", &init);
 
 	while (cnt < dc.mods_cnt) {
-		argc = 0;
+		argc = 1;
 
 		x = 0;
 		if (dc.mods[cnt].name[0] == 'X')
@@ -521,9 +521,6 @@ void exec_modules(void *arg)
 
 		if (x) {
 
-			argv[argc] = dc.mods[cnt].name;
-			argc++;
-
 			arg_tok = strtok(dc.mods[cnt].args, ",");
 
 			while (arg_tok != NULL && argc < 15){
@@ -534,6 +531,7 @@ void exec_modules(void *arg)
 			argv[argc] = NULL;
 
 			memcpy(&path[6], dc.mods[cnt].name + 1, strlen(dc.mods[cnt].name));
+			argv[0] = path;
 			if (vfork() == 0) {
 				if(execve(path, argv, NULL) != EOK)
 					printf("Failed to start %s\n", &path[6]);
