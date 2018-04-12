@@ -1,8 +1,6 @@
 /*
  * Phoenix-RTOS
  *
- * Operating system kernel
- *
  * Meterfs
  *
  * Copyright 2017 Phoenix Systems

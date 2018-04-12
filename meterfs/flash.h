@@ -1,8 +1,6 @@
 /*
  * Phoenix-RTOS
  *
- * Operating system kernel
- *
  * Meterfs - SST25VF016B SPI flash routines
  *
  * Copyright 2017 Phoenix Systems

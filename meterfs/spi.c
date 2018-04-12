@@ -1,8 +1,6 @@
 /*
  * Phoenix-RTOS
  *
- * Operating system kernel
- *
  * Meterfs - STM32L1x SPI routines
  *
  * Copyright 2017 Phoenix Systems

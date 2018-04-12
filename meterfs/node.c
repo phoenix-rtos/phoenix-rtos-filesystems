@@ -1,8 +1,6 @@
 /*
  * Phoenix-RTOS
  *
- * Operating system kernel
- *
  * Opened files
  *
  * Copyright 2017 Phoenix Systems
