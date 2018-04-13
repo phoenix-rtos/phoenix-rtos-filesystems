@@ -10,15 +10,16 @@
  *
  */
 
-#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+//#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
-#include <linux/kernel.h>
-#include <linux/mtd/mtd.h>
-#include <linux/slab.h>
-#include <linux/pagemap.h>
-#include <linux/crc32.h>
-#include <linux/compiler.h>
-#include <linux/stat.h>
+#include "os-phoenix.h"
+//#include <linux/kernel.h>
+//#include <linux/mtd/mtd.h>
+//#include <linux/slab.h>
+//#include <linux/pagemap.h>
+//#include <linux/crc32.h>
+//#include <linux/compiler.h>
+//#include <linux/stat.h>
 #include "nodelist.h"
 #include "compr.h"
 

@@ -9,12 +9,13 @@
  *
  */
 
-#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+//#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
-#include <linux/kernel.h>
-#include <linux/slab.h>
-#include <linux/init.h>
-#include <linux/jffs2.h>
+#include "os-phoenix.h"
+//#include <linux/kernel.h>
+//#include <linux/slab.h>
+//#include <linux/init.h>
+//#include <linux/jffs2.h>
 #include "nodelist.h"
 
 /* These are initialised to NULL in the kernel startup code.

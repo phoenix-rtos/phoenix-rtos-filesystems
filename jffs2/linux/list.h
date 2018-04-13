@@ -2,6 +2,15 @@
 #ifndef __TOOLS_LINUX_LIST_H
 #define __TOOLS_LINUX_LIST_H
 
+struct list_head {
+	struct list_head *next, *prev;
+};
+
+#define LIST_POISON1 (void *)0x100
+#define LIST_POISON2 (void *)0x200
+
+
+#define WRITE_ONCE(x, val) x = (val)
 /*
  * Simple doubly linked list implementation.
  *

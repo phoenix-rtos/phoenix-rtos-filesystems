@@ -21,6 +21,8 @@
 //#include <linux/errno.h>
 //#include <linux/fs.h>
 //#include <linux/jffs2.h>
+
+#include "os-phoenix.h"
 #include "jffs2_fs_i.h"
 #include "jffs2_fs_sb.h"
 #include "nodelist.h"

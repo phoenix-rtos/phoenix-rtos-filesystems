@@ -10,15 +10,16 @@
  *
  */
 
-#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+//#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
-#include <linux/kernel.h>
-#include <linux/fs.h>
-#include <linux/time.h>
-#include <linux/pagemap.h>
-#include <linux/highmem.h>
-#include <linux/crc32.h>
-#include <linux/jffs2.h>
+#include "os-phoenix.h"
+//#include <linux/kernel.h>
+//#include <linux/fs.h>
+//#include <linux/time.h>
+//#include <linux/pagemap.h>
+//#include <linux/highmem.h>
+//#include <linux/crc32.h>
+//#include <linux/jffs2.h>
 #include "nodelist.h"
 
 static int jffs2_write_end(struct file *filp, struct address_space *mapping,

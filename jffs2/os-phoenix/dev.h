@@ -19,20 +19,10 @@
 
 #include <sys/stat.h>
 
-int old_valid_dev(dev_t dev)
-{
-	return 0;
-}
-
-int old_encode_dev(dev_t dev)
-{
-	return 0;
-}
-
-int new_encode_dev(dev_t dev)
-{
-	return 0;
-}
-
+int old_valid_dev(dev_t dev);
+int old_encode_dev(dev_t dev);
+int new_encode_dev(dev_t dev);
+dev_t old_decode_dev(u16 val);
+dev_t new_decode_dev(u32 dev);
 
 #endif /* _OS_PHOENIX_DEV_H_ */

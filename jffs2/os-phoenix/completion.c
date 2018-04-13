@@ -14,6 +14,7 @@
  */
 
 #include <sys/threads.h>
+#include "completion.h"
 
 void init_completion(struct completion *comp)
 {
@@ -34,7 +35,7 @@ void wait_for_completion(struct completion *comp)
 {
 	mutexLock(comp->lock);
 	while (!comp->complete)
-		condWait(comp->cond, comp->lock, NULL);
+		condWait(comp->cond, comp->lock, 0);
 	mutexUnlock(comp->lock);
 }
 

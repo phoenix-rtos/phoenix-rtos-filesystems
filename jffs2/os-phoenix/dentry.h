@@ -26,6 +26,7 @@ struct qstr {
 struct dentry {
 	struct qstr d_name;
 	struct inode *d_inode;
+	struct super_block *d_sb;	/* The root of the dentry tree */
 };
 
 static inline struct inode *d_inode(const struct dentry *dentry)
@@ -33,19 +34,22 @@ static inline struct inode *d_inode(const struct dentry *dentry)
 	return dentry->d_inode;
 }
 
-struct dentry * d_splice_alias(struct inode *inode, struct dentry *dentry)
-{
-	return NULL;
-}
+struct dentry * d_splice_alias(struct inode *inode, struct dentry *dentry);
 
-void d_invalidate(struct dentry *dentry)
-{
-	return;
-}
+void d_invalidate(struct dentry *dentry);
 
 static inline bool d_really_is_positive(const struct dentry *dentry)
 {
 	return dentry->d_inode != NULL;
 }
+
+void d_instantiate(struct dentry *dentry, struct inode *inode);
+
+static inline bool d_is_dir(const struct dentry *dentry)
+{
+		return 1;
+}
+
+struct dentry * d_make_root(struct inode *inode);
 
 #endif /* _OS_PHOENIX_DENTRY_H_ */

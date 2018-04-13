@@ -12,9 +12,9 @@
 #ifndef __JFFS2_NODELIST_H__
 #define __JFFS2_NODELIST_H__
 
+#include "os-phoenix.h"
 //#include <linux/fs.h>
 //#include <linux/types.h>
-#include "os-phoenix.h"
 #include "jffs2.h"
 #include "jffs2_fs_sb.h"
 #include "jffs2_fs_i.h"
