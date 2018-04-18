@@ -25,6 +25,7 @@ struct mutex {
 
 typedef handle_t spinlock_t;
 
+#define spin_lock_init(x) mutexCreate(x)
 #define spin_lock(x) mutexLock(*x)
 #define spin_unlock(x) mutexUnlock(*x)
 

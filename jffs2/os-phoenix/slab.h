@@ -31,6 +31,9 @@ struct kmem_cache {
 };
 
 #define SLAB_HWCACHE_ALIGN	((slab_flags_t)0x00002000U)
+#define SLAB_ACCOUNT 0
+#define SLAB_MEM_SPREAD 0
+#define SLAB_RECLAIM_ACCOUNT 0
 
 extern struct kmem_cache *kmem_cache_create(const char *name, size_t size,
 			size_t align, slab_flags_t flags,

@@ -17,17 +17,17 @@ LDFLAGS = -nostdlib -z max-page-size=0x1000
 
 STRIP = arm-phoenix-strip
 
-
+#linux base jffs2 files + writebuffer for nand support
 SRCS = compr.c dir.c file.c ioctl.c nodelist.c malloc.c read.c nodemgmt.c \
 	   readinode.c write.c scan.c gc.c symlink.c build.c erase.c \
-	   background.c fs.c writev.c debug.c wbuf.c
+	   background.c fs.c writev.c super.c debug.c wbuf.c
 
 #phoenix specific files
 SRCS += os-phoenix/fs.c os-phoenix/completion.c os-phoenix/mtd.c os-phoenix/slab.c \
 		os-phoenix/dev.c os-phoenix/crc32.c os-phoenix/rb.c os-phoenix/dentry.c \
 		os-phoenix/wait.c os-phoenix/os-phoenix.c os-phoenix/locks.c jffs2.c
 
-
+#rest of additional jffs2 options (not supported)
 ifdef $(CONFIG_JFFS2_FS_XATTR)
 	SRCS += xattr.c xattr_trusted.c xattr_user.c
 endif

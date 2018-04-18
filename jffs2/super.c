@@ -9,24 +9,25 @@
  *
  */
 
-#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+//#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
-#include <linux/kernel.h>
-#include <linux/module.h>
-#include <linux/slab.h>
-#include <linux/init.h>
-#include <linux/list.h>
-#include <linux/fs.h>
-#include <linux/err.h>
-#include <linux/mount.h>
-#include <linux/parser.h>
-#include <linux/jffs2.h>
-#include <linux/pagemap.h>
-#include <linux/mtd/super.h>
-#include <linux/ctype.h>
-#include <linux/namei.h>
-#include <linux/seq_file.h>
-#include <linux/exportfs.h>
+#include "os-phoenix.h"
+//#include <linux/kernel.h>
+//#include <linux/module.h>
+//#include <linux/slab.h>
+//#include <linux/init.h>
+//#include <linux/list.h>
+//#include <linux/fs.h>
+//#include <linux/err.h>
+//#include <linux/mount.h>
+//#include <linux/parser.h>
+//#include <linux/jffs2.h>
+//#include <linux/pagemap.h>
+//#include <linux/mtd/super.h>
+//#include <linux/ctype.h>
+//#include <linux/namei.h>
+//#include <linux/seq_file.h>
+//#include <linux/exportfs.h>
 #include "compr.h"
 #include "nodelist.h"
 

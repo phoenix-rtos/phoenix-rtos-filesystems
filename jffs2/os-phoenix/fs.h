@@ -67,6 +67,7 @@ struct dir_context;
 struct page;
 struct address_space;
 struct iattr;
+struct mtd_info;
 
 typedef int (*filldir_t)(struct dir_context *, const char *, int, loff_t, u64,
 					 unsigned);
@@ -157,6 +158,22 @@ struct inode {
 	struct address_space		i_data;
 	kuid_t						i_uid;
 	kgid_t						i_gid;
+	struct rcu_head				i_rcu;
+};
+
+struct super_operations;
+
+struct xattr_handler {
+	const char *name;
+	const char *prefix;
+	int flags;      /* fs private flags */
+	bool (*list)(struct dentry *dentry);
+	int (*get)(const struct xattr_handler *, struct dentry *dentry,
+		   struct inode *inode, const char *name, void *buffer,
+		   size_t size);
+	int (*set)(const struct xattr_handler *, struct dentry *dentry,
+		   struct inode *inode, const char *name, const void *buffer,
+		   size_t size, int flags);
 };
 
 
@@ -168,7 +185,11 @@ struct super_block {
 	unsigned long s_flags;
 	loff_t s_maxbytes;
 	struct dentry *s_root;
+	struct mtd_info *s_mtd;
 	int todo;
+	const struct super_operations *s_op;
+	const struct export_operations *s_export_op;
+	const struct xattr_handler **s_xattr;
 };
 
 static inline bool sb_rdonly(const struct super_block *sb) { return sb->s_flags & SB_RDONLY; }
@@ -200,6 +221,23 @@ struct inode_operations {
 	int (*tmpfile) (struct inode *, struct dentry *, umode_t);
 	int (*set_acl)(struct inode *, struct posix_acl *, int);
 };
+
+struct kstatfs;
+
+struct super_operations {
+   	struct inode *(*alloc_inode)(struct super_block *sb);
+	void (*destroy_inode)(struct inode *);
+
+   	void (*dirty_inode) (struct inode *, int flags);
+	void (*evict_inode) (struct inode *);
+	void (*put_super) (struct super_block *);
+	int (*sync_fs)(struct super_block *sb, int wait);
+	int (*statfs) (struct dentry *, struct kstatfs *);
+	int (*remount_fs) (struct super_block *, int *, char *);
+
+	int (*show_options)(struct seq_file *, struct dentry *);
+};
+
 
 struct address_space_operations {
 //	int (*writepage)(struct page *page, struct writeback_control *wbc);
@@ -377,6 +415,9 @@ void truncate_setsize(struct inode *inode, loff_t newsize);
 
 void truncate_inode_pages_final(struct address_space *addr_space);
 
+
+extern void inode_init_once(struct inode *inode);
+
 typedef struct {
 	long	val[2];
 } __kernel_fsid_t;
@@ -394,6 +435,64 @@ struct kstatfs {
 	long f_frsize;
 	long f_flags;
 	long f_spare[4];
+};
+
+struct fid {
+	union {
+		struct {
+			u32 ino;
+			u32 gen;
+			u32 parent_ino;
+			u32 parent_gen;
+		} i32;
+ 		struct {
+ 			u32 block;
+ 			u16 partref;
+ 			u16 parent_partref;
+ 			u32 generation;
+ 			u32 parent_block;
+ 			u32 parent_generation;
+ 		} udf;
+		__u32 raw[0];
+	};
+};
+
+
+struct export_operations {
+	int (*encode_fh)(struct inode *inode, __u32 *fh, int *max_len,
+			struct inode *parent);
+	struct dentry * (*fh_to_dentry)(struct super_block *sb, struct fid *fid,
+			int fh_len, int fh_type);
+	struct dentry * (*fh_to_parent)(struct super_block *sb, struct fid *fid,
+			int fh_len, int fh_type);
+	int (*get_name)(struct dentry *parent, char *name,
+			struct dentry *child);
+	struct dentry * (*get_parent)(struct dentry *child);
+	int (*commit_metadata)(struct inode *inode);
+
+	int (*get_uuid)(struct super_block *sb, u8 *buf, u32 *len, u64 *offset);
+};
+
+
+extern struct dentry *generic_fh_to_dentry(struct super_block *sb,
+	struct fid *fid, int fh_len, int fh_type,
+	struct inode *(*get_inode) (struct super_block *sb, u64 ino, u32 gen));
+
+
+extern struct dentry *generic_fh_to_parent(struct super_block *sb,
+	struct fid *fid, int fh_len, int fh_type,
+	struct inode *(*get_inode) (struct super_block *sb, u64 ino, u32 gen));
+
+
+#define MODULE_ALIAS_FS(x)
+#define THIS_MODULE 1
+struct file_system_type {
+	const char *name;
+	int fs_flags;
+	struct dentry *(*mount) (struct file_system_type *, int,
+		       const char *, void *);
+	void (*kill_sb) (struct super_block *);
+	int owner;
 };
 
 #endif /* _OS_PHOENIX_FS_H_ */

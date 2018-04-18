@@ -85,6 +85,9 @@ static inline bool queue_delayed_work(struct workqueue_struct *wq,
 	return 0;
 }
 
+extern bool cancel_delayed_work(struct delayed_work *dwork);
+
+extern bool cancel_delayed_work_sync(struct delayed_work *dwork);
 
 #endif /* _OS_PHOENIX_WAIT_H_ */
 

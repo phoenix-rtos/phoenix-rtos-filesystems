@@ -35,3 +35,8 @@ struct dentry * d_make_root(struct inode *inode)
 	return NULL;
 }
 
+
+struct dentry *d_obtain_alias(struct inode *inode)
+{
+	return NULL;
+}

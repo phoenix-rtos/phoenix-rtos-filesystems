@@ -52,4 +52,7 @@ static inline bool d_is_dir(const struct dentry *dentry)
 
 struct dentry * d_make_root(struct inode *inode);
 
+
+extern struct dentry * d_obtain_alias(struct inode *);
+
 #endif /* _OS_PHOENIX_DENTRY_H_ */

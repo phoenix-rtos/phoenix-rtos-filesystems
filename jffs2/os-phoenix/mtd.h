@@ -48,13 +48,13 @@ enum {
 
 struct mtd_oob_ops {
 	unsigned int	mode;
-	size_t		len;
-	size_t		retlen;
-	size_t		ooblen;
-	size_t		oobretlen;
-	uint32_t	ooboffs;
-	uint8_t		*datbuf;
-	uint8_t		*oobbuf;
+	size_t			len;
+	size_t			retlen;
+	size_t			ooblen;
+	size_t			oobretlen;
+	uint32_t		ooboffs;
+	uint8_t			*datbuf;
+	uint8_t			*oobbuf;
 };
 
 struct erase_info {
@@ -75,6 +75,7 @@ struct erase_info {
 struct mtd_info {
 	int todo;
 	u_char type;
+	const char *name;
 	uint32_t flags;
 	int index;
 	uint32_t erasesize;
@@ -113,6 +114,20 @@ static inline int mtd_is_bitflip(int err) {
 }
 
 int mtd_block_isbad(struct mtd_info *mtd, loff_t ofs);
+
+
+extern struct dentry *mount_mtd(struct file_system_type *fs_type, int flags,
+		      const char *dev_name, void *data,
+		      int (*fill_super)(struct super_block *, void *, int));
+
+extern void kill_mtd_super(struct super_block *sb);
+
+static inline void mtd_sync(struct mtd_info *mtd)
+{
+//	if (mtd->_sync)
+//		mtd->_sync(mtd);
+}
+
 
 #endif /* _OS_PHOENIX_MTD_H_ */
 

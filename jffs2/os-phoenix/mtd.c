@@ -45,10 +45,16 @@ int mtd_write_oob(struct mtd_info *mtd, loff_t to, struct mtd_oob_ops *ops)
 	return 0;
 }
 
+// not supported in nand
 int mtd_point(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 			      void **virt, resource_size_t *phys)
 {
-	return 0;
+	return -EOPNOTSUPP;
+}
+
+int mtd_unpoint(struct mtd_info *mtd, loff_t from, size_t len)
+{
+	return -EOPNOTSUPP;
 }
 
 int mtd_erase(struct mtd_info *mtd, struct erase_info *instr)
@@ -57,11 +63,6 @@ int mtd_erase(struct mtd_info *mtd, struct erase_info *instr)
 }
 
 int mtd_block_markbad(struct mtd_info *mtd, loff_t ofs)
-{
-	return 0;
-}
-
-int mtd_unpoint(struct mtd_info *mtd, loff_t from, size_t len)
 {
 	return 0;
 }

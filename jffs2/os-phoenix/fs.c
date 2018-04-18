@@ -148,3 +148,23 @@ void truncate_setsize(struct inode *inode, loff_t newsize)
 void truncate_inode_pages_final(struct address_space *addr_space)
 {
 }
+
+void inode_init_once(struct inode *inode)
+{
+}
+
+
+struct dentry *generic_fh_to_dentry(struct super_block *sb,
+	struct fid *fid, int fh_len, int fh_type,
+	struct inode *(*get_inode) (struct super_block *sb, u64 ino, u32 gen))
+{
+	return NULL;
+}
+
+
+struct dentry *generic_fh_to_parent(struct super_block *sb,
+	struct fid *fid, int fh_len, int fh_type,
+	struct inode *(*get_inode) (struct super_block *sb, u64 ino, u32 gen))
+{
+	return NULL;
+}

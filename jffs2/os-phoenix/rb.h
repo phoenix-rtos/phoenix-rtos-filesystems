@@ -22,7 +22,8 @@
 
 #define RB_ROOT	(struct rb_root) { NULL, }
 
-#define rb_parent(r)   ((struct rb_node *)((r)->__rb_parent_color & ~3))
+//#define rb_parent(r)   ((struct rb_node *)((r)->__rb_parent_color & ~3))
+#define rb_parent(r)   container_of(r->n.parent, struct rb_node, n)
 
 
 struct rb_node {
@@ -44,7 +45,7 @@ struct rb_node *rb_first(struct rb_root *root);
 struct rb_node *rb_last(struct rb_root *root);
 
 
-#define rb_entry(ptr, type, member) lib_treeof(type, member, &(ptr->n))
+#define rb_entry(ptr, type, member) container_of(ptr, type, member)
 
 
 struct rb_node *rb_next(const struct rb_node *node);
@@ -56,10 +57,15 @@ void rb_erase(struct rb_node *node, struct rb_root *root);
 static inline void rb_link_node(struct rb_node *node, struct rb_node *parent,
 						struct rb_node **rb_link)
 {
-		node->__rb_parent_color = (unsigned long)parent;
-		node->rb_left = node->rb_right = NULL;
+	node->__rb_parent_color = (unsigned long)parent;
 
-		*rb_link = node;
+	node->n.parent = &parent->n;
+	node->n.left = node->n.right = NULL;
+
+	node->rb_left = node->rb_right = NULL;
+
+	*rb_link = node;
+
 }
 
 void rb_insert_color(struct rb_node *rb_node, struct rb_root *rb_root);

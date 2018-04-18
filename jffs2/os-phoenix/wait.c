@@ -31,3 +31,13 @@ void remove_wait_queue(struct wait_queue_head *wq_head, struct wait_queue_entry 
 {
 }
 
+
+bool cancel_delayed_work(struct delayed_work *dwork)
+{
+	return 1;
+}
+
+bool cancel_delayed_work_sync(struct delayed_work *dwork)
+{
+	return 1;
+}

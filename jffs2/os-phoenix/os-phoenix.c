@@ -77,7 +77,7 @@ gid_t from_kgid(struct user_namespace *to, kgid_t kgid)
 
 long PTR_ERR(const void *ptr)
 {
-		return (long) ptr;
+	return (long) ptr;
 }
 
 
@@ -101,13 +101,13 @@ bool IS_ERR(const void *ptr)
 
 ssize_t generic_read_dir(struct file *filp, char __user *buf, size_t siz, loff_t *ppos)
 {
-		return -EISDIR;
+	return -EISDIR;
 }
 
 
 loff_t generic_file_llseek(struct file *file, loff_t offset, int whence)
 {
-		return -EINVAL;
+	return -EINVAL;
 }
 
 unsigned long msecs_to_jiffies(const unsigned int m)
@@ -122,7 +122,7 @@ long schedule_timeout_interruptible(long timeout)
 
 inline pid_t task_pid_nr(struct task_struct *tsk)
 {
-		return tsk->pid;
+	return tsk->pid;
 }
 
 void set_user_nice(struct task_struct *p, long nice)
@@ -291,4 +291,33 @@ kgid_t current_fsgid()
 	kgid_t kgid;
 	kgid.val = 0;
 	return kgid;
+}
+
+
+void call_rcu(struct rcu_head *head, rcu_callback_t func)
+{
+}
+
+void seq_printf(struct seq_file *m, const char *fmt, ...)
+{
+}
+
+char *strsep(char **s, const char *ct)
+{
+	return NULL;
+}
+
+int match_token(char *s, const match_table_t table, substring_t args[])
+{
+	return 0;
+}
+
+char *match_strdup(const substring_t *s)
+{
+	return NULL;
+}
+
+int match_int(substring_t *s, int *result)
+{
+	return 0;
 }

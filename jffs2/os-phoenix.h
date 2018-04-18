@@ -24,8 +24,10 @@
 #include <string.h>
 #include <errno.h>
 #include <time.h>
+#include <unistd.h>
 
 #define __init
+#define __exit
 #define __user
 
 #define likely(x) (x)
@@ -45,8 +47,8 @@ struct delayed_call {
 	int todo;
 };
 
+
 struct vm_area_struct {
-	int todo;
 };
 
 
@@ -65,14 +67,15 @@ struct iov_iter {
 };
 
 
-
 struct kstat {
 	int todo;
 };
 
+
 struct path {
 	int todo;
 };
+
 
 struct kvec {
 	void *iov_base; /* and that should *never* hold a userland pointer */
@@ -80,9 +83,18 @@ struct kvec {
 };
 
 
+struct seq_file
+{
+};
+
+struct rcu_head
+{
+};
+
 struct jffs2_sb_info;
 struct jffs2_eraseblock;
 struct jffs2_inode_info;
+
 
 #define container_of(ptr, type, member) ({ \
 	int _off = (int) &(((type *) 0)->member); \
@@ -382,6 +394,9 @@ void kunmap(struct page *page);
 #define pr_err(...) printf(__VA_ARGS__)
 #define pr_crit(...) printf(__VA_ARGS__)
 
+#define KERN_DEBUG
+#define printk(...) printf(__VA_ARGS__)
+
 #define GFP_KERNEL 0
 #define GFP_USER 1
 
@@ -481,6 +496,16 @@ void jffs2_dirty_trigger(struct jffs2_sb_info *c);
 
 int jffs2_check_oob_empty(struct jffs2_sb_info *c, struct jffs2_eraseblock *jeb,int mode);
 
+void jffs2_evict_inode (struct inode *);
+
+int jffs2_statfs (struct dentry *, struct kstatfs *);
+
+void jffs2_dirty_inode(struct inode *inode, int flags);
+
+int jffs2_do_remount_fs(struct super_block *, int *, char *);
+
+int jffs2_do_fill_super(struct super_block *sb, void *data, int silent);
+
 struct jffs2_inode_info;
 
 extern struct workqueue_struct *system_long_wq;
@@ -537,5 +562,45 @@ bool kthread_should_stop(void);
 kuid_t current_fsuid();
 
 kgid_t current_fsgid();
+
+typedef void (*rcu_callback_t)(struct rcu_head *head);
+
+void call_rcu(struct rcu_head *head, rcu_callback_t func);
+
+void seq_printf(struct seq_file *m, const char *fmt, ...);
+
+#define MODULE_LICENSE(x)
+#define MODULE_AUTHOR(x)
+#define MODULE_DESCRIPTION(x)
+#define module_init(x)
+#define module_exit(x)
+
+enum {MAX_OPT_ARGS = 3};
+
+typedef struct {
+	char *from;
+	char *to;
+} substring_t;
+
+
+struct match_token {
+	int token;
+	const char *pattern;
+};
+
+
+typedef struct match_token match_table_t[];
+
+
+char *strsep(char **s, const char *ct);
+
+
+int match_token(char *s, const match_table_t table, substring_t args[]);
+
+
+char *match_strdup(const substring_t *s);
+
+
+int match_int(substring_t *s, int *result);
 
 #endif /* _OS_PHOENIX_H_ */

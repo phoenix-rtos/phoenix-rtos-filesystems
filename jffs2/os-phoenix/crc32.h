@@ -17,6 +17,8 @@
 #ifndef _OS_PHOENIX_CRC32_H_
 #define _OS_PHOENIX_CRC32_H_
 
+#define CRC32_POLY 0xEDB88320
+
 u32 crc32(u32 crc, void *p, size_t len);
 
 #endif /* _OS_PHOENIX_CRC32_H_ */
