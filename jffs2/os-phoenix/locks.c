@@ -18,21 +18,61 @@
 
 void up_read(struct rw_semaphore *sem)
 {
+	mutexLock(sem->lock);
+
+	while (sem->cond < 0) {
+		sem->wait++;
+		condWait(sem->cond, sem->lock, 0);
+		sem->wait--;
+	}
+
+	sem->cnt++;
+	mutexUnlock(sem->lock);
 }
 
 void down_read(struct rw_semaphore *sem)
 {
+	mutexLock(sem->lock);
+
+	if (sem->cnt) sem->cnt--;
+
+	if (sem->wait)
+		condSignal(sem->cond);
+
+	mutexUnlock(sem->lock);
 }
 
 void up_write(struct rw_semaphore *sem)
 {
+	mutexLock(sem->lock);
+	while (sem->cond != 0) {
+		sem->wait++;
+		condWait(sem->cond, sem->lock, 50000);
+		sem->wait--;
+	}
+	sem->cnt = -1;
+	mutexUnlock(sem->lock);
 }
 
 void down_write(struct rw_semaphore *sem)
 {
+	mutexLock(sem->lock);
+	sem->cnt = 0;
+
+	if (sem->wait)
+		condSignal(sem->cond);
+
+	mutexUnlock(sem->lock);
 }
 
 void __init_rwsem(struct rw_semaphore *sem, const char *name,
 			 struct lock_class_key *key)
 {
+	if (sem == NULL)
+		return;
+
+	mutexCreate(&sem->lock);
+	condCreate(&sem->cond);
+	sem->cnt = 0;
+	sem->wait = 0;
 }

@@ -77,7 +77,7 @@ void rb_replace_node(struct rb_node *victim, struct rb_node *new,
 		else
 			parent->rb_right = new;
 	} else
-		root->rb_node = root;
+		root->rb_node = new;
 }
 
 
