@@ -23,20 +23,29 @@
 #define RB_ROOT	(struct rb_root) { NULL, }
 
 //#define rb_parent(r)   ((struct rb_node *)((r)->__rb_parent_color & ~3))
-#define rb_parent(r)   container_of(r->n.parent, struct rb_node, n)
+#define rb_parent(r) container_of(r->n.parent, struct rb_node, n)
 
+#define rb_left(r) container_of(r->n.left, struct rb_node, n)
+
+#define rb_right(r) container_of(r->n.right, struct rb_node, n)
 
 struct rb_node {
-	rbnode_t n;
-	struct rb_node *rb_left;
-	struct rb_node *rb_right;
-	unsigned long  __rb_parent_color;
+	union {
+		rbnode_t n;
+		struct {
+			unsigned long __rb_parent_color;
+			struct rb_node *rb_left;
+			struct rb_node *rb_right;
+		};
+	};
 };
 
 
 struct rb_root {
-	rbtree_t t;
-	struct rb_node *rb_node;
+	union {
+		rbtree_t t;
+		struct rb_node *rb_node;
+	};
 };
 
 
@@ -58,9 +67,6 @@ static inline void rb_link_node(struct rb_node *node, struct rb_node *parent,
 						struct rb_node **rb_link)
 {
 	node->__rb_parent_color = (unsigned long)parent;
-
-	node->n.parent = &parent->n;
-	node->n.left = node->n.right = NULL;
 
 	node->rb_left = node->rb_right = NULL;
 

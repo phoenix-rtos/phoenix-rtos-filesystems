@@ -26,6 +26,11 @@
 #include <time.h>
 #include <unistd.h>
 
+
+#ifndef __PHOENIX
+#define __PHOENIX
+#endif
+
 #define __init
 #define __exit
 #define __user
