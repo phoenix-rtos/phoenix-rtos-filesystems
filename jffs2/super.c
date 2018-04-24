@@ -357,7 +357,11 @@ static struct file_system_type jffs2_fs_type = {
 };
 MODULE_ALIAS_FS("jffs2");
 
+#ifdef __PHOENIX
+int init_jffs2_fs(void)
+#else
 static int __init init_jffs2_fs(void)
+#endif
 {
 	int ret;
 
@@ -417,7 +421,11 @@ static int __init init_jffs2_fs(void)
 	return ret;
 }
 
+#ifdef __PHOENIX
+void exit_jffs2_fs(void)
+#else
 static void __exit exit_jffs2_fs(void)
+#endif
 {
 	unregister_filesystem(&jffs2_fs_type);
 	jffs2_destroy_slab_caches();

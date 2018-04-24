@@ -36,22 +36,23 @@ void init_special_inode(struct inode *inode, umode_t mode, dev_t dev)
 
 void inc_nlink(struct inode *inode)
 {
-	return;
+	inode->i_nlink++;
 }
 
 void clear_nlink(struct inode *inode)
 {
-	return;
+	inode->i_nlink = 0;
 }
 
 void set_nlink(struct inode *inode, unsigned int nlink)
 {
-	return;
+	inode->i_nlink = nlink;
 }
 
 void drop_nlink(struct inode *inode)
 {
-	return;
+	if (inode->i_nlink)
+		inode->i_nlink--;
 }
 
 void ihold(struct inode * inode)
@@ -60,7 +61,7 @@ void ihold(struct inode * inode)
 
 struct inode *new_inode(struct super_block *sb)
 {
-	return NULL;
+	return sb->s_op->alloc_inode(sb);
 }
 
 void unlock_new_inode(struct inode *inode)
@@ -69,6 +70,7 @@ void unlock_new_inode(struct inode *inode)
 
 void iget_failed(struct inode *inode)
 {
+	free(inode);
 }
 
 struct inode * iget_locked(struct super_block *sb, unsigned long ino)
@@ -153,6 +155,24 @@ void inode_init_once(struct inode *inode)
 {
 }
 
+int register_filesystem(struct file_system_type *fs)
+{
+	if (fs->mount(fs, 0, "jffs2", NULL) == NULL)
+		return -1;
+
+	return 0;
+}
+
+int unregister_filesystem(struct file_system_type *fs)
+{
+	return 0;
+}
+
+
+int sync_filesystem(struct super_block *sb)
+{
+	return 0;
+}
 
 struct dentry *generic_fh_to_dentry(struct super_block *sb,
 	struct fid *fid, int fh_len, int fh_type,

@@ -20,74 +20,77 @@
 
 typedef struct wait_queue_head{
 	handle_t lock;
-	struct list_head head;
+	handle_t cond;
+	int cnt;
 } wait_queue_head_t;
-
-struct wait_queue_entry;
-
-typedef int (*wait_queue_func_t)(struct wait_queue_entry *wq_entry, unsigned mode, int flags, void *key);
-
-int default_wake_function(struct wait_queue_entry *wq_entry, unsigned mode, int flags, void *key);
-
-/* wait_queue_entry::flags */
-#define WQ_FLAG_EXCLUSIVE		0x01
-#define WQ_FLAG_WOKEN			0x02
-#define WQ_FLAG_BOOKMARK		0x04
 
 /*
  *  * A single wait-queue entry structure:
  *   */
 struct wait_queue_entry {
-	unsigned int			flags;
-	void					*private;
-	wait_queue_func_t		func;
-	struct list_head		entry;
+};
+
+
+#define DECLARE_WAITQUEUE(name, tsk)	\
+		struct wait_queue_entry name;	\
+
+
+void add_wait_queue(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry);
+void remove_wait_queue(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry);
+
+void init_waitqueue_head(wait_queue_head_t *wq_head);
+
+void wake_up(wait_queue_head_t *wq_head);
+
+// work queues
+
+struct workqueue_struct {
+	int todo;
+};
+
+struct work_struct;
+typedef void (*work_func_t)(struct work_struct *work);
+
+enum {
+	WORK_DEFAULT,
+	WORK_PENDING,
+	WORK_CANCEL
 };
 
 struct work_struct {
-//	atomic_long_t data;
-//	struct list_head entry;
-//	work_func_t func;
+	work_func_t func;
+	handle_t lock;
+	handle_t cond;
+	u8 state;
 };
 
 struct delayed_work {
 	struct work_struct work;
+	unsigned long delay;
 };
 
-#define INIT_DELAYED_WORK(__work, __func) ({do { } while (0); })
+
+static inline void INIT_DELAYED_WORK(struct delayed_work *dwork, work_func_t work_func) 
+{
+	dwork->work.func = work_func;
+
+	mutexCreate(&dwork->work.lock);
+	condCreate(&dwork->work.cond);
+	dwork->work.state = WORK_DEFAULT;
+}
+
 
 static inline struct delayed_work *to_delayed_work(struct work_struct *work)
 {
 	return container_of(work, struct delayed_work, work);
 }
 
-#define __WAITQUEUE_INITIALIZER(name, tsk) {									\
-		.private		= tsk,													\
-		.func			= default_wake_function,								\
-		.entry			= { NULL, NULL } }
-
-#define DECLARE_WAITQUEUE(name, tsk)											\
-		struct wait_queue_entry name = __WAITQUEUE_INITIALIZER(name, tsk)
-
-
-void add_wait_queue(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry);
-void remove_wait_queue(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry);
-
-struct workqueue_struct {
-	int todo;
-};
-
-
-static inline bool queue_delayed_work(struct workqueue_struct *wq,
+bool queue_delayed_work(struct workqueue_struct *wq,
 				      struct delayed_work *dwork,
-				      unsigned long delay)
-{
-	return 0;
-}
-
-extern bool cancel_delayed_work(struct delayed_work *dwork);
+				      unsigned long delay);
 
 extern bool cancel_delayed_work_sync(struct delayed_work *dwork);
+
 
 #endif /* _OS_PHOENIX_WAIT_H_ */
 

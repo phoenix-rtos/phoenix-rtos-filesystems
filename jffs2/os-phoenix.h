@@ -45,9 +45,6 @@
 #define cond_resched() do { } while (0)
 
 
-#define wake_up(x) do { } while(0)
-
-
 struct delayed_call {
 	int todo;
 };
@@ -83,7 +80,7 @@ struct path {
 
 
 struct kvec {
-	void *iov_base; /* and that should *never* hold a userland pointer */
+	void *iov_base;
 	size_t iov_len;
 };
 
@@ -122,59 +119,50 @@ struct jffs2_inode_info;
 #define SECTOR_ADDR(x) ( (((unsigned long)(x) / c->sector_size) * c->sector_size) )
 
 struct page {
-	/* First double word block */
-	unsigned long flags;		/* Atomic flags, some possibly
-					 * updated asynchronously */
+	unsigned long flags;
 	union {
-		struct address_space *mapping;	/* If low bit clear, points to
-						 * inode address_space, or NULL.
-						 * If page mapped as anonymous
-						 * memory, low bit is set, and
-						 * it points to anon_vma object:
-						 * see PAGE_MAPPING_ANON below.
-						 */
-		void *s_mem;			/* slab first object */
-		atomic_t compound_mapcount;	/* first tail page */
-		/* page_deferred_list().next	 -- second tail page */
+		struct address_space *mapping;
+		void *s_mem;
+		atomic_t compound_mapcount;
 	};
 
 	/* Second double word */
 	struct {
 		union {
 			pgoff_t index;		/* Our offset within mapping. */
-			void *freelist;		/* sl[aou]b first free object */
+//			void *freelist;		/* sl[aou]b first free object */
 			/* page_deferred_list().prev	-- second tail page */
 		};
 
-		union {
+//		union {
 			/*
 			 * Keep _count separate from slub cmpxchg_double data.
 			 * As the rest of the double word is protected by
 			 * slab_lock but _count is not.
 			 */
-			unsigned counters;
+//			unsigned counters;
 
-			struct {
+//			struct {
 
-				union {
+//				union {
 					/*
 					 * Count of ptes mapped in mms, to show
 					 * when page is mapped & limit reverse
 					 * map searches.
 					 */
-					atomic_t _mapcount;
+//					atomic_t _mapcount;
 
-					struct { /* SLUB */
-						unsigned inuse:16;
-						unsigned objects:15;
-						unsigned frozen:1;
-					};
-					int units;	/* SLOB */
-				};
-				atomic_t _count;		/* Usage count, see below. */
-			};
-			unsigned int active;	/* SLAB */
-		};
+//					struct { /* SLUB */
+//						unsigned inuse:16;
+//						unsigned objects:15;
+//						unsigned frozen:1;
+//					};
+//					int units;	/* SLOB */
+//				};
+//				atomic_t _count;		/* Usage count, see below. */
+//			};
+//			unsigned int active;	/* SLAB */
+//		};
 	};
 
 	void *virtual;
@@ -222,6 +210,7 @@ CLEARPAGEFLAG_NOOP(Uptodate);
 #define BUG() do { } while (0)
 #define BUG_ON(condition) do { } while (0)
 #define WARN_ON(condition) do { } while (0)
+#define BUILD_BUG_ON(condition) ((void)sizeof(char[1 - 2*!!(condition)]))
 
 #define JFFS2_INODE_INFO(i) (container_of(i, struct jffs2_inode_info, vfs_inode))
 #define OFNI_EDONI_2SFFJ(f)  (&(f)->vfs_inode)
@@ -416,11 +405,11 @@ extern const struct file_operations jffs2_dir_operations;
 
 //#define jffs2_flush_wbuf_gc(c, i) ({ do{} while(0); (void)(c), (void) i, 0; })
 //#define jffs2_flush_wbuf_pad(c) ({ do{} while(0); (void)(c), 0; })
-#define jffs2_wbuf_dirty(c) (0)
+#define jffs2_wbuf_dirty(c) (!!(c)->wbuf_len)
 #define jffs2_can_mark_obsolete(c) (0)
-#define jffs2_is_readonly(c) (0)
-#define jffs2_is_writebuffered(c) (0)
-#define jffs2_cleanmarker_oob(c) (0)
+#define jffs2_is_readonly(c) (OFNI_BS_2SFFJ(c)->s_flags & SB_RDONLY)
+#define jffs2_is_writebuffered(c) (1)
+#define jffs2_cleanmarker_oob(c) (c->mtd->type == MTD_NANDFLASH)
 
 int jffs2_fsync(struct file *, loff_t, loff_t, int);
 
@@ -511,6 +500,10 @@ int jffs2_do_remount_fs(struct super_block *, int *, char *);
 
 int jffs2_do_fill_super(struct super_block *sb, void *data, int silent);
 
+int init_jffs2_fs(void);
+
+void exit_jffs2_fs(void);
+
 struct jffs2_inode_info;
 
 extern struct workqueue_struct *system_long_wq;
@@ -549,16 +542,9 @@ unsigned long get_seconds(void);
 	(type)x > (type) y ? (type)y : (type)x; })
 
 
-
-#define wake_up_process(k) (0);
-#define kthread_create(threadfn, data, namefmt, arg...) (0)
-
 #define kthread_run(threadfn, data, namefmt, ...)			   \
 ({									   \
-	struct task_struct *__k						   \
-		= kthread_create(threadfn, data, namefmt, ## __VA_ARGS__); \
-	if (!IS_ERR(__k))						   \
-		wake_up_process(__k);					   \
+	struct task_struct *__k = NULL;						   \
 	__k;								   \
 })
 
@@ -607,5 +593,9 @@ char *match_strdup(const substring_t *s);
 
 
 int match_int(substring_t *s, int *result);
+
+
+void rcu_barrier(void);
+
 
 #endif /* _OS_PHOENIX_H_ */

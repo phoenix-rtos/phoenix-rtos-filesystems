@@ -112,7 +112,7 @@ loff_t generic_file_llseek(struct file *file, loff_t offset, int whence)
 
 unsigned long msecs_to_jiffies(const unsigned int m)
 {
-	return 0;
+	return m;
 }
 
 long schedule_timeout_interruptible(long timeout)
@@ -129,7 +129,7 @@ void set_user_nice(struct task_struct *p, long nice)
 {
 }
 
-void set_freezable(void) 
+void set_freezable(void)
 {
 }
 
@@ -295,6 +295,12 @@ kgid_t current_fsgid()
 
 
 void call_rcu(struct rcu_head *head, rcu_callback_t func)
+{
+	func(head);
+}
+
+
+void rcu_barrier(void)
 {
 }
 

@@ -25,7 +25,8 @@ SRCS = compr.c dir.c file.c ioctl.c nodelist.c malloc.c read.c nodemgmt.c \
 #phoenix specific files
 SRCS += os-phoenix/fs.c os-phoenix/completion.c os-phoenix/mtd.c os-phoenix/slab.c \
 		os-phoenix/dev.c os-phoenix/crc32.c os-phoenix/rb.c os-phoenix/dentry.c \
-		os-phoenix/wait.c os-phoenix/os-phoenix.c os-phoenix/locks.c jffs2.c
+		os-phoenix/wait.c os-phoenix/os-phoenix.c os-phoenix/locks.c jffs2.c \
+		os-phoenix/object.c
 
 #rest of additional jffs2 options (not supported)
 ifdef $(CONFIG_JFFS2_FS_XATTR)
