@@ -24,6 +24,5 @@ static inline bool capable(int cap)
 	return true;
 }
 
-
 #endif /* _OS_PHOENIX_CAPABILITY_H_ */
 

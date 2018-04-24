@@ -32,36 +32,19 @@
 #define DT_WHT			14
 
 #define RENAME_NOREPLACE		(1 << 0)		/* Don't overwrite target */
-#define RENAME_EXCHANGE			(1 << 1)		/* Exchange source and dest */
-#define RENAME_WHITEOUT			(1 << 2)		/* Whiteout source */
 
 #define S_IRWXUGO		(S_IRWXU|S_IRWXG|S_IRWXO)
-#define S_IALLUGO		(S_ISUID|S_ISGID|S_ISVTX|S_IRWXUGO)
 #define S_IRUGO			(S_IRUSR|S_IRGRP|S_IROTH)
 #define S_IWUGO			(S_IWUSR|S_IWGRP|S_IWOTH)
 #define S_IXUGO			(S_IXUSR|S_IXGRP|S_IXOTH)
 
 #define SB_RDONLY		 1		/* Mount read-only */
-#define SB_NOSUID		 2		/* Ignore suid and sgid bits */
-#define SB_NODEV		 4		/* Disallow access to device special files */
-#define SB_NOEXEC		 8		/* Disallow program execution */
-#define SB_SYNCHRONOUS	16		/* Writes are synced at once */
-#define SB_MANDLOCK		64		/* Allow mandatory locks on an FS */
-#define SB_DIRSYNC		128		/* Directory modifications are synchronous */
 #define SB_NOATIME		1024	/* Do not update access times. */
-#define SB_NODIRATIME	2048	/* Do not update directory access times */
-#define SB_SILENT		32768
 #define SB_POSIXACL		(1<<16)	/* VFS does not apply the umask */
-#define SB_KERNMOUNT	(1<<22) /* this is a kern_mount call */
-#define SB_I_VERSION	(1<<23) /* Update inode I_version field */
-#define SB_LAZYTIME		(1<<25) /* Update the on-disk [acm]times lazily */
 
-
-#define I_DIRTY_SYNC			(1 << 0)
 #define I_DIRTY_DATASYNC		(1 << 1)
 
 struct timespec current_time(struct inode *inode);
-
 
 struct dir_context;
 struct page;
@@ -262,7 +245,6 @@ struct address_space_operations {
 #define ATTR_CTIME	(1 << 6)
 #define ATTR_ATIME_SET	(1 << 7)
 #define ATTR_MTIME_SET	(1 << 8)
-#define ATTR_FORCE	(1 << 9) /* Not a change, but a change it */
 #define ATTR_ATTR_FLAG	(1 << 10)
 #define ATTR_KILL_SUID	(1 << 11)
 #define ATTR_KILL_SGID	(1 << 12)
