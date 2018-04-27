@@ -504,7 +504,7 @@ int main(void)
 				break;
 
 			case mtCreate:
-				dummyfs_create(&msg.o.create.oid, msg.i.create.type, msg.i.create.mode, msg.i.create.port);
+				msg.o.create.err = dummyfs_create(&msg.o.create.oid, msg.i.create.type, msg.i.create.mode, msg.i.create.port);
 				break;
 
 			case mtDestroy:
