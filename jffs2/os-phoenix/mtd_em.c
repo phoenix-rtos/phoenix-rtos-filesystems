@@ -15,9 +15,19 @@
 
 #include "../os-phoenix.h"
 
+#include <fcntl.h>
+#include <sys/mman.h>
 
 #include "mtd.h"
 
+typedef struct _ecc_t {
+	char meta[16];
+} ecc_t;
+
+static void *nand_em;
+static ecc_t ecc[256];
+
+#define NAND_SIZE (4096 * 256)
 
 int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 			     u_char *buf)
@@ -25,9 +35,12 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 
 	*retlen = 0;
 
+	printf ("mtd_read offs %lu, len %lu\n", from, len);
 	if (!len)
 		return 0;
 
+	memcpy(buf, nand_em + from, len);
+	*retlen = len;
 	return 0;
 }
 
@@ -35,10 +48,12 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 int mtd_write(struct mtd_info *mtd, loff_t to, size_t len, size_t *retlen,
 	      const u_char *buf)
 {
+	printf ("mtd_write offs %lu, len %lu\n", to, len);
 	if (!len)
 		return 0;
 
-
+	memcpy(nand_em + to, buf, len);
+	*retlen = len;
 	return 0;
 }
 
@@ -67,12 +82,16 @@ int mtd_writev(struct mtd_info *mtd, const struct kvec *vecs,
 
 int mtd_read_oob(struct mtd_info *mtd, loff_t from, struct mtd_oob_ops *ops)
 {
+	printf ("mtd_read_oob offs %lu ooblen %lu\n", from, ops->ooblen);
+	ops->oobretlen = ops->ooblen;
 	return 0;
 }
 
 
 int mtd_write_oob(struct mtd_info *mtd, loff_t to, struct mtd_oob_ops *ops)
 {
+	printf ("mtd_write offs %lu ooblen %lu\n", to, ops->ooblen);
+	ops->oobretlen = ops->ooblen;
 	return 0;
 }
 
@@ -135,31 +154,46 @@ struct dentry *mount_mtd(struct file_system_type *fs_type, int flags,
 		const char *dev_name, void *data,
 		int (*fill_super)(struct super_block *, void *, int))
 {
+
 	struct mtd_info *mtd;
-	flashdrv_dma_t *dma;
+	int imgfd;
+	int ret;
+	int offs = 0;
 
-	flashdrv_init();
+	printf("mmaping device\n");
+	nand_em = mmap(NULL, NAND_SIZE, PROT_READ | PROT_WRITE, 0, OID_NULL, 0);
 
-	dma = flashdrv_dmanew();
-
-	if (dma == NULL)
+	if (nand_em == NULL) {
+		printf("mtd mount mmap error\n");
 		return NULL;
+	}
 
+	imgfd = open("/init/test.jffs2", 'r');
+
+	while ((ret = read(imgfd, nand_em + offs, 1024)) > 0) {
+		//printf("file system values 0x%x for 0x%x\n", *(u32 *)(nand_em + offs), offs);
+
+		offs += ret;
+		//if (offs == 1048576)
+		//	break;
+	}
+	printf("reading done: offs = %d\n", offs);
+	printf("show value for 0x13b0 0x%x\n", *(u16 *)(nand_em + 0x13b0));
 	mtd = malloc(sizeof(struct mtd_info));
 
-	mtd->name = "micron";
-	mtd->dma = dma;
+	mtd->name = "nand emulator";
 	mtd->type = MTD_NANDFLASH;
-	mtd->erasesize = 64 * 4096;
+	mtd->erasesize = 16 * 4096;
 	mtd->writesize = 4096;
 	mtd->flags = MTD_WRITEABLE;
-	mtd->size = 64 * 4096 * 4096;
-	mtd->oobsize = 224;
+	mtd->size = 256 * 4096;
+	mtd->oobsize = 32;
 	mtd->oobavail = 16;
 
 	struct super_block *sb = malloc(sizeof(struct super_block));
 	sb->s_mtd = mtd;
 
+	printf("fill super\n");
 	fill_super(sb, NULL, 0);
 	return sb->s_root;
 }

@@ -270,9 +270,11 @@ struct inode *jffs2_iget(struct super_block *sb, unsigned long ino)
 	f = JFFS2_INODE_INFO(inode);
 	c = JFFS2_SB_INFO(inode->i_sb);
 
+	printf("inode info %p sb info %p\n", f, c);
 	jffs2_init_inode_info(f);
 	mutex_lock(&f->sem);
 
+	printf("jffs2 read inode\n");
 	ret = jffs2_do_read_inode(c, f, inode->i_ino, &latest_node);
 	if (ret)
 		goto error;
@@ -287,6 +289,7 @@ struct inode *jffs2_iget(struct super_block *sb, unsigned long ino)
 
 	set_nlink(inode, f->inocache->pino_nlink);
 
+	printf("!!!!!!!read inode size %d\n", inode->i_size);
 	inode->i_blocks = (inode->i_size + 511) >> 9;
 
 	switch (inode->i_mode & S_IFMT) {
@@ -567,13 +570,17 @@ int jffs2_do_fill_super(struct super_block *sb, void *data, int silent)
 	}
 
 	jffs2_init_xattr_subsystem(c);
-
+	printf("!!!!!!!!!! mount fs\n");
 	if ((ret = jffs2_do_mount_fs(c)))
 		goto out_inohash;
 
+	printf("!!!!!!!!!! mounted\n");
 	jffs2_dbg(1, "%s(): Getting root inode\n", __func__);
 	root_i = jffs2_iget(sb, 1);
+	printf("!!!!!!!!! got root inode 0x%p\n", root_i);
+	printf("!!!!!!!!! root inode %lu\n", root_i->i_ino);
 	if (IS_ERR(root_i)) {
+		printf("error inode\n");
 		jffs2_dbg(1, "get root inode failed\n");
 		ret = PTR_ERR(root_i);
 		goto out_root;
@@ -581,6 +588,7 @@ int jffs2_do_fill_super(struct super_block *sb, void *data, int silent)
 
 	ret = -ENOMEM;
 
+	printf("!!!!!!!!! root inode %lu\n", root_i->i_ino);
 	jffs2_dbg(1, "%s(): d_make_root()\n", __func__);
 	sb->s_root = d_make_root(root_i);
 	if (!sb->s_root)
@@ -590,8 +598,12 @@ int jffs2_do_fill_super(struct super_block *sb, void *data, int silent)
 	sb->s_blocksize = PAGE_SIZE;
 	sb->s_blocksize_bits = PAGE_SHIFT;
 	sb->s_magic = JFFS2_SUPER_MAGIC;
-	if (!sb_rdonly(sb))
+	printf("is read only?????\n");
+	if (!sb_rdonly(sb)) {
+		printf("start garbage\n");
 		jffs2_start_garbage_collect_thread(c);
+	}
+	printf("end end  end\n");
 	return 0;
 
 out_root:

@@ -28,11 +28,21 @@ void d_invalidate(struct dentry *dentry)
 
 void d_instantiate(struct dentry *dentry, struct inode *inode)
 {
+
 }
 
 struct dentry * d_make_root(struct inode *inode)
 {
-	return NULL;
+	struct dentry *res = NULL;
+
+	if (inode) {
+		res = malloc(sizeof(struct dentry));
+		memset(res, 0, sizeof(struct dentry));
+		res->d_inode = inode;
+		res->d_sb = inode->i_sb;
+	}
+
+	return res;
 }
 
 

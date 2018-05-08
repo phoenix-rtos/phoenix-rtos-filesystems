@@ -86,10 +86,19 @@ static u32 crc_table[256] = {
 
 u32 crc32(u32 crc, void *p, size_t len)
 {
-	crc = 0xFFFFFFFF;
+/*	crc = 0xFFFFFFFF;
 
 	while (len--)
 		crc = (crc >> 8) ^ crc_table[(crc ^ *(u8 *)p++) & 0xFF];
 
 	return crc ^ 0xFFFFFFFF;
+*/
+	int i;
+	while (len--) {
+		crc ^= *(char *)p++;
+		for (i = 0; i < 8; i++)
+			crc = (crc >> 1) ^ ((crc & 1) ? 0xedb88320 : 0);
+	}
+
+	return crc;
 }

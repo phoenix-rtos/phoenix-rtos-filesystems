@@ -95,7 +95,7 @@ void *ERR_CAST(const void *ptr)
 
 bool IS_ERR(const void *ptr)
 {
-	return (unsigned long)ptr;
+	return (unsigned long)ptr < 0xff;
 }
 
 
@@ -122,7 +122,7 @@ long schedule_timeout_interruptible(long timeout)
 
 inline pid_t task_pid_nr(struct task_struct *tsk)
 {
-	return tsk->pid;
+	return 333;
 }
 
 void set_user_nice(struct task_struct *p, long nice)

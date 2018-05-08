@@ -16,6 +16,7 @@
 #ifndef _OS_PHOENIX_OBJECT_H_
 #define _OS_PHOENIX_OBJECT_H_ /* object.h */
 
+#include "../os-phoenix.h"
 
 enum {
 	ST_ERROR,
@@ -26,6 +27,8 @@ enum {
 
 typedef struct _jffs2_object_t {
 	oid_t oid;
+	struct inode *inode;
+	struct dentry *dentry;
 	struct jffs2_inode_info *inode_info;
 
 	u32 refs;
@@ -44,7 +47,7 @@ typedef struct _jffs2_object_t {
 void object_init(void);
 
 
-jffs2_object_t *object_create(int type);
+jffs2_object_t *object_create(int type, struct inode *inode);
 
 
 jffs2_object_t *object_get(unsigned int id);

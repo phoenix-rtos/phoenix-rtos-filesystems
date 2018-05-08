@@ -75,7 +75,18 @@ void iget_failed(struct inode *inode)
 
 struct inode * iget_locked(struct super_block *sb, unsigned long ino)
 {
-	return NULL;
+	struct inode *inode = NULL;
+
+	//todo:
+	inode = new_inode(sb);
+
+	if (inode != NULL) {
+		inode->i_ino = ino;
+		inode->i_state = I_NEW;
+		inode->i_sb = sb;
+	}
+
+	return inode;
 }
 
 void iput(struct inode *inode)
@@ -157,6 +168,7 @@ void inode_init_once(struct inode *inode)
 
 int register_filesystem(struct file_system_type *fs)
 {
+	printf("register filesystem\n");
 	if (fs->mount(fs, 0, "jffs2", NULL) == NULL)
 		return -1;
 

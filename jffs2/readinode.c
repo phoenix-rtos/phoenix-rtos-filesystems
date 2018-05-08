@@ -1078,7 +1078,6 @@ static int jffs2_get_inode_nodes(struct jffs2_sb_info *c, struct jffs2_inode_inf
 			break;
 
 		case JFFS2_NODETYPE_INODE:
-
 			if (JFFS2_MIN_NODE_HEADER < sizeof(struct jffs2_raw_inode) &&
 			    len < sizeof(struct jffs2_raw_inode)) {
 				err = read_more(c, ref, sizeof(struct jffs2_raw_inode), &len, buf);

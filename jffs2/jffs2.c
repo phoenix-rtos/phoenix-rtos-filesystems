@@ -94,12 +94,12 @@ static int jffs2_srv_create(oid_t *oid, int type, int mode, u32 port)
 {
 	jffs2_object_t *o;
 
-	o = object_create(type);
+//	o = object_create(type);
 
 	if (o == NULL)
 		return -EINVAL;
 
-	oid->id = o->oid.id;
+	oid->id = 0;
 	oid->port = o->oid.port;
 
 	return EOK;
@@ -155,7 +155,7 @@ int main(void)
 	portCreate(&jffs2_common.port);
 
 	/* Try to mount fs as root */
-	if (portRegister(jffs2_common.port, "/", &toid) < 0) {
+	if (portRegister(jffs2_common.port, "/jffs2", &toid) < 0) {
 		printf("jffs2: Can't mount on directory %s\n", "/");
 		return -1;
 	}

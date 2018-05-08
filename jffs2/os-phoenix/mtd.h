@@ -17,6 +17,8 @@
 #ifndef _OS_PHOENIX_MTD_H_
 #define _OS_PHOENIX_MTD_H_
 
+#include "../../../phoenix-rtos-devices/storage/imx6ull-flash/flashdrv.h"
+
 #define MTD_ERASE_PENDING		0x01
 #define MTD_ERASING				0x02
 #define MTD_ERASE_SUSPEND		0x04
@@ -72,6 +74,9 @@ struct erase_info {
 	struct erase_info *next;
 };
 
+//struct _flashdrv_dma_t;
+//typedef struct _flashdrv_dma_t flashdrv_dma_t;
+
 struct mtd_info {
 	int todo;
 	u_char type;
@@ -83,6 +88,7 @@ struct mtd_info {
 	uint64_t size;
 	uint32_t oobsize;   // Amount of OOB data per block (e.g. 16)
 	uint32_t oobavail;  // Available OOB bytes per block
+	flashdrv_dma_t *dma;
 };
 
 int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,

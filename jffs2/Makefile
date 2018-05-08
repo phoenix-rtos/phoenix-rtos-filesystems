@@ -8,7 +8,7 @@
 #
 
 CC = arm-phoenix-gcc
-CFLAGS = -mthumb -c -Wall -Wno-pointer-sign -Wno-discarded-qualifiers -Wno-unused-value -Os -nostartfiles -nostdlib -mno-unaligned-access -mcpu=cortex-a7 -mtune=cortex-a7 -mfloat-abi=hard -fomit-frame-pointer -ffreestanding -I. -I../../libphoenix/ -I../../phoenix-rtos-kernel/src/ -DARCH=\"arch/arm-imx/arch.h\" -DCONFIG_JFFS2_CMODE_NONE -DCONFIG_JFFS2_FS_WRITEBUFFER
+CFLAGS = -mthumb -c -Wall -Wno-pointer-sign -Wno-discarded-qualifiers -Wno-unused-value -Os -nostartfiles -nostdlib -mno-unaligned-access -mcpu=cortex-a7 -mtune=cortex-a7 -mfloat-abi=hard -fomit-frame-pointer -ffreestanding -I. -I../../libphoenix/ -I../../phoenix-rtos-kernel/src/ -I../../phoenix-rtos-kernel/include -DARCH=\"arch/arm-imx/arch.h\" -DCONFIG_JFFS2_CMODE_NONE -DCONFIG_JFFS2_FS_WRITEBUFFER -DLIBFLASHDRV -DJFFS2_DBG_READINODE_MESSAGES
 
 
 LD = arm-phoenix-gcc
@@ -23,10 +23,16 @@ SRCS = compr.c dir.c file.c ioctl.c nodelist.c malloc.c read.c nodemgmt.c \
 	   background.c fs.c writev.c super.c debug.c wbuf.c
 
 #phoenix specific files
-SRCS += os-phoenix/fs.c os-phoenix/completion.c os-phoenix/mtd.c os-phoenix/slab.c \
+SRCS += os-phoenix/fs.c os-phoenix/completion.c os-phoenix/slab.c \
 		os-phoenix/dev.c os-phoenix/crc32.c os-phoenix/rb.c os-phoenix/dentry.c \
 		os-phoenix/wait.c os-phoenix/os-phoenix.c os-phoenix/locks.c jffs2.c \
-		os-phoenix/object.c
+		os-phoenix/object.c ../../phoenix-rtos-devices/storage/imx6ull-flash/flashdrv.c
+
+ifeq ($(MTD_EM), 1)
+	SRCS += os-phoenix/mtd_em.c
+else
+	SRCS += os-phoenix/mtd.c
+endif
 
 #rest of additional jffs2 options (not supported)
 ifdef $(CONFIG_JFFS2_FS_XATTR)

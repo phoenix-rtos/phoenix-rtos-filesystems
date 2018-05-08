@@ -137,20 +137,15 @@ int object_remove(jffs2_object_t *o)
 	return EOK;
 }
 
-jffs2_object_t *object_create(int type)
+jffs2_object_t *object_create(int type, struct inode *inode)
 {
 	jffs2_object_t *r, t;
 	u32 id;
 
 	mutexLock(jffs2_objects.lock);
-	t.oid.id = 0;
+	t.oid.id = inode->i_ino;
 	r = lib_treeof(jffs2_object_t, node, lib_rbFindEx(jffs2_objects.tree.root, &t.node, object_gapcmp));
 	if (r != NULL) {
-		if (r->lmaxgap > 0)
-			id = r->oid.id - 1;
-		else
-			id = r->oid.id + 1;
-	} else {
 		mutexUnlock(jffs2_objects.lock);
 		return NULL;
 	}
