@@ -416,9 +416,9 @@ int main(void)
 
 	ext2 = malloc(sizeof(ext2_info_t));
 
+	printf("ext2: Starting ext2 server %s\n", "");
 	ata_init();
 
-	printf("ext2: Starting ext2 server %s\n", "");
 	if (ext2_init()) {
 		printf("ext2: init error %s\n", "");
 		free(ext2);

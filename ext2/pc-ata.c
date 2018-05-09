@@ -424,7 +424,7 @@ int ata_init_bus(struct ata_bus *ab)
 
 			ab->ac[i].devices[j].size = ab->ac[i].devices[j].info.lba28_totalsectors;
 
-			printf("[%d:%d] %.5f GiB\n", i, j, (double)ab->ac[i].devices[j].size * ab->ac[i].devices[j].sector_size / 1000 / 1000 / 1000);
+			//printf("[%d:%d] %.5f GiB\n", i, j, (double)ab->ac[i].devices[j].size * ab->ac[i].devices[j].sector_size / 1000 / 1000 / 1000);
 		}
 	}
 
@@ -474,18 +474,12 @@ int ata_generic_init(ata_opt_t *opt)
 			break;
 		pci_dev[devs_found] = pctl.pci.dev;
 
-		printf("ata :%2u:%2u:%2u-->%6u,%6u-->%3u,%3u \n",
-				pci_dev[devs_found].b, pci_dev[devs_found].d,
-				pci_dev[devs_found].f, pci_dev[devs_found].device & 0xFFFF,
-				pci_dev[devs_found].vendor & 0xFFFF,
-				(pci_dev[devs_found].cl >> 8) & 0xFF,pci_dev[devs_found].cl & 0xFF);
-
 		if (!ata_init_one(&pci_dev[devs_found], aopt)) {
 			devs_found++;
 		}
 	}
 	if (!devs_found) {
-		printf("ata: no devices found %s\n", "");
+		printf("ext2: no ata devices found %s\n", "");
 		return -ENOENT;
 	}
 
@@ -495,7 +489,6 @@ int ata_generic_init(ata_opt_t *opt)
 
 int ata_init(void)
 {
-	printf("ata: Initializing %s\n","");
 	ata_generic_init(NULL);
 
 	return 0;

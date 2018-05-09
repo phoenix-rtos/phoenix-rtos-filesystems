@@ -45,7 +45,6 @@ int ext2_read_sb(u32 sect)
 		return -EFAULT;
 	}
 	if (ext2->sb->magic != EXT2_MAGIC) {
-		printf("ext2: not an ext2 partition 0x%x\n", ext2->sb->magic);
 		free(ext2->sb);
 		ext2->sb = NULL;
 		return -EFAULT;
@@ -77,6 +76,7 @@ void ext2_init_sb(int pentry)
 
 	ext2->block_size = SUPERBLOCK_SIZE << ext2->sb->log_block_size;
 	ext2->blocks_count = ext2->sb->blocks_count;
+	printf("ext2: Mounting %.2f MiB partition\n", (float)(ext2->block_size * ext2->blocks_count)/1024/1024);
 	ext2->blocks_in_group = ext2->sb->blocks_in_group;
 	ext2->inode_size = ext2->sb->inode_size;
 	ext2->inodes_count = ext2->sb->inodes_count;
@@ -139,6 +139,11 @@ int ext2_init(void)
 				break;
 			}
 		}
+	}
+
+	if (ret != EOK) {
+		printf("ext2: no ext2 partition found\n");
+		return ret;
 	}
 
 	ext2_init_sb(i);
