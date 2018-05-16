@@ -40,7 +40,8 @@ struct {
 
 static int jffs2_srv_lookup(oid_t *dir, const char *name, oid_t *res)
 {
-
+	printf("jffs2: loookup\n");
+	return 0;
 	struct inode *inode = NULL;
 	struct dentry dentry;
 	u8 path_end = 0;
@@ -154,11 +155,6 @@ int main(void)
 
 	portCreate(&jffs2_common.port);
 
-	/* Try to mount fs as root */
-	if (portRegister(jffs2_common.port, "/jffs2", &toid) < 0) {
-		printf("jffs2: Can't mount on directory %s\n", "/");
-		return -1;
-	}
 	printf("jffs2: Starting jffs2 server at port %d\n", jffs2_common.port);
 
 	if(init_jffs2_fs() != EOK) {
@@ -169,6 +165,12 @@ int main(void)
 	printf("object_init\n");
 	object_init();
 	printf("object_init done\n");
+
+	/* Try to mount fs as root */
+	if (portRegister(jffs2_common.port, "/", &toid) < 0) {
+		printf("jffs2: Can't mount on directory %s\n", "/");
+		return -1;
+	}
 
 	for (;;) {
 		if (msgRecv(jffs2_common.port, &msg, &rid) < 0) {

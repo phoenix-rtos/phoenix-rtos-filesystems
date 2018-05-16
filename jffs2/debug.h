@@ -66,7 +66,7 @@
 
 #define jffs2_dbg(level, fmt, ...)		\
 do {						\
-	if (CONFIG_JFFS2_FS_DEBUG >= 0)	\
+	if (CONFIG_JFFS2_FS_DEBUG >= level)	\
 		pr_debug(fmt, ##__VA_ARGS__);	\
 } while (0)
 

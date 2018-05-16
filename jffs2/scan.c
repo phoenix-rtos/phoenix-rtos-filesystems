@@ -114,7 +114,6 @@ int jffs2_scan_medium(struct jffs2_sb_info *c)
 	if (!flashbuf) {
 		/* For NAND it's quicker to read a whole eraseblock at a time,
 		   apparently */
-		printf("sector size 0x%x\n", c->sector_size);
 		if (jffs2_cleanmarker_oob(c))
 			try_size = c->sector_size;
 		else
@@ -152,7 +151,7 @@ int jffs2_scan_medium(struct jffs2_sb_info *c)
 
 		ret = jffs2_scan_eraseblock(c, jeb, buf_size?flashbuf:(flashbuf+jeb->offset),
 						buf_size, s);
-		printf("ret %d\n", ret);
+
 		if (ret < 0)
 			goto out;
 
@@ -473,7 +472,6 @@ static int jffs2_scan_eraseblock (struct jffs2_sb_info *c, struct jffs2_eraseblo
 		/* Even if it's not found, we still scan to see
 		   if the block is empty. We use this information
 		   to decide whether to erase it or not. */
-		printf("check clean marker %d\n", ret);
 		switch (ret) {
 		case 0:		cleanmarkerfound = 1; break;
 		case 1: 	break;
@@ -483,7 +481,6 @@ static int jffs2_scan_eraseblock (struct jffs2_sb_info *c, struct jffs2_eraseblo
 #endif
 
 	if (jffs2_sum_active()) {
-		printf("SHOULD NOT BE HERE\n");
 		struct jffs2_sum_marker *sm;
 		void *sumptr = NULL;
 		uint32_t sumlen;
@@ -555,7 +552,6 @@ static int jffs2_scan_eraseblock (struct jffs2_sb_info *c, struct jffs2_eraseblo
 full_scan:
 	buf_ofs = jeb->offset;
 
-	printf("buf_size 0x%x\n", buf_size);
 	if (!buf_size) {
 		/* This is the XIP case -- we're reading _directly_ from the flash chip */
 		buf_len = c->sector_size;

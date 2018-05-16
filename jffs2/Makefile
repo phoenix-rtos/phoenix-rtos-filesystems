@@ -8,7 +8,8 @@
 #
 
 CC = arm-phoenix-gcc
-CFLAGS = -mthumb -c -g -Wall -Wno-pointer-sign -Wno-discarded-qualifiers -Wno-unused-value -Os -nostartfiles -nostdlib -mno-unaligned-access -mcpu=cortex-a7 -mtune=cortex-a7 -mfloat-abi=hard -fomit-frame-pointer -ffreestanding -I. -I../../libphoenix/ -I../../phoenix-rtos-kernel/src/ -I../../phoenix-rtos-kernel/include -DARCH=\"arch/arm-imx/arch.h\" -DCONFIG_JFFS2_CMODE_NONE -DCONFIG_JFFS2_FS_WRITEBUFFER -DLIBFLASHDRV -DJFFS2_DBG_READINODE_MESSAGES -DJFFS2_DBG_FSBUILD_MESSAGES 
+CFLAGS = -mthumb -c -g -Wall -Wno-pointer-sign -Wno-discarded-qualifiers -Wno-unused-value -Os -nostartfiles -nostdlib -mno-unaligned-access -mcpu=cortex-a7 -mtune=cortex-a7 -mfloat-abi=hard -fomit-frame-pointer -ffreestanding -I. -I../../libphoenix/ -I../../phoenix-rtos-kernel/src/ -I../../phoenix-rtos-kernel/include -DARCH=\"arch/arm-imx/arch.h\" -DCONFIG_JFFS2_CMODE_NONE -DCONFIG_JFFS2_FS_WRITEBUFFER -DLIBFLASHDRV 
+#-DJFFS2_DBG_READINODE_MESSAGES -DJFFS2_DBG_FSBUILD_MESSAGES 
 #-DJFFS2_DBG_READINODE_MESSAGES
 
 
