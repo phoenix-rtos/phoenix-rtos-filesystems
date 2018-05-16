@@ -8,8 +8,7 @@ SRCS = ext2.c mbr.c inode.c block.c file.c pc-ata.c dir.c object.c sb.c
 OBJS = $(SRCS:.c=.o)
 BIN = ext2
 
-CFLAGS += -I. -I../../libphoenix/ -DARCH=\"arch/ia32/arch.h\" -I../../phoenix-rtos-devices/pci/pc-pci
-#CFLAGS += -mthumb
+CFLAGS += -I../../phoenix-rtos-devices/storage/ata/
 
 
 all: check $(BIN)
@@ -30,7 +29,7 @@ check:
 
 $(BIN): $(OBJS)
 	@echo " LD    $@"
-	$(SIL)$(LD) $(LDFLAGS) -o $(BIN) $(OBJS) ../../libphoenix/libphoenix.a $(GCCLIB)
+	$(SIL)$(LD) $(LDFLAGS) -o $(BIN) $(OBJS) $(LDLIBS)
 	@echo " STRIP $@"
 	$(SIL)$(STRIP) $(BIN) 2>/dev/null
 

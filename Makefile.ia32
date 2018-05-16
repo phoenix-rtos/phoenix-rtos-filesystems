@@ -24,6 +24,8 @@ ifneq (, $(findstring ia32, $(TARGET)))
 	LD = $(CROSS)ld
 	LDFLAGS = -m elf_i386
 	GCCLIB := $(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
+	PHOENIXLIB := $(shell $(CC) $(CFLAGS) -print-file-name=libphoenix.a)
+	LDLIBS := $(PHOENIXLIB) $(GCCLIB)
 
 	OBJCOPY = $(CROSS)objcopy
 	OBJDUMP = $(CROSS)objdump
