@@ -19,6 +19,7 @@
 
 #include <stdlib.h>
 #include <sys/threads.h>
+#include <sys/mman.h>
 #include <sys/rb.h>
 #include <stdint.h>
 #include <string.h>
@@ -380,13 +381,13 @@ void *kmap(struct page *page);
 
 void kunmap(struct page *page);
 
-#define pr_notice(...) printf(__VA_ARGS__)
-#define pr_info(...) printf(__VA_ARGS__)
-#define pr_debug(...) printf(__VA_ARGS__)
-#define pr_warn(...) printf(__VA_ARGS__)
-#define pr_cont(...) printf(__VA_ARGS__)
-#define pr_err(...) printf(__VA_ARGS__)
-#define pr_crit(...) printf(__VA_ARGS__)
+#define pr_notice(fmt, ...) printf(fmt, ##__VA_ARGS__)
+#define pr_info(fmt, ...) printf(fmt, ##__VA_ARGS__)
+#define pr_debug(fmt, ...) printf(fmt, ##__VA_ARGS__)
+#define pr_warn(fmt, ...) printf(fmt, ##__VA_ARGS__)
+#define pr_cont(fmt, ...) printf(fmt, ##__VA_ARGS__)
+#define pr_err(fmt, ...) printf(fmt, ##__VA_ARGS__)
+#define pr_crit(fmt, ...) printf(fmt, ##__VA_ARGS__)
 
 #define KERN_DEBUG
 #define printk(...) printf(__VA_ARGS__)
@@ -544,8 +545,11 @@ unsigned long get_seconds(void);
 
 #define kthread_run(threadfn, data, namefmt, ...)			   \
 ({									   \
-	struct task_struct *__k = NULL;						   \
-	__k;								   \
+	void *stack = mmap(NULL, 0x1000, PROT_WRITE | PROT_READ, 0, OID_NULL, 0); \
+	struct task_struct *__k = malloc(sizeof(struct task_struct));\
+	beginthread(threadfn, 4, stack, 0x1000, data); \
+	__k->pid = 0x1337; \
+	__k; \
 })
 
 bool kthread_should_stop(void);

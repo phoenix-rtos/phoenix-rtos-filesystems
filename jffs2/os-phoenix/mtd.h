@@ -89,6 +89,8 @@ struct mtd_info {
 	uint32_t oobsize;   // Amount of OOB data per block (e.g. 16)
 	uint32_t oobavail;  // Available OOB bytes per block
 	flashdrv_dma_t *dma;
+	void *data_buf;
+	void *meta_buf;
 };
 
 int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,

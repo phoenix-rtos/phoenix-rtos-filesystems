@@ -35,7 +35,7 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 
 	*retlen = 0;
 
-	printf ("mtd_read offs %lu, len %lu\n", from, len);
+	printf("mtd_read offs 0x%x, len 0x%x\n", from, len);
 	if (!len)
 		return 0;
 
@@ -48,7 +48,7 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 int mtd_write(struct mtd_info *mtd, loff_t to, size_t len, size_t *retlen,
 	      const u_char *buf)
 {
-	printf ("mtd_write offs %lu, len %lu\n", to, len);
+	printf("mtd_write offs 0x%x, len 0x%x\n", to, len);
 	if (!len)
 		return 0;
 
@@ -82,7 +82,8 @@ int mtd_writev(struct mtd_info *mtd, const struct kvec *vecs,
 
 int mtd_read_oob(struct mtd_info *mtd, loff_t from, struct mtd_oob_ops *ops)
 {
-	printf ("mtd_read_oob offs %lu ooblen %lu\n", from, ops->ooblen);
+	printf("mtd_read_oob offs %lu ooblen %lu\n", from, ops->ooblen);
+	memset(ops->oobbuf, 0xff, ops->ooblen);
 	ops->oobretlen = ops->ooblen;
 	return 0;
 }
@@ -90,7 +91,7 @@ int mtd_read_oob(struct mtd_info *mtd, loff_t from, struct mtd_oob_ops *ops)
 
 int mtd_write_oob(struct mtd_info *mtd, loff_t to, struct mtd_oob_ops *ops)
 {
-	printf ("mtd_write offs %lu ooblen %lu\n", to, ops->ooblen);
+	printf("mtd_write offs %lu ooblen %lu\n", to, ops->ooblen);
 	ops->oobretlen = ops->ooblen;
 	return 0;
 }
@@ -112,6 +113,9 @@ int mtd_unpoint(struct mtd_info *mtd, loff_t from, size_t len)
 
 int mtd_erase(struct mtd_info *mtd, struct erase_info *instr)
 {
+	memset(nand_em + instr->addr, 0xffffffff, instr->len);
+	instr->state = MTD_ERASE_DONE;
+	instr->callback(instr);
 	return 0;
 }
 
@@ -174,8 +178,8 @@ struct dentry *mount_mtd(struct file_system_type *fs_type, int flags,
 		//printf("file system values 0x%x for 0x%x\n", *(u32 *)(nand_em + offs), offs);
 
 		offs += ret;
-		//if (offs == 1048576)
-		//	break;
+		if (offs == 1048576)
+			break;
 	}
 	printf("reading done: offs = %d\n", offs);
 	printf("show value for 0x13b0 0x%x\n", *(u16 *)(nand_em + 0x13b0));

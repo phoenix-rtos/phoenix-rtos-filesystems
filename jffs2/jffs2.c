@@ -165,8 +165,10 @@ int main(void)
 		printf("jffs2: Error initialising jffs2\n");
 		return -1;
 	}
-
+//	while(1) usleep(100000);
+	printf("object_init\n");
 	object_init();
+	printf("object_init done\n");
 
 	for (;;) {
 		if (msgRecv(jffs2_common.port, &msg, &rid) < 0) {

@@ -49,7 +49,8 @@ void rb_erase(struct rb_node *rb_node, struct rb_root *rb_root)
 
 void rb_insert_color(struct rb_node *rb_node, struct rb_root *rb_root)
 {
-	lib_rbInsert(&rb_root->t, &rb_node->n);
+	rb_node->n.color = RB_RED;
+	lib_rbInsertBalance(&rb_root->t, &rb_node->n);
 }
 
 

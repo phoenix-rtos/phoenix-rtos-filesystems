@@ -46,6 +46,7 @@
 /* Sanity checks are supposed to be light-weight and enabled by default */
 #define JFFS2_DBG_SANITY_CHECKS
 
+
 /*
  * Dx() are mainly used for debugging messages, they must go away and be
  * superseded by nicer dbg_xxx() macros...
@@ -65,7 +66,7 @@
 
 #define jffs2_dbg(level, fmt, ...)		\
 do {						\
-	if (CONFIG_JFFS2_FS_DEBUG >= level)	\
+	if (CONFIG_JFFS2_FS_DEBUG >= 0)	\
 		pr_debug(fmt, ##__VA_ARGS__);	\
 } while (0)
 
