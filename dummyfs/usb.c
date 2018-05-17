@@ -590,7 +590,7 @@ int fetch_modules(void)
 	if (condCreate(&dc.cond) != EOK)
 		return 0;
 
-	interrupt(75, dc_intr, NULL, dc.cond);
+	interrupt(75, dc_intr, NULL, dc.cond, &dc.inth);
 
 	*(dc.base + endptflush) = 0xffffffff;
 	*(dc.base + usbcmd) &= ~1;
