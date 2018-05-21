@@ -33,6 +33,7 @@
 
 struct _dummyfs_common_t dummyfs_common;
 
+int dummyfs_destroy(oid_t *oid);
 
 int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res)
 {
@@ -188,18 +189,24 @@ int dummyfs_link(oid_t *dir, const char *name, oid_t *oid)
 		return -EINVAL;
 	}
 
-	if (o->type == otDir && o->refs > 1) {
+
+	if (o->type == otDir && o->nlink != 0) {
 		object_put(o);
 		object_put(d);
 		return -EINVAL;
 	}
 
+	o->nlink++;
 
 	if (o->type == otDir) {
 		object_lock(o);
 		dir_add(o, ".", otDir, oid);
 		dir_add(o, "..", otDir, dir);
+		o->nlink++;
 		object_unlock(o);
+		object_lock(d);
+		d->nlink++;
+		object_unlock(d);
 	}
 
 	object_lock(d);
@@ -207,15 +214,17 @@ int dummyfs_link(oid_t *dir, const char *name, oid_t *oid)
 
 	if (ret != EOK) {
 		object_unlock(d);
+		object_lock(o);
+		o->nlink--;
 		if (o->type == otDir) {
-			object_lock(o);
+			o->nlink--;
 			dir_destroy(o);
-			object_unlock(o);
 		}
-		object_put(o);
+		object_unlock(o);
 	}
 
 	object_unlock(d);
+	object_put(o);
 	object_put(d);
 
 	return ret;
@@ -231,6 +240,9 @@ int dummyfs_unlink(oid_t *dir, const char *name)
 	if (name == NULL)
 		return -EINVAL;
 
+	if (!strcmp(name, ".") || !strcmp(name, ".."))
+		return -EINVAL;
+
 	d = object_get(dir->id);
 
 	if (d == NULL)
@@ -242,6 +254,12 @@ int dummyfs_unlink(oid_t *dir, const char *name)
 		object_unlock(d);
 		object_put(d);
 		return -ENOENT;
+	}
+
+	if (oid.id == 0) {
+		object_unlock(d);
+		object_put(d);
+		return -EINVAL;
 	}
 
 	o = object_get(oid.id);
@@ -261,11 +279,22 @@ int dummyfs_unlink(oid_t *dir, const char *name)
 
 	ret = dir_remove(d, name);
 
-	object_put(o);
-	object_put(o);
+	if (ret == EOK && o->type == otDir)
+		d->nlink--;
 
 	object_unlock(d);
 	object_put(d);
+
+	if (ret == EOK) {
+		object_lock(o);
+		o->nlink--;
+		if (o->type == otDir)
+			o->nlink--;
+		object_unlock(o);
+	}
+
+	object_put(o);
+	dummyfs_destroy(&o->oid);
 
 	return ret;
 }

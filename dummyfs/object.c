@@ -159,6 +159,7 @@ dummyfs_object_t *object_create(void)
 	r->oid.id = id;
 	r->refs = 1;
 	r->type = otUnknown;
+	r->nlink = 0;
 
 	lib_rbInsert(&file_objects, &r->node);
 	mutexUnlock(olock);
@@ -182,7 +183,7 @@ void object_unlock(dummyfs_object_t *o)
 int object_remove(dummyfs_object_t *o)
 {
 	mutexLock(olock);
-	if (o->refs > 1) {
+	if (o->nlink) {
 		mutexUnlock(olock);
 		return -EBUSY;
 	}
