@@ -25,7 +25,6 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 {
 
 	int err;
-	size_t offs = 0;
 	*retlen = 0;
 
 	if (!len)
@@ -77,8 +76,6 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 int mtd_write(struct mtd_info *mtd, loff_t to, size_t len, size_t *retlen,
 	      const u_char *buf)
 {
-	int err;
-	size_t offs = 0;
 	*retlen = 0;
 
 	if (!len)

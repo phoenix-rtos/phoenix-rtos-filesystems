@@ -24,7 +24,6 @@
 #include <unistd.h>
 #include <dirent.h>
 
-
 #include "os-phoenix.h"
 #include "os-phoenix/object.h"
 #include "nodelist.h"
@@ -46,13 +45,10 @@ static int jffs2_srv_lookup(oid_t *dir, const char *name, oid_t *res)
 
 	res->id = 0;
 
-	if ((o = object_get(dir->id)) != NULL)
-		inode = o->inode;
-	else
-		inode = jffs2_iget(jffs2_common.sb, dir->id);
+	inode = jffs2_iget(jffs2_common.sb, dir->id);
 
-	if (inode == NULL)
-		return -1;
+	if (IS_ERR(inode))
+		return -EINVAL;
 
 	dentry = malloc(sizeof(struct dentry));
 	res->port = jffs2_common.port;
@@ -85,9 +81,7 @@ static int jffs2_srv_lookup(oid_t *dir, const char *name, oid_t *res)
 
 		dentry->d_name.len = strlen(dentry->d_name.name);
 
-	//	printf("lookup\n");
 		dtemp = jffs2_lookup(inode, dentry, 0);
-	//	printf("lookup done\n");
 
 		if (dtemp == NULL) {
 			free(dentry->d_name.name);
@@ -99,10 +93,7 @@ static int jffs2_srv_lookup(oid_t *dir, const char *name, oid_t *res)
 		free(dentry->d_name.name);
 		dentry->d_name.len = 0;
 
-		if ((o = object_get(res->id)) != NULL)
-			inode = o->inode;
-		else
-			inode = jffs2_iget(jffs2_common.sb, res->id);
+		inode = jffs2_iget(jffs2_common.sb, res->id);
 	}
 
 	free(dentry);
@@ -122,8 +113,54 @@ static int jffs2_srv_setattr(oid_t *oid, int type, int attr)
 
 static int jffs2_srv_getattr(oid_t *oid, int type, int *attr)
 {
-//	printf("jffs2: getattr\n");
-	return 0;
+	struct inode *inode;
+	struct jffs2_inode_info *f;
+
+	inode = jffs2_iget(jffs2_common.sb, oid->id);
+
+	if (IS_ERR(inode))
+		return -ENOENT;
+
+	f = JFFS2_INODE_INFO(inode);
+
+	mutex_lock(&f->sem);
+	switch (type) {
+
+		case (0): /* mode */
+			*attr = inode->i_mode;
+			break;
+
+		case (1): /* uid */
+			*attr = inode->i_uid.val;
+			break;
+
+		case (2): /* gid */
+			*attr = inode->i_gid.val;
+			break;
+
+		case (3): /* size */
+			*attr = inode->i_size;
+			break;
+
+		case (4): /* type */
+			if (S_ISDIR(inode->i_mode))
+				*attr = 0;
+			else if (S_ISREG(inode->i_mode))
+				*attr = 1;
+			else if (S_ISCHR(inode->i_mode))
+				*attr = 2;
+			else
+				*attr = 3;
+			break;
+
+		case (5): /* port */
+			*attr = inode->i_rdev;
+			break;
+	}
+
+	mutex_unlock(&f->sem);
+
+	return EOK;
 }
 
 
@@ -141,16 +178,6 @@ static int jffs2_srv_unlink(oid_t *dir, const char *name)
 
 static int jffs2_srv_create(oid_t *oid, int type, int mode, u32 port)
 {
-	jffs2_object_t *o;
-
-//	o = object_create(type);
-
-	if (o == NULL)
-		return -EINVAL;
-
-	oid->id = 0;
-	oid->port = o->oid.port;
-
 	return EOK;
 }
 
@@ -168,10 +195,10 @@ static int jffs2_srv_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsig
 	struct dir_context ctx = {dir_print, offs, dent, -1};
 	jffs2_object_t *o;
 
-	if ((o = object_get(dir->id)) != NULL)
-		inode = o->inode;
-	else
-		inode = jffs2_iget(jffs2_common.sb, dir->id);
+	inode = jffs2_iget(jffs2_common.sb, dir->id);
+
+	if (IS_ERR(inode))
+		return -EINVAL;
 
 	if (!((inode->i_mode >> 14) & 1))
 		return -EINVAL;
@@ -205,10 +232,10 @@ static int jffs2_srv_read(oid_t *oid, offs_t offs, void *data, unsigned long len
 	unsigned char *pg_buf;
 	int ret;
 
-	if ((o = object_get(oid->id)) != NULL)
-		inode = o->inode;
-	else
-		inode = jffs2_iget(jffs2_common.sb, oid->id);
+	inode = jffs2_iget(jffs2_common.sb, oid->id);
+
+	if (IS_ERR(inode))
+		return -EINVAL;
 
 	f = JFFS2_INODE_INFO(inode);
 	c = JFFS2_SB_INFO(inode->i_sb);
@@ -254,7 +281,6 @@ int main(void)
 		printf("jffs2: Error initialising jffs2\n");
 		return -1;
 	}
-//	while(1) usleep(100000);
 
 	/* Try to mount fs as root */
 	if (portRegister(jffs2_common.port, "/", &toid) < 0) {
