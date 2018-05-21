@@ -228,6 +228,9 @@ int dummyfs_unlink(oid_t *dir, const char *name)
 	dummyfs_object_t *o, *d;
 	int ret;
 
+	if (name == NULL)
+		return -EINVAL;
+
 	d = object_get(dir->id);
 
 	if (d == NULL)
