@@ -160,19 +160,7 @@ static int jffs2_srv_destroy(oid_t *oid)
 	return 0;
 }
 
-/*int dir_print(struct dir_context *ctx, const char *name, int len, loff_t pos, u64 ino, unsigned type)
-{
-	ctx->pos++;
-	ctx->emit++;
-	ctx->dent->d_reclen = 1;
-	ctx->dent->d_namlen = len;
-	ctx->dent->d_ino = ino;
-	ctx->dent->d_type = type;
-	memcpy(ctx->dent->d_name, name, len);
-	ctx->dent->d_name[len] = '\0';
-	return 0;
-}
-*/
+
 static int jffs2_srv_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int size)
 {
 	struct inode *inode;
@@ -210,7 +198,32 @@ static void jffs2_srv_close(oid_t *oid)
 
 static int jffs2_srv_read(oid_t *oid, offs_t offs, void *data, unsigned long len)
 {
-	return 0;
+	jffs2_object_t *o;
+	struct inode *inode;
+	struct jffs2_inode_info *f = JFFS2_INODE_INFO(inode);
+	struct jffs2_sb_info *c = JFFS2_SB_INFO(inode->i_sb);
+	unsigned char *pg_buf;
+	int ret;
+
+	if ((o = object_get(oid->id)) != NULL)
+		inode = o->inode;
+	else
+		inode = jffs2_iget(jffs2_common.sb, oid->id);
+
+	f = JFFS2_INODE_INFO(inode);
+	c = JFFS2_SB_INFO(inode->i_sb);
+
+	if (inode->i_size < offs)
+		return -EINVAL;
+
+	mutex_lock(&f->sem);
+	ret = jffs2_read_inode_range(c, f, data, offs, len);
+	mutex_unlock(&f->sem);
+
+	if (!ret)
+		return len;
+
+	return ret;
 }
 
 

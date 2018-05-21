@@ -17,6 +17,7 @@
 #define _OS_PHOENIX_FS_H_
 
 #include <sys/stat.h>
+#include <dirent.h>
 
 #include "../linux/list.h"
 #include "types.h"
