@@ -103,6 +103,7 @@ struct jffs2_inode_info;
 	int _off = (int) &(((type *) 0)->member); \
 	(type *)(((void *)ptr) - _off); })
 
+#include "os-phoenix/object.h"
 #include "os-phoenix/completion.h"
 #include "os-phoenix/dev.h"
 #include "os-phoenix/rb.h"
@@ -222,8 +223,6 @@ CLEARPAGEFLAG_NOOP(Uptodate);
 
 #define ITIME(sec) ((struct timespec){sec, 0})
 #define I_SEC(tv) ((tv).tv_sec)
-#define __I_NEW					3
-#define I_NEW					(1 << __I_NEW)
 
 #define JFFS2_F_I_SIZE(f) (OFNI_EDONI_2SFFJ(f)->i_size)
 #define JFFS2_F_I_MODE(f) (OFNI_EDONI_2SFFJ(f)->i_mode)
@@ -260,7 +259,7 @@ loff_t generic_file_llseek(struct file *file, loff_t offset, int whence);
 #define TASK_INTERRUPTIBLE 0x0001
 
 #define current (pid_t)0
-#define schedule() do { } while (0)
+#define schedule() do { usleep(10000000);} while (0)
 #define jiffies 0
 
 unsigned long msecs_to_jiffies(const unsigned int m);
@@ -601,5 +600,12 @@ int match_int(substring_t *s, int *result);
 
 void rcu_barrier(void);
 
+typedef struct _jffs2_common_t {
+	u32 port;
+	oid_t root;
+	struct super_block *sb;
+} jffs2_common_t;
+
+extern jffs2_common_t jffs2_common;
 
 #endif /* _OS_PHOENIX_H_ */

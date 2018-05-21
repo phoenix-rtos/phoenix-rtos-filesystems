@@ -18,7 +18,7 @@
 
 #include <sys/stat.h>
 
-#include "linux/list.h"
+#include "../linux/list.h"
 #include "types.h"
 
 #define DT_UNKNOWN		0
@@ -43,6 +43,8 @@
 #define SB_POSIXACL		(1<<16)	/* VFS does not apply the umask */
 
 #define I_DIRTY_DATASYNC		(1 << 1)
+#define __I_NEW					3
+#define I_NEW					(1 << __I_NEW)
 
 struct timespec current_time(struct inode *inode);
 
@@ -58,13 +60,15 @@ typedef int (*filldir_t)(struct dir_context *, const char *, int, loff_t, u64,
 struct dir_context {
 	const filldir_t actor;
 	loff_t pos;
+	struct dirent *dent;
+	int emit;
 };
 
 
 struct file {
 	struct inode *f_inode;
-	int todo;
 	struct address_space *f_mapping;
+	u64 f_pino;
 };
 
 
@@ -74,15 +78,10 @@ static inline struct inode *file_inode(const struct file *f)
 }
 
 
-static inline bool dir_emit_dots(struct file *file, struct dir_context *ctx)
-{
-	return 1;
-}
-
 static inline bool dir_emit(struct dir_context *ctx, const char *name,
 		int namelen, u64 ino, unsigned type)
 {
-	return ctx->actor(ctx, name, namelen, ctx->pos, ino, type) == 0;
+	return ctx->actor(ctx, name, namelen, ctx->pos, ino, type);
 }
 
 
@@ -144,6 +143,28 @@ struct inode {
 	kgid_t						i_gid;
 	struct rcu_head				i_rcu;
 };
+
+static inline bool dir_emit_dots(struct file *file, struct dir_context *ctx)
+{
+	if (ctx->pos == 0)
+		return ctx->actor(ctx, ".", 1, ctx->pos, file_inode(file)->i_ino, DT_DIR);
+	else if (ctx->pos == 1)
+		return ctx->actor(ctx, "..", 2, ctx->pos, file->f_pino, DT_DIR);
+	return 1;
+}
+
+static inline int dir_print(struct dir_context *ctx, const char *name, int len, loff_t pos, u64 ino, unsigned type)
+{
+	ctx->pos++;
+	ctx->emit++;
+	ctx->dent->d_reclen = 1;
+	ctx->dent->d_namlen = len;
+	ctx->dent->d_ino = ino;
+	ctx->dent->d_type = type;
+	memcpy(ctx->dent->d_name, name, len);
+	ctx->dent->d_name[len] = '\0';
+	return 0;
+}
 
 struct super_operations;
 
@@ -303,12 +324,12 @@ void iput(struct inode *inode);
 
 static inline void inode_lock(struct inode *inode)
 {
-//	mutex_lock(&inode->i_mutex);
+	//mutex_lock(&inode->i_mutex);
 }
 
 static inline void inode_unlock(struct inode *inode)
 {
-//	mutex_unlock(&inode->i_mutex);
+	//mutex_unlock(&inode->i_mutex);
 }
 
 void clear_inode(struct inode *inode);

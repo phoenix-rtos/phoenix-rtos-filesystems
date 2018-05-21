@@ -18,6 +18,7 @@
 
 #include "mtd.h"
 
+jffs2_common_t jffs2_common;
 
 int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 			     u_char *buf)
@@ -27,11 +28,8 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 	size_t offs = 0;
 	*retlen = 0;
 
-//	printf("mtd_read: from 0x%x, len 0x%x\n", from, len);
-//	printf("mtd read block 0x%x offs %x\n", from / mtd->writesize, offs);
 	if (!len)
 		return 0;
-
 
 	if (from % mtd->writesize) {
 		if ((err = flashdrv_read(mtd->dma, from / mtd->writesize, mtd->data_buf, mtd->meta_buf))) {
@@ -43,7 +41,7 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 		*retlen += mtd->writesize - (from % mtd->writesize);
 		if (*retlen > len)
 			*retlen = len;
-//		printf("init len 0x%x offs 0x%x\n", from % mtd->writesize, *retlen);
+
 		memcpy(buf, mtd->data_buf + (from % mtd->writesize), *retlen);
 		len -= *retlen;
 		from += *retlen;
@@ -53,9 +51,7 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 		return 0;
 
 	while (len >= mtd->writesize) {
-//		printf("mtd read block 0x%x offs 0x%x\n", from / mtd->writesize, *retlen);
 		if ((err = flashdrv_read(mtd->dma, from / mtd->writesize, mtd->data_buf, mtd->meta_buf))) {
-//			printf("flash read err code 0x%x\n", err);
 			if (err != 0xff10)
 				return -1;
 		}
@@ -67,16 +63,13 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 	}
 
 	if (len > 0) {
-//		printf("mtd read block 0x%x offs %x\n", from / mtd->writesize, *retlen);
 		if ((err = flashdrv_read(mtd->dma, from / mtd->writesize, mtd->data_buf, mtd->meta_buf))) {
-//			printf("flash read err code 0x%x\n", err);
 			if (err != 0xff10)
 				return -1;
 		}
 		memcpy(buf + *retlen, mtd->data_buf, len);
 		*retlen += len;
 	}
-//	printf("read block end 0x%x\n", *retlen);
 	return 0;
 }
 
@@ -101,7 +94,6 @@ int mtd_write(struct mtd_info *mtd, loff_t to, size_t len, size_t *retlen,
 		*retlen += mtd->writesize;
 		to += mtd->writesize;
 	}
-
 
 	return 0;
 }
@@ -133,14 +125,9 @@ int mtd_read_oob(struct mtd_info *mtd, loff_t from, struct mtd_oob_ops *ops)
 {
 
 	int ret = 0;
-//	ops->oobretlen = ops->ooblen;
-//	return 0;
 
-
-//	printf("read oob from 0x%x len 0x%x\n", from, ops->ooblen);
 	while (ops->oobretlen < ops->ooblen) {
 		if ((ret = flashdrv_read(mtd->dma, from / mtd->writesize, mtd->data_buf, mtd->meta_buf))) {
-		//	printf("read oob error 0x%x\n", ret);
 			if (ret != 0xff10)
 				printf("some error 0x%x\n", ret);;
 		}
@@ -160,7 +147,7 @@ int mtd_write_oob(struct mtd_info *mtd, loff_t to, struct mtd_oob_ops *ops)
 		printf("OOB TOO LONG\n");
 
 	memset(mtd->data_buf, 0xff, mtd->writesize);
-	memset(mtd->data_buf, 0xff, sizeof(flashdrv_meta_t));
+	memset(mtd->meta_buf, 0xff, sizeof(flashdrv_meta_t));
 	memcpy(mtd->meta_buf, ops->oobbuf, ops->ooblen);
 
 	if (flashdrv_write(mtd->dma, to / mtd->writesize, mtd->data_buf, mtd->meta_buf))
@@ -204,7 +191,7 @@ int mtd_block_markbad(struct mtd_info *mtd, loff_t ofs)
 {
 	memset(mtd->data_buf, 0xff, mtd->writesize);
 	memset(mtd->meta_buf, 0xff, mtd->writesize);
-	memset(mtd->data_buf + mtd->writesize, 0, 4);
+	memset(mtd->data_buf, 0, 2);
 
 	if (flashdrv_writeraw(mtd->dma, ofs / mtd->writesize, mtd->data_buf, mtd->writesize + 224))
 		return -1;
@@ -287,6 +274,8 @@ struct dentry *mount_mtd(struct file_system_type *fs_type, int flags,
 	sb->s_mtd = mtd;
 
 	fill_super(sb, NULL, 0);
+	jffs2_common.sb = sb;
+
 	return sb->s_root;
 }
 

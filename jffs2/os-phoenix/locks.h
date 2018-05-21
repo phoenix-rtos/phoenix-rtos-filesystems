@@ -17,7 +17,7 @@
 #ifndef _OS_PHOENIX_LOCKS_H_
 #define _OS_PHOENIX_LOCKS_H_
 
-#include "os-phoenix/types.h"
+#include "types.h"
 
 struct mutex {
 	handle_t h;

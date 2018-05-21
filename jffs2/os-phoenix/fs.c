@@ -66,6 +66,7 @@ struct inode *new_inode(struct super_block *sb)
 
 void unlock_new_inode(struct inode *inode)
 {
+	inode->i_state &= ~I_NEW;
 }
 
 void iget_failed(struct inode *inode)
@@ -76,16 +77,20 @@ void iget_failed(struct inode *inode)
 struct inode * iget_locked(struct super_block *sb, unsigned long ino)
 {
 	struct inode *inode = NULL;
+	jffs2_object_t *o = object_get(ino);
 
-	//todo:
+	if (o != NULL)
+		return o->inode;
+
 	inode = new_inode(sb);
 
 	if (inode != NULL) {
 		inode->i_ino = ino;
 		inode->i_state = I_NEW;
 		inode->i_sb = sb;
+		inode->i_mapping = malloc(sizeof(struct address_space));
+		object_create(0, inode);
 	}
-
 	return inode;
 }
 
@@ -104,6 +109,11 @@ bool is_bad_inode(struct inode *inode)
 
 struct inode *ilookup(struct super_block *sb, unsigned long ino)
 {
+	jffs2_object_t *o = object_get(ino);
+
+	if (o != NULL)
+		o->inode;
+
 	return NULL;
 }
 
@@ -164,11 +174,11 @@ void truncate_inode_pages_final(struct address_space *addr_space)
 
 void inode_init_once(struct inode *inode)
 {
+	memset(inode, 0, sizeof(struct inode));
 }
 
 int register_filesystem(struct file_system_type *fs)
 {
-	printf("register filesystem\n");
 	if (fs->mount(fs, 0, "jffs2", NULL) == NULL)
 		return -1;
 

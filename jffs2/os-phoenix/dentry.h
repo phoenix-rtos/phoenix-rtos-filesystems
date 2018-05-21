@@ -27,6 +27,8 @@ struct dentry {
 	struct qstr d_name;
 	struct inode *d_inode;
 	struct super_block *d_sb;	/* The root of the dentry tree */
+	struct dentry *d_parent;
+	u64 pino;
 };
 
 static inline struct inode *d_inode(const struct dentry *dentry)
@@ -53,6 +55,6 @@ static inline bool d_is_dir(const struct dentry *dentry)
 struct dentry * d_make_root(struct inode *inode);
 
 
-extern struct dentry * d_obtain_alias(struct inode *);
+extern struct dentry *d_obtain_alias(struct inode *);
 
 #endif /* _OS_PHOENIX_DENTRY_H_ */

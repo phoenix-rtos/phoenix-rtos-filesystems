@@ -27,43 +27,90 @@
 
 #include "os-phoenix.h"
 #include "os-phoenix/object.h"
-
-struct {
-	u32 port;
-	oid_t root;
-	struct super_block sb;
-} jffs2_common;
-
+#include "nodelist.h"
 
 #define JFFS2_ROOT_DIR &jffs2_common.root
 
 
 static int jffs2_srv_lookup(oid_t *dir, const char *name, oid_t *res)
 {
-	printf("jffs2: loookup\n");
-	return 0;
+	struct dentry *dentry, *dtemp;
+	jffs2_object_t *o;
 	struct inode *inode = NULL;
-	struct dentry dentry;
-	u8 path_end = 0;
+	int len = 0;
+	char *path;
+	char *end;
 
-	if (dir == NULL)
-		dir = JFFS2_ROOT_DIR;
+	if (dir->id == 0)
+		dir->id = 1;
 
-	inode = jffs2_iget(&jffs2_common.sb, dir->id);
+	res->id = 0;
 
-	while (inode != NULL) {
-	//	jffs2_lookup(inode, &dentry, 0);
-		//if (ret != NULL)
-			inode = dentry.d_inode;
-
-		//if (path_forward(name))
-			break;
-	}
+	if ((o = object_get(dir->id)) != NULL)
+		inode = o->inode;
+	else
+		inode = jffs2_iget(jffs2_common.sb, dir->id);
 
 	if (inode == NULL)
+		return -1;
+
+	dentry = malloc(sizeof(struct dentry));
+	res->port = jffs2_common.port;
+
+	while (name[len] != '\0') {
+		while (name[len] == '/') {
+			len++;
+			continue;
+		}
+
+		dentry->d_name.name = strdup(name + len);
+
+		end = strchr(dentry->d_name.name, '/');
+		if (end != NULL)
+			*end = 0;
+
+		if (!strcmp(dentry->d_name.name, ".")) {
+			res->id = inode->i_ino;
+			len++;
+			free(dentry->d_name.name);
+			dentry->d_name.len = 0;
+			continue;
+		} else if (!strcmp(dentry->d_name.name, "..")) {
+			res->id = JFFS2_INODE_INFO(inode)->inocache->pino_nlink;
+			len += 2;
+			free(dentry->d_name.name);
+			dentry->d_name.len = 0;
+			continue;
+		}
+
+		dentry->d_name.len = strlen(dentry->d_name.name);
+
+	//	printf("lookup\n");
+		dtemp = jffs2_lookup(inode, dentry, 0);
+	//	printf("lookup done\n");
+
+		if (dtemp == NULL) {
+			free(dentry->d_name.name);
+			break;
+		} else
+			res->id = dtemp->d_inode->i_ino;
+
+		len += dentry->d_name.len;
+		free(dentry->d_name.name);
+		dentry->d_name.len = 0;
+
+		if ((o = object_get(res->id)) != NULL)
+			inode = o->inode;
+		else
+			inode = jffs2_iget(jffs2_common.sb, res->id);
+	}
+
+	free(dentry);
+
+	if (!res->id)
 		return -ENOENT;
 
-	return 0;
+	return len;
 }
 
 
@@ -75,7 +122,8 @@ static int jffs2_srv_setattr(oid_t *oid, int type, int attr)
 
 static int jffs2_srv_getattr(oid_t *oid, int type, int *attr)
 {
-	return -ENOTSUP;
+//	printf("jffs2: getattr\n");
+	return 0;
 }
 
 
@@ -112,15 +160,46 @@ static int jffs2_srv_destroy(oid_t *oid)
 	return 0;
 }
 
-
+/*int dir_print(struct dir_context *ctx, const char *name, int len, loff_t pos, u64 ino, unsigned type)
+{
+	ctx->pos++;
+	ctx->emit++;
+	ctx->dent->d_reclen = 1;
+	ctx->dent->d_namlen = len;
+	ctx->dent->d_ino = ino;
+	ctx->dent->d_type = type;
+	memcpy(ctx->dent->d_name, name, len);
+	ctx->dent->d_name[len] = '\0';
+	return 0;
+}
+*/
 static int jffs2_srv_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int size)
 {
-	return 0;
+	struct inode *inode;
+	struct file file;
+	struct dir_context ctx = {dir_print, offs, dent, -1};
+	jffs2_object_t *o;
+
+	if ((o = object_get(dir->id)) != NULL)
+		inode = o->inode;
+	else
+		inode = jffs2_iget(jffs2_common.sb, dir->id);
+
+	if (!((inode->i_mode >> 14) & 1))
+		return -EINVAL;
+
+	file.f_pino = JFFS2_INODE_INFO(inode)->inocache->pino_nlink;
+	file.f_inode = inode;
+
+	jffs2_readdir(&file, &ctx);
+
+	return ctx.emit;
 }
 
 
 static void jffs2_srv_open(oid_t *oid)
 {
+//	printf("jffs2: open\n");
 }
 
 
@@ -157,14 +236,12 @@ int main(void)
 
 	printf("jffs2: Starting jffs2 server at port %d\n", jffs2_common.port);
 
+	object_init();
 	if(init_jffs2_fs() != EOK) {
 		printf("jffs2: Error initialising jffs2\n");
 		return -1;
 	}
 //	while(1) usleep(100000);
-	printf("object_init\n");
-	object_init();
-	printf("object_init done\n");
 
 	/* Try to mount fs as root */
 	if (portRegister(jffs2_common.port, "/", &toid) < 0) {

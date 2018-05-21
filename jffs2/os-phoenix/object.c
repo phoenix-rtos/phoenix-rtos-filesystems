@@ -144,18 +144,23 @@ jffs2_object_t *object_create(int type, struct inode *inode)
 
 	mutexLock(jffs2_objects.lock);
 	t.oid.id = inode->i_ino;
-	r = lib_treeof(jffs2_object_t, node, lib_rbFindEx(jffs2_objects.tree.root, &t.node, object_gapcmp));
+
+	r = lib_treeof(jffs2_object_t, node, lib_rbFind(&jffs2_objects.tree, &t.node));
 	if (r != NULL) {
 		mutexUnlock(jffs2_objects.lock);
 		return NULL;
 	}
-
+	r = malloc(sizeof(jffs2_object_t));
+	if (r == NULL) {
+		printf("End of memory - this is very bad\n");
+		return NULL;
+	}
 	memset(r, 0, sizeof(jffs2_object_t));
-	r->oid.id = id;
+	r->oid.id = inode->i_ino;
 	r->refs = 1;
 	r->type = type;
 	r->state = ST_LOCKED;
-	r->inode_info = NULL;
+	r->inode = inode;
 
 	lib_rbInsert(&jffs2_objects.tree, &r->node);
 	mutexUnlock(jffs2_objects.lock);
@@ -173,7 +178,6 @@ jffs2_object_t *object_get(unsigned int id)
 	if ((o = lib_treeof(jffs2_object_t, node, lib_rbFind(&jffs2_objects.tree, &t.node))) != NULL)
 		o->refs++;
 	mutexUnlock(jffs2_objects.lock);
-
 	return o;
 }
 
@@ -185,6 +189,6 @@ void object_put(jffs2_object_t *o)
 
 void object_init(void)
 {
-	lib_rbInit(&jffs2_objects.tree, object_cmp, object_augment);
+	lib_rbInit(&jffs2_objects.tree, object_cmp, NULL);
 	mutexCreate(&jffs2_objects.lock);
 }

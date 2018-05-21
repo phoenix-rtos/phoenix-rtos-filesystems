@@ -15,7 +15,7 @@
 
 #include "../os-phoenix.h"
 
-unsigned int dirty_writeback_interval = 5 * 100; /* centiseconds */
+unsigned int dirty_writeback_interval = 5 * 100000; /* centiseconds */
 
 void *page_address(const struct page *page)
 {

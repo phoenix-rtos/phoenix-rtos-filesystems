@@ -18,6 +18,10 @@
 
 struct dentry * d_splice_alias(struct inode *inode, struct dentry *dentry)
 {
+	if (inode != NULL) {
+		dentry->d_inode = inode;
+		return dentry;
+	}
 	return NULL;
 }
 

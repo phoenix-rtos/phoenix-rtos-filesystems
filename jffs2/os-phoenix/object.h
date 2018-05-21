@@ -29,7 +29,6 @@ typedef struct _jffs2_object_t {
 	oid_t oid;
 	struct inode *inode;
 	struct dentry *dentry;
-	struct jffs2_inode_info *inode_info;
 
 	u32 refs;
 	u32 type;

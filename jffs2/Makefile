@@ -6,18 +6,39 @@
 # Copyright 2018 Phoenix Systems
 # Author: Kamil Amanowicz
 #
+SIL ?=
+MAKEFLAGS += --no-print-directory
+export SIL TARGET CC CFLAGS MKDEP MKDEPFLAGS AR ARFLAGS LD LDFLAGS LDLIBS OBJDUMP STRIP
+MKDEP = $(CROSS)gcc -MM
+MKDEPFLAGS = $(CFLAGS)
 
-CC = arm-phoenix-gcc
-CFLAGS = -mthumb -c -g -Wall -Wno-pointer-sign -Wno-discarded-qualifiers -Wno-unused-value -Os -nostartfiles -nostdlib -mno-unaligned-access -mcpu=cortex-a7 -mtune=cortex-a7 -mfloat-abi=hard -fomit-frame-pointer -ffreestanding -I. -I../../libphoenix/ -I../../phoenix-rtos-kernel/src/ -I../../phoenix-rtos-kernel/include -DARCH=\"arch/arm-imx/arch.h\" -DCONFIG_JFFS2_CMODE_NONE -DCONFIG_JFFS2_FS_WRITEBUFFER -DLIBFLASHDRV 
-#-DJFFS2_DBG_READINODE_MESSAGES -DJFFS2_DBG_FSBUILD_MESSAGES 
-#-DJFFS2_DBG_READINODE_MESSAGES
-
-
-LD = arm-phoenix-gcc
+CROSS ?= arm-phoenix-
+CC = $(CROSS)gcc
+AR = $(CROSS)ar
+ARFLAGS = -r
+LD = $(CROSS)ld
 LDFLAGS = -nostdlib -z max-page-size=0x1000
+LDFLAGS += --gc-sections
+OBJCOPY = $(CROSS)objcopy
+OBJDUMP = $(CROSS)objdump
+STRIP = $(CROSS)strip
 
 
-STRIP = arm-phoenix-strip
+CFLAGS =  -Os -Wall -Wno-pointer-sign -Wno-discarded-qualifiers -Wno-unused-value\
+		  -g -I$(SRCDIR) -nostartfiles -nostdlib\
+		  -mcpu=cortex-a7 -mtune=cortex-a7 -mfpu=neon-vfpv4 -mfloat-abi=hard -mthumb\
+		  -fomit-frame-pointer -ffreestanding -mno-unaligned-access\
+		  -DVERSION=\"$(VERSION)\" -DARCH=\"arch/arm-imx/arch.h\"\
+		  -DCONFIG_JFFS2_CMODE_NONE -DCONFIG_JFFS2_FS_WRITEBUFFER -DLIBFLASHDRV\
+#		  -DJFFS2_DBG_READINODE_MESSAGES -DJFFS2_DBG_FSBUILD_MESSAGES
+
+CFLAGS += -fdata-sections -ffunction-sections
+GCCLIB := $(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
+PHOENIXLIB := $(shell $(CC) $(CFLAGS) -print-file-name=libphoenix.a)
+LDLIBS := $(PHOENIXLIB) $(GCCLIB)
+
+#-DJFFS2_DBG_READINODE_MESSAGES
+LIBS := flashdrv.o
 
 #linux base jffs2 files + writebuffer for nand support
 SRCS = compr.c dir.c file.c ioctl.c nodelist.c malloc.c read.c nodemgmt.c \
@@ -28,7 +49,7 @@ SRCS = compr.c dir.c file.c ioctl.c nodelist.c malloc.c read.c nodemgmt.c \
 SRCS += os-phoenix/fs.c os-phoenix/completion.c os-phoenix/slab.c \
 		os-phoenix/dev.c os-phoenix/crc32.c os-phoenix/rb.c os-phoenix/dentry.c \
 		os-phoenix/wait.c os-phoenix/os-phoenix.c os-phoenix/locks.c jffs2.c \
-		os-phoenix/object.c ../../phoenix-rtos-devices/storage/imx6ull-flash/flashdrv.c
+		os-phoenix/object.c
 
 ifeq ($(MTD_EM), 1)
 	SRCS += os-phoenix/mtd_em.c
@@ -71,21 +92,18 @@ endif
 
 OBJS = $(SRCS:.c=.o)
 
-LIBPHOENIX = ../../libphoenix/libphoenix.a
 GCCLIB := $(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
 BIN = jffs2
 
-all: jffs2 jffs2.debug
+all: jffs2
 
-%.c%.o:
-	$(CC) $(CFLAGS) $<
+.c.o:
+flashdrv.o: ../../phoenix-rtos-devices/storage/imx6ull-flash/flashdrv.c
+	@(printf " CC    %-24s  \n" "$<"; $(CC) -c $(CFLAGS) "$<" -o "$@")
 
-jffs2: $(OBJS) $(LIBPHOENIX)
-	$(LD) $(LDFLAGS) -o $(BIN) $(OBJS) $(LIBPHOENIX) $(GCCLIB)
-	$(STRIP) $(BIN)
-
-jffs2.debug: $(OBJS) $(LIBPHOENIX)
-	$(LD) $(LDFLAGS) -o $(BIN).debug $(OBJS) $(LIBPHOENIX) $(GCCLIB)
+jffs2: $(OBJS) $(LIBS)
+	$(SIL)$(LD) $(LDFLAGS) -o $(BIN) $^ $(LDLIBS)
+#	$(STRIP) $(BIN)
 
 clean:
 	rm -f *.o os-phoenix/*.o *~ core
