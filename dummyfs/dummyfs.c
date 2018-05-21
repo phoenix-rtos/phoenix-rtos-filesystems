@@ -238,8 +238,11 @@ int dummyfs_unlink(oid_t *dir, const char *name)
 
 	object_lock(d);
 
-	if (dir_find(d, name, &oid) < 0)
+	if (dir_find(d, name, &oid) < 0) {
+		object_unlock(d);
+		object_put(d);
 		return -ENOENT;
+	}
 
 	o = object_get(oid.id);
 
