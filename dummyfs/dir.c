@@ -44,12 +44,14 @@ int dir_find(dummyfs_object_t *dir, const char *name, oid_t *res)
 	do {
 		if (!strcmp(e->name, dirname)) {
 			memcpy(res, &e->oid, sizeof(oid_t));
+			free(dirname);
 			return len;
 		}
 
 		e = e->next;
 	} while (e != dir->entries);
 
+	free(dirname);
 	return -ENOENT;
 }
 
