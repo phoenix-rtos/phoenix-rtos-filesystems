@@ -191,8 +191,10 @@ int dummyfs_read(oid_t *oid, offs_t offs, char *buff, unsigned int len)
 	if (buff == NULL)
 		ret = -EINVAL;
 
-	if (o->size <= offs)
-		ret = -EINVAL;
+	if (o->size <= offs) {
+		object_put(o);
+		return 0;
+	}
 
 	if (ret != EOK) {
 		object_put(o);
