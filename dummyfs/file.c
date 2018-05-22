@@ -159,6 +159,7 @@ int dummyfs_truncate(oid_t *oid, unsigned int size)
 		}
 		if (size == 0) {
 			dummyfs_decsz(sizeof(dummyfs_chunk_t) + trash->size);
+			o->chunks = NULL;
 			free(trash->data);
 			free(trash);
 		}
