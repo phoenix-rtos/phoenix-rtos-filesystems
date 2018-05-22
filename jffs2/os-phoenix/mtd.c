@@ -20,6 +20,9 @@
 
 jffs2_common_t jffs2_common;
 
+#define MTD_PAGE_SIZE 4096
+#define MTD_BLOCK_SIZE (64 * MTD_PAGE_SIZE)
+
 int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 			     u_char *buf)
 {
@@ -33,9 +36,8 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 	if (from % mtd->writesize) {
 		if ((err = flashdrv_read(mtd->dma, from / mtd->writesize, mtd->data_buf, mtd->meta_buf))) {
 			if (err != 0xff10)
-				printf("flash read err code 0x%x\n", err);
+				return -1;
 		}
-
 
 		*retlen += mtd->writesize - (from % mtd->writesize);
 		if (*retlen > len)
@@ -126,7 +128,7 @@ int mtd_read_oob(struct mtd_info *mtd, loff_t from, struct mtd_oob_ops *ops)
 	while (ops->oobretlen < ops->ooblen) {
 		if ((ret = flashdrv_read(mtd->dma, from / mtd->writesize, mtd->data_buf, mtd->meta_buf))) {
 			if (ret != 0xff10)
-				printf("some error 0x%x\n", ret);;
+				return -1;
 		}
 
 		memcpy(ops->oobbuf + ops->oobretlen, mtd->meta_buf, ops->ooblen > mtd->oobsize ? mtd->oobsize : ops->ooblen);
@@ -141,7 +143,7 @@ int mtd_read_oob(struct mtd_info *mtd, loff_t from, struct mtd_oob_ops *ops)
 int mtd_write_oob(struct mtd_info *mtd, loff_t to, struct mtd_oob_ops *ops)
 {
 	if (ops->ooblen > mtd->oobsize)
-		printf("OOB TOO LONG\n");
+		return -1;
 
 	memset(mtd->data_buf, 0xff, mtd->writesize);
 	memset(mtd->meta_buf, 0xff, sizeof(flashdrv_meta_t));
@@ -225,10 +227,8 @@ int mtd_block_isbad(struct mtd_info *mtd, loff_t ofs)
 	if (flashdrv_readraw(mtd->dma, ofs / mtd->writesize, mtd->data_buf, mtd->writesize + 224))
 		return -1;
 
-	if(!((char *)mtd->data_buf)[0]) {
-	//	printf("block is bad\n");
+	if(!((char *)mtd->data_buf)[0])
 		return 1;
-	}
 
 	return 0;
 }
@@ -253,10 +253,10 @@ struct dentry *mount_mtd(struct file_system_type *fs_type, int flags,
 	mtd->name = "micron";
 	mtd->dma = dma;
 	mtd->type = MTD_NANDFLASH;
-	mtd->erasesize = 64 * 4096;
-	mtd->writesize = 4096;
+	mtd->erasesize = MTD_BLOCK_SIZE;
+	mtd->writesize = MTD_PAGE_SIZE;
 	mtd->flags = MTD_WRITEABLE;
-	mtd->size = 64 * 4096 * 5;
+	mtd->size = MTD_BLOCK_SIZE * 5;
 	mtd->oobsize = 16;
 	mtd->oobavail = 16;
 

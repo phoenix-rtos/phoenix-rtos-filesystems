@@ -88,6 +88,7 @@ struct inode * iget_locked(struct super_block *sb, unsigned long ino)
 		inode->i_ino = ino;
 		inode->i_state = I_NEW;
 		inode->i_sb = sb;
+		inode->i_count = 1;
 		inode->i_mapping = malloc(sizeof(struct address_space));
 		object_create(0, inode);
 	}
@@ -96,10 +97,17 @@ struct inode * iget_locked(struct super_block *sb, unsigned long ino)
 
 void iput(struct inode *inode)
 {
+	jffs2_object_t *o = object_get(inode->i_ino);
+
+	inode->i_count--;
+	o->refs--;
+
+	object_put(o);
 }
 
 void clear_inode(struct inode *inode)
 {
+
 }
 
 bool is_bad_inode(struct inode *inode)

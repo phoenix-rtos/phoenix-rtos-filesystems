@@ -17,44 +17,49 @@
 #ifndef _OS_PHOENIX_DENTRY_H_
 #define _OS_PHOENIX_DENTRY_H_
 
+
 struct qstr {
 	u32 len;
 	u32 hash;
 	const unsigned char *name;
 };
 
+
 struct dentry {
 	struct qstr d_name;
 	struct inode *d_inode;
 	struct super_block *d_sb;	/* The root of the dentry tree */
-	struct dentry *d_parent;
-	u64 pino;
 };
+
 
 static inline struct inode *d_inode(const struct dentry *dentry)
 {
 	return dentry->d_inode;
 }
 
+
 struct dentry * d_splice_alias(struct inode *inode, struct dentry *dentry);
 
+
 void d_invalidate(struct dentry *dentry);
+
 
 static inline bool d_really_is_positive(const struct dentry *dentry)
 {
 	return dentry->d_inode != NULL;
 }
 
+
 void d_instantiate(struct dentry *dentry, struct inode *inode);
 
-static inline bool d_is_dir(const struct dentry *dentry)
-{
-		return 1;
-}
+
+bool d_is_dir(const struct dentry *dentry);
+
 
 struct dentry * d_make_root(struct inode *inode);
 
 
 extern struct dentry *d_obtain_alias(struct inode *);
+
 
 #endif /* _OS_PHOENIX_DENTRY_H_ */

@@ -103,16 +103,11 @@ struct file_operations {
 
 struct address_space {
 	struct inode							*host;		/* owner: inode, block_device */
-//	struct radix_tree_root	page_tree;	/* radix tree of all pages */
 	spinlock_t								tree_lock;	/* and lock protecting it */
 	atomic_t								i_mmap_writable;/* count VM_SHARED mappings */
 	struct rb_root							i_mmap;		/* tree of private and shared mappings */
-//	struct rw_semaphore	i_mmap_rwsem;	/* protect tree, count, list */
-	/* Protected by tree_lock together with the radix tree */
 	unsigned long							nrpages;	/* number of total pages */
-	/* number of shadow or DAX exceptional entries */
 	unsigned long							nrexceptional;
-//	pgoff_t			writeback_index;/* writeback starts here */
 	const struct address_space_operations 	*a_ops;	/* methods */
 	unsigned long							flags;		/* error bits/gfp mask */
 	spinlock_t								private_lock;	/* for use by the address_space */
@@ -286,11 +281,6 @@ struct iattr {
 	struct timespec	ia_mtime;
 	struct timespec	ia_ctime;
 
-	/*
-	 * Not an attribute, but an auxiliary info for filesystems wanting to
-	 * implement an ftruncate() like method.  NOTE: filesystem should
-	 * check for (ia_valid & ATTR_FILE), and not for (ia_file != NULL).
-	 */
 	struct file	*ia_file;
 };
 
@@ -350,13 +340,13 @@ void make_bad_inode(struct inode *inode);
  */
 static inline uid_t i_uid_read(const struct inode *inode)
 {
-	return 0;//inode->i_uid;
+	return inode->i_uid.val;
 }
 
 
 static inline gid_t i_gid_read(const struct inode *inode)
 {
-	return 0;//inode->i_gid;
+	return inode->i_gid.val;
 }
 
 static inline void i_uid_write(struct inode *inode, uid_t uid)

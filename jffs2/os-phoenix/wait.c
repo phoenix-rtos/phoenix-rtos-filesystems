@@ -59,6 +59,7 @@ static void delayed_work_starter(void *arg)
 
 	mutexLock(dwork->work.lock);
 	if (dwork->work.state == WORK_CANCEL) {
+		condSignal(dwork->work.cond);
 		mutexUnlock(dwork->work.lock);
 		return;
 	}
@@ -94,7 +95,7 @@ bool queue_delayed_work(struct workqueue_struct *wq,
 bool cancel_delayed_work_sync(struct delayed_work *dwork)
 {
 	mutexLock(dwork->work.lock);
-	if (dwork->work.state == WORK_PENDING) {
+	if (dwork->work.state != WORK_CANCEL) {
 		dwork->work.state = WORK_CANCEL;
 		condWait(dwork->work.cond, dwork->work.lock, 0);
 	}

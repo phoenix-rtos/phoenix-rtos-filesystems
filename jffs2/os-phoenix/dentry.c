@@ -16,6 +16,7 @@
 #include "../os-phoenix.h"
 #include "dentry.h"
 
+
 struct dentry * d_splice_alias(struct inode *inode, struct dentry *dentry)
 {
 	if (inode != NULL) {
@@ -25,15 +26,20 @@ struct dentry * d_splice_alias(struct inode *inode, struct dentry *dentry)
 	return NULL;
 }
 
+
 void d_invalidate(struct dentry *dentry)
 {
-	return;
+	dentry->d_inode = NULL;
+	dentry->d_sb = NULL;
 }
+
 
 void d_instantiate(struct dentry *dentry, struct inode *inode)
 {
-
+	dentry->d_inode = inode;
+	dentry->d_sb = inode->i_sb;
 }
+
 
 struct dentry * d_make_root(struct inode *inode)
 {
@@ -50,6 +56,12 @@ struct dentry * d_make_root(struct inode *inode)
 }
 
 
+bool d_is_dir(const struct dentry *dentry)
+{
+	return S_ISDIR(d_inode(dentry)->i_mode);
+}
+
+//not used
 struct dentry *d_obtain_alias(struct inode *inode)
 {
 	return NULL;

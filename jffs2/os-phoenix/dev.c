@@ -23,20 +23,20 @@ int old_valid_dev(dev_t dev)
 
 int old_encode_dev(dev_t dev)
 {
-	return 0;
+	return dev;
 }
 
 int new_encode_dev(dev_t dev)
 {
-	return 0;
+	return dev;
 }
 
-dev_t old_decode_dev(u16 val)
+dev_t old_decode_dev(u16 dev)
 {
-	return 0;
+	return dev;
 }
 
 dev_t new_decode_dev(u32 dev)
 {
-	return 0;
+	return dev;
 }

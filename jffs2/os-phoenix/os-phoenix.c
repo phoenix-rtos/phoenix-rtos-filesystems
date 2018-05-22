@@ -30,14 +30,6 @@ void put_page(struct page *page)
 
 int PageUptodate(struct page *page)
 {
-	/*
-	 * Must ensure that the data we read out of the page is loaded
-	 * _after_ we've loaded page->flags to check for PageUptodate.
-	 * We can skip the barrier if the page is not uptodate, because
-	 * we wouldn't be reading anything from it.
-	 *
-	 * See SetPageUptodate() for the other side of the story.
-	 */
 	return 0;
 }
 
@@ -150,12 +142,6 @@ int kernel_dequeue_signal(siginfo_t *info)
 
 void allow_signal(int sig)
 {
-	/*
-	 * Kernel threads handle their own signals. Let the signal code
-	 * know it'll be handled, so that they don't get converted to
-	 * SIGKILL or just silently dropped.
-	 */
-//	kernel_sigaction(sig, (__force __sighandler_t)2);
 }
 
 

@@ -20,6 +20,7 @@
 #include <sys/msg.h>
 #include <sys/list.h>
 #include <sys/mman.h>
+#include <sys/file.h>
 #include <string.h>
 #include <unistd.h>
 #include <dirent.h>
@@ -34,10 +35,8 @@
 static int jffs2_srv_lookup(oid_t *dir, const char *name, oid_t *res)
 {
 	struct dentry *dentry, *dtemp;
-	jffs2_object_t *o;
 	struct inode *inode = NULL;
 	int len = 0;
-	char *path;
 	char *end;
 
 	if (dir->id == 0)
@@ -107,7 +106,48 @@ static int jffs2_srv_lookup(oid_t *dir, const char *name, oid_t *res)
 
 static int jffs2_srv_setattr(oid_t *oid, int type, int attr)
 {
-	return 0;
+	struct iattr iattr;
+	struct inode *inode;
+	struct jffs2_inode_info *f;
+
+	inode = jffs2_iget(jffs2_common.sb, oid->id);
+	if (IS_ERR(inode))
+		return -ENOENT;
+
+	f = JFFS2_INODE_INFO(inode);
+
+	mutex_lock(&f->sem);
+
+	switch (type) {
+
+		case (atMode): /* mode */
+			iattr.ia_valid = ATTR_MODE;
+			iattr.ia_mode = (inode->i_mode & ~0xffff) | (attr & 0xffff);
+			break;
+
+		case (atUid): /* uid */
+			iattr.ia_valid = ATTR_UID;
+			iattr.ia_uid.val = attr;
+			break;
+
+		case (atGid): /* gid */
+			iattr.ia_valid = ATTR_GID;
+			iattr.ia_gid.val = attr;
+			break;
+
+		case (atSize): /* size */
+			iattr.ia_valid = ATTR_SIZE;
+			iattr.ia_mode = attr;
+			break;
+
+		case (atPort): /* port */
+			inode->i_rdev = attr;
+			break;
+	}
+
+	mutex_unlock(&f->sem);
+
+	return jffs2_do_setattr(inode, &iattr);
 }
 
 
@@ -126,34 +166,34 @@ static int jffs2_srv_getattr(oid_t *oid, int type, int *attr)
 	mutex_lock(&f->sem);
 	switch (type) {
 
-		case (0): /* mode */
+		case (atMode): /* mode */
 			*attr = inode->i_mode;
 			break;
 
-		case (1): /* uid */
+		case (atUid): /* uid */
 			*attr = inode->i_uid.val;
 			break;
 
-		case (2): /* gid */
+		case (atGid): /* gid */
 			*attr = inode->i_gid.val;
 			break;
 
-		case (3): /* size */
+		case (atSize): /* size */
 			*attr = inode->i_size;
 			break;
 
-		case (4): /* type */
+		case (atType): /* type */
 			if (S_ISDIR(inode->i_mode))
-				*attr = 0;
+				*attr = otDir;
 			else if (S_ISREG(inode->i_mode))
-				*attr = 1;
+				*attr = otFile;
 			else if (S_ISCHR(inode->i_mode))
-				*attr = 2;
+				*attr = otDev;
 			else
-				*attr = 3;
+				*attr = otUnknown;
 			break;
 
-		case (5): /* port */
+		case (atPort): /* port */
 			*attr = inode->i_rdev;
 			break;
 	}
@@ -193,7 +233,6 @@ static int jffs2_srv_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsig
 	struct inode *inode;
 	struct file file;
 	struct dir_context ctx = {dir_print, offs, dent, -1};
-	jffs2_object_t *o;
 
 	inode = jffs2_iget(jffs2_common.sb, dir->id);
 
@@ -214,7 +253,6 @@ static int jffs2_srv_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsig
 
 static void jffs2_srv_open(oid_t *oid)
 {
-//	printf("jffs2: open\n");
 }
 
 
@@ -225,14 +263,15 @@ static void jffs2_srv_close(oid_t *oid)
 
 static int jffs2_srv_read(oid_t *oid, offs_t offs, void *data, unsigned long len)
 {
-	jffs2_object_t *o;
 	struct inode *inode;
-	struct jffs2_inode_info *f = JFFS2_INODE_INFO(inode);
-	struct jffs2_sb_info *c = JFFS2_SB_INFO(inode->i_sb);
-	unsigned char *pg_buf;
+	struct jffs2_inode_info *f;
+	struct jffs2_sb_info *c;
 	int ret;
 
 	inode = jffs2_iget(jffs2_common.sb, oid->id);
+
+	f = JFFS2_INODE_INFO(inode);
+	c = JFFS2_SB_INFO(inode->i_sb);
 
 	if (IS_ERR(inode))
 		return -EINVAL;
@@ -241,7 +280,7 @@ static int jffs2_srv_read(oid_t *oid, offs_t offs, void *data, unsigned long len
 	c = JFFS2_SB_INFO(inode->i_sb);
 
 	if (inode->i_size < offs)
-		return -EINVAL;
+		return 0;
 
 	mutex_lock(&f->sem);
 	ret = jffs2_read_inode_range(c, f, data, offs, len);
@@ -262,7 +301,7 @@ static int jffs2_srv_write(oid_t *oid, offs_t offs, void *data, unsigned long le
 
 static int jffs2_srv_truncate(oid_t *oid, unsigned long len)
 {
-	return 0;
+	return jffs2_srv_setattr(oid, 3, len);
 }
 
 

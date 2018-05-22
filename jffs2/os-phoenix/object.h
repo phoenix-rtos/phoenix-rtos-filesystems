@@ -28,17 +28,11 @@ enum {
 typedef struct _jffs2_object_t {
 	oid_t oid;
 	struct inode *inode;
-	struct dentry *dentry;
 
 	u32 refs;
-	u32 type;
-	u8  state;
 
 	rbnode_t node;
 	handle_t lock;
-
-	int rmaxgap;
-	int lmaxgap;
 
 } jffs2_object_t;
 

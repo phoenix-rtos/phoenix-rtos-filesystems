@@ -103,7 +103,7 @@ flashdrv.o: ../../phoenix-rtos-devices/storage/imx6ull-flash/flashdrv.c
 
 jffs2: $(OBJS) $(LIBS)
 	$(SIL)$(LD) $(LDFLAGS) -o $(BIN) $^ $(LDLIBS)
-#	$(STRIP) $(BIN)
+	$(STRIP) $(BIN)
 
 clean:
 	rm -f *.o os-phoenix/*.o *~ core

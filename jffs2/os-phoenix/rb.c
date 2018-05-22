@@ -54,6 +54,12 @@ void rb_insert_color(struct rb_node *rb_node, struct rb_root *rb_root)
 }
 
 
+static inline void rb_set_parent(struct rb_node *node, struct rb_node *parent)
+{
+	node->n.parent = &parent->n;
+}
+
+
 void rb_replace_node(struct rb_node *victim, struct rb_node *new,
 		     struct rb_root *root)
 {
@@ -65,11 +71,11 @@ void rb_replace_node(struct rb_node *victim, struct rb_node *new,
 	/* Set the surrounding nodes to point to the replacement */
 	if (rb_left(victim)) {
 		rb_left(victim)->n.parent = &new->n;
-		//rb_set_parent(victim->rb_left, new);
+		rb_set_parent(victim->rb_left, new);
 	}
 	if (rb_right(victim)) {
 		rb_right(victim)->n.parent = &new->n;
-		//rb_set_parent(victim->rb_right, new);
+		rb_set_parent(victim->rb_right, new);
 	}
 
 	if (parent) {
