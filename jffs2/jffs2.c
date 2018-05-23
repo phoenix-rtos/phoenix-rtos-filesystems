@@ -75,6 +75,7 @@ static int jffs2_srv_lookup(oid_t *dir, const char *name, oid_t *res)
 			len += 2;
 			free(dentry->d_name.name);
 			dentry->d_name.len = 0;
+			inode = jffs2_iget(jffs2_common.sb, res->id);
 			continue;
 		}
 
@@ -144,7 +145,6 @@ static int jffs2_srv_setattr(oid_t *oid, int type, int attr)
 			inode->i_rdev = attr;
 			break;
 	}
-
 	mutex_unlock(&f->sem);
 
 	return jffs2_do_setattr(inode, &iattr);
