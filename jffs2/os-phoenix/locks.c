@@ -32,7 +32,7 @@ void down_read(struct rw_semaphore *sem)
 {
 	mutexLock(sem->lock);
 
-	while (sem->cond < 0) {
+	while (sem->cnt < 0) {
 		sem->wait++;
 		condWait(sem->cond, sem->lock, 0);
 		sem->wait--;
@@ -56,7 +56,7 @@ void up_write(struct rw_semaphore *sem)
 void down_write(struct rw_semaphore *sem)
 {
 	mutexLock(sem->lock);
-	while (sem->cond != 0) {
+	while (sem->cnt != 0) {
 		sem->wait++;
 		condWait(sem->cond, sem->lock, 50000);
 		sem->wait--;
