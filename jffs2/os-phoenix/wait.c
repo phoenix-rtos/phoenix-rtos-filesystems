@@ -54,7 +54,6 @@ void remove_wait_queue(struct wait_queue_head *wq_head, struct wait_queue_entry 
 static void delayed_work_starter(void *arg)
 {
 	struct delayed_work *dwork = (struct delayed_work *)arg;
-
 	usleep(dwork->delay);
 
 	mutexLock(dwork->work.lock);
@@ -73,6 +72,7 @@ static void delayed_work_starter(void *arg)
 		condSignal(dwork->work.cond);
 	dwork->work.state = WORK_DEFAULT;
 	mutexUnlock(dwork->work.lock);
+	endthread();
 }
 
 static char __attribute__((aligned(8))) stack[2048];
@@ -82,6 +82,7 @@ bool queue_delayed_work(struct workqueue_struct *wq,
 				      unsigned long delay)
 {
 	mutexLock(dwork->work.lock);
+	dwork->delay = delay;
 	if (dwork->work.state == WORK_PENDING) {
 		mutexUnlock(dwork->work.lock);
 		return 0;
