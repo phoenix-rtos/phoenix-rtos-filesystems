@@ -174,6 +174,7 @@ const char *simple_get_link(struct dentry *dentry, struct inode *inode, struct d
 
 void truncate_setsize(struct inode *inode, loff_t newsize)
 {
+	inode->i_size = newsize;
 }
 
 void truncate_inode_pages_final(struct address_space *addr_space)

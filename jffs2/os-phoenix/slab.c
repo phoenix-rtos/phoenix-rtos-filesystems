@@ -55,6 +55,7 @@ void kmem_cache_free(struct kmem_cache *kmem_cache, void *ptr)
 void *kmem_cache_alloc(struct kmem_cache *kmem_cache, gfp_t flags)
 {
 	void *object = malloc(kmem_cache->size);
+	memset(object, 0, kmem_cache->size);
 
 	if (kmem_cache->ctor != NULL)
 		kmem_cache->ctor(object);

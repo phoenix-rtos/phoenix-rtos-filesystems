@@ -40,7 +40,7 @@ static inline int mutex_lock_interruptible(struct mutex *lock)
 
 static inline bool mutex_is_locked(struct mutex *lock)
 {
-	return 0;
+	return 1;
 }
 
 
