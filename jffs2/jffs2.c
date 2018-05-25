@@ -81,7 +81,7 @@ static int jffs2_srv_lookup(oid_t *dir, const char *name, oid_t *res)
 
 		dentry->d_name.len = strlen(dentry->d_name.name);
 
-		dtemp = jffs2_lookup(inode, dentry, 0);
+		dtemp = inode->i_op->lookup(inode, dentry, 0);
 
 		if (dtemp == NULL) {
 			free(dentry->d_name.name);
@@ -209,19 +209,101 @@ static int jffs2_srv_getattr(oid_t *oid, int type, int *attr)
 
 static int jffs2_srv_link(oid_t *dir, const char *name, oid_t *oid)
 {
-	return 0;
+	struct inode *idir, *inode;
+	struct dentry *old, *new;
+	int ret;
+
+	if (!dir->id || !oid->id)
+		return -EINVAL;
+
+	if (name == NULL || !strlen(name))
+		return -EINVAL;
+
+	idir = jffs2_iget(jffs2_common.sb, dir->id);
+
+	if (IS_ERR(idir))
+		return -ENOENT;
+
+	inode = jffs2_iget(jffs2_common.sb, oid->id);
+
+	if (IS_ERR(inode)) {
+		iput(idir);
+		return -ENOENT;
+	}
+
+	old = malloc(sizeof(struct dentry));
+	new = malloc(sizeof(struct dentry));
+
+	new->d_name.name = strdup(name);
+	new->d_name.len = strlen(name);
+
+	d_instantiate(old, inode);
+
+	ret = idir->i_op->link(old, idir, new);
+
+	iput(idir);
+	iput(inode);
+
+	free(old);
+	free(new->d_name.name);
+	free(new);
+
+	return ret;
 }
 
 
 static int jffs2_srv_unlink(oid_t *dir, const char *name)
 {
-	return 0;
+	struct inode *idir, *inode;
+	struct dentry *dentry;
+	oid_t oid;
+	int ret;
+
+	if (!dir->id)
+		return -EINVAL;
+
+	if (name == NULL || !strlen(name))
+		return -EINVAL;
+
+	idir = jffs2_iget(jffs2_common.sb, dir->id);
+
+	if (IS_ERR(idir))
+		return -ENOENT;
+
+	if (jffs2_srv_lookup(dir, name, &oid) != EOK) {
+		iput(idir);
+		return -ENOENT;
+	}
+
+	inode = jffs2_iget(jffs2_common.sb, oid.id);
+
+	if (IS_ERR(inode)) {
+		iput(idir);
+		return -ENOENT;
+	}
+
+	dentry = malloc(sizeof(struct dentry));
+
+	dentry->d_name.name = strdup(name);
+	dentry->d_name.len = strlen(name);
+
+	d_instantiate(dentry, inode);
+
+	ret = idir->i_op->unlink(idir, dentry);
+
+	iput(idir);
+	iput(inode);
+
+	free(dentry->d_name.name);
+	free(dentry);
+
+	return ret;
 }
 
 
 static int jffs2_srv_create(oid_t *oid, int type, int mode, u32 port)
 {
-	return EOK;
+	return -1;
 }
 
 
@@ -331,6 +413,7 @@ int main(void)
 		return -1;
 	}
 
+	toid.id = 1;
 	/* Try to mount fs as root */
 	if (portRegister(jffs2_common.port, "/", &toid) < 0) {
 		printf("jffs2: Can't mount on directory %s\n", "/");
@@ -370,7 +453,7 @@ int main(void)
 				break;
 
 			case mtCreate:
-				jffs2_srv_create(&msg.o.create.oid, msg.i.create.type, msg.i.create.mode, msg.i.create.port);
+				msg.o.create.err = jffs2_srv_create(&msg.o.create.oid, msg.i.create.type, msg.i.create.mode, msg.i.create.port);
 				break;
 
 			case mtDestroy:
