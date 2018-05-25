@@ -75,7 +75,7 @@ static void delayed_work_starter(void *arg)
 	endthread();
 }
 
-static char __attribute__((aligned(8))) stack[2048];
+static char __attribute__((aligned(8))) dw_stack[4096];
 
 bool queue_delayed_work(struct workqueue_struct *wq,
 				      struct delayed_work *dwork,
@@ -89,7 +89,7 @@ bool queue_delayed_work(struct workqueue_struct *wq,
 	}
 	mutexUnlock(dwork->work.lock);
 
-	beginthread(delayed_work_starter, 3, &stack, 2048, dwork);
+	beginthread(delayed_work_starter, 3, &dw_stack, 4096, dwork);
 	return 1;
 }
 

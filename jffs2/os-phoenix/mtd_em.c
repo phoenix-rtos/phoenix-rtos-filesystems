@@ -24,6 +24,8 @@ typedef struct _ecc_t {
 	char meta[16];
 } ecc_t;
 
+jffs2_common_t jffs2_common;
+
 static void *nand_em;
 static ecc_t ecc[256];
 
@@ -34,8 +36,8 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 {
 
 	*retlen = 0;
-
-	printf("mtd_read offs 0x%x, len 0x%x\n", from, len);
+	memset(buf, 0, len);
+//	printf("mtd_read offs 0x%x, len 0x%x\n", from, len);
 	if (!len)
 		return 0;
 
@@ -48,7 +50,6 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 int mtd_write(struct mtd_info *mtd, loff_t to, size_t len, size_t *retlen,
 	      const u_char *buf)
 {
-	printf("mtd_write offs 0x%x, len 0x%x\n", to, len);
 	if (!len)
 		return 0;
 
@@ -181,8 +182,6 @@ struct dentry *mount_mtd(struct file_system_type *fs_type, int flags,
 		if (offs == 1048576)
 			break;
 	}
-	printf("reading done: offs = %d\n", offs);
-	printf("show value for 0x13b0 0x%x\n", *(u16 *)(nand_em + 0x13b0));
 	mtd = malloc(sizeof(struct mtd_info));
 
 	mtd->name = "nand emulator";
@@ -199,6 +198,7 @@ struct dentry *mount_mtd(struct file_system_type *fs_type, int flags,
 
 	printf("fill super\n");
 	fill_super(sb, NULL, 0);
+	jffs2_common.sb = sb;
 	return sb->s_root;
 }
 

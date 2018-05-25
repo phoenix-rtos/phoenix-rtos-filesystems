@@ -138,7 +138,7 @@ static int jffs2_srv_setattr(oid_t *oid, int type, int attr)
 
 		case (atSize): /* size */
 			iattr.ia_valid = ATTR_SIZE;
-			iattr.ia_mode = attr;
+			iattr.ia_size = attr;
 			break;
 
 		case (atPort): /* port */
@@ -155,6 +155,9 @@ static int jffs2_srv_getattr(oid_t *oid, int type, int *attr)
 {
 	struct inode *inode;
 	struct jffs2_inode_info *f;
+
+	if (!oid->id)
+		return -EINVAL;
 
 	inode = jffs2_iget(jffs2_common.sb, oid->id);
 
@@ -234,6 +237,9 @@ static int jffs2_srv_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsig
 	struct file file;
 	struct dir_context ctx = {dir_print, offs, dent, -1};
 
+	if (!dir->id)
+		return -EINVAL;
+
 	inode = jffs2_iget(jffs2_common.sb, dir->id);
 
 	if (IS_ERR(inode))
@@ -268,6 +274,9 @@ static int jffs2_srv_read(oid_t *oid, offs_t offs, void *data, unsigned long len
 	struct jffs2_sb_info *c;
 	int ret;
 
+	if (!oid->id)
+		return -EINVAL;
+
 	inode = jffs2_iget(jffs2_common.sb, oid->id);
 
 	f = JFFS2_INODE_INFO(inode);
@@ -287,8 +296,9 @@ static int jffs2_srv_read(oid_t *oid, offs_t offs, void *data, unsigned long len
 	mutex_unlock(&f->sem);
 
 	if (!ret)
-		return len;
+		return len > inode->i_size - offs ? inode->i_size - offs : len;
 
+	printf("jffs2: read error %d\n", ret);
 	return ret;
 }
 

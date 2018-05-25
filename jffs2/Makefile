@@ -102,8 +102,8 @@ flashdrv.o: ../../phoenix-rtos-devices/storage/imx6ull-flash/flashdrv.c
 	@(printf " CC    %-24s  \n" "$<"; $(CC) -c $(CFLAGS) "$<" -o "$@")
 
 jffs2: $(OBJS) $(LIBS)
-	$(SIL)$(LD) $(LDFLAGS) -o $(BIN) $^ $(LDLIBS)
-	$(STRIP) $(BIN)
+	$(SIL)$(LD) $(LDFLAGS) -o $(BIN)_unstripped $^ $(LDLIBS)
+	$(STRIP) $(BIN)_unstripped -o $(BIN)
 
 clean:
 	rm -f *.o os-phoenix/*.o *~ core
