@@ -31,6 +31,7 @@
 
 #define JFFS2_ROOT_DIR &jffs2_common.root
 
+extern int jffs2_readdir(struct file *file, struct dir_context *ctx);
 
 static int jffs2_srv_lookup(oid_t *dir, const char *name, oid_t *res)
 {
@@ -93,10 +94,12 @@ static int jffs2_srv_lookup(oid_t *dir, const char *name, oid_t *res)
 		free(dentry->d_name.name);
 		dentry->d_name.len = 0;
 
-		inode = jffs2_iget(jffs2_common.sb, res->id);
+		iput(inode);
+		inode = d_inode(dtemp);
 	}
 
 	free(dentry);
+	iput(inode);
 
 	if (!res->id)
 		return -ENOENT;
@@ -110,6 +113,8 @@ static int jffs2_srv_setattr(oid_t *oid, int type, int attr)
 	struct iattr iattr;
 	struct inode *inode;
 	struct jffs2_inode_info *f;
+	struct dentry dentry;
+	int ret;
 
 	inode = jffs2_iget(jffs2_common.sb, oid->id);
 	if (IS_ERR(inode))
@@ -145,9 +150,15 @@ static int jffs2_srv_setattr(oid_t *oid, int type, int attr)
 			inode->i_rdev = attr;
 			break;
 	}
+
+	d_instantiate(&dentry, inode);
+
 	mutex_unlock(&f->sem);
 
-	return jffs2_do_setattr(inode, &iattr);
+	ret = inode->i_op->setattr(&dentry, &iattr);
+	iput(inode);
+
+	return ret;
 }
 
 
@@ -202,6 +213,7 @@ static int jffs2_srv_getattr(oid_t *oid, int type, int *attr)
 	}
 
 	mutex_unlock(&f->sem);
+	iput(inode);
 
 	return EOK;
 }
@@ -301,7 +313,7 @@ static int jffs2_srv_unlink(oid_t *dir, const char *name)
 }
 
 
-static int jffs2_srv_create(oid_t *oid, int type, int mode, u32 port)
+static int jffs2_srv_create(oid_t *oid, const char *name, int type, int mode, u32 port)
 {
 	return -1;
 }
@@ -334,6 +346,7 @@ static int jffs2_srv_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsig
 	file.f_inode = inode;
 
 	jffs2_readdir(&file, &ctx);
+	iput(inode);
 
 	return ctx.emit;
 }
@@ -378,9 +391,11 @@ static int jffs2_srv_read(oid_t *oid, offs_t offs, void *data, unsigned long len
 	mutex_unlock(&f->sem);
 
 	if (!ret)
-		return len > inode->i_size - offs ? inode->i_size - offs : len;
+		ret = len > inode->i_size - offs ? inode->i_size - offs : len;
+	else
+		printf("jffs2: read error %d\n", ret);
 
-	printf("jffs2: read error %d\n", ret);
+	iput(inode);
 	return ret;
 }
 
@@ -453,7 +468,7 @@ int main(void)
 				break;
 
 			case mtCreate:
-				msg.o.create.err = jffs2_srv_create(&msg.o.create.oid, msg.i.create.type, msg.i.create.mode, msg.i.create.port);
+				msg.o.create.err = jffs2_srv_create(&msg.o.create.oid, msg.i.data, msg.i.create.type, msg.i.create.mode, msg.i.create.port);
 				break;
 
 			case mtDestroy:

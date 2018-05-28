@@ -23,7 +23,7 @@
 #include "nodelist.h"
 
 
-static int jffs2_garbage_collect_thread(void *);
+static void jffs2_garbage_collect_thread(void *);
 
 void jffs2_garbage_collect_trigger(struct jffs2_sb_info *c)
 {
@@ -73,7 +73,7 @@ void jffs2_stop_garbage_collect_thread(struct jffs2_sb_info *c)
 		wait_for_completion(&c->gc_thread_exit);
 }
 
-static int jffs2_garbage_collect_thread(void *_c)
+static void jffs2_garbage_collect_thread(void *_c)
 {
 	struct jffs2_sb_info *c = _c;
 	sigset_t hupmask;

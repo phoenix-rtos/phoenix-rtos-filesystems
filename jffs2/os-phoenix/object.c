@@ -38,12 +38,6 @@ static int object_cmp(rbnode_t *n1, rbnode_t *n2)
 }
 
 
-void object_destroy(jffs2_object_t *o)
-{
-		return;
-}
-
-
 int object_remove(jffs2_object_t *o)
 {
 	mutexLock(jffs2_objects.lock);
@@ -53,6 +47,13 @@ int object_remove(jffs2_object_t *o)
 	mutexUnlock(jffs2_objects.lock);
 
 	return EOK;
+}
+
+
+void object_destroy(jffs2_object_t *o)
+{
+	object_remove(o);
+	free(o);
 }
 
 
@@ -75,7 +76,7 @@ jffs2_object_t *object_create(int type, struct inode *inode)
 	}
 	memset(r, 0, sizeof(jffs2_object_t));
 	r->oid.id = inode->i_ino;
-	r->refs = 1;
+	r->refs = 0;
 	r->inode = inode;
 
 	lib_rbInsert(&jffs2_objects.tree, &r->node);
@@ -101,6 +102,8 @@ jffs2_object_t *object_get(unsigned int id)
 
 void object_put(jffs2_object_t *o)
 {
+	if (o->refs > 0)
+		o->refs--;
 }
 
 

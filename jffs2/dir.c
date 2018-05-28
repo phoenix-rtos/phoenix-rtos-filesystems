@@ -26,13 +26,12 @@
 
 #ifdef __PHOENIX
 int jffs2_readdir(struct file *file, struct dir_context *ctx);
-struct dentry *jffs2_lookup (struct inode *,struct dentry *, unsigned int);
 #else
 static int jffs2_readdir(struct file *file, struct dir_context *ctx);
-static struct dentry *jffs2_lookup (struct inode *,struct dentry *,
-				    unsigned int);
 #endif
 
+static struct dentry *jffs2_lookup (struct inode *,struct dentry *,
+				    unsigned int);
 static int jffs2_create (struct inode *,struct dentry *,umode_t,
 			 bool);
 static int jffs2_link (struct dentry *,struct inode *,struct dentry *);
@@ -79,13 +78,8 @@ const struct inode_operations jffs2_dir_inode_operations =
    and we use the same hash function as the dentries. Makes this
    nice and simple
 */
-#ifdef __PHOENIX
-struct dentry *jffs2_lookup(struct inode *dir_i, struct dentry *target,
-				   unsigned int flags)
-#else
 static struct dentry *jffs2_lookup(struct inode *dir_i, struct dentry *target,
 				   unsigned int flags)
-#endif
 {
 	struct jffs2_inode_info *dir_f;
 	struct jffs2_full_dirent *fd = NULL, *fd_list;

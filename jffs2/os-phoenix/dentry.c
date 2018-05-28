@@ -50,6 +50,7 @@ struct dentry * d_make_root(struct inode *inode)
 		memset(res, 0, sizeof(struct dentry));
 		res->d_inode = inode;
 		res->d_sb = inode->i_sb;
+		inode->i_count = 1;
 	}
 
 	return res;

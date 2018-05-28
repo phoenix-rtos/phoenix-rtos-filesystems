@@ -36,6 +36,7 @@ int jffs2_flash_direct_write(struct jffs2_sb_info *c, loff_t ofs, size_t len,
 	int ret;
 	ret = mtd_write(c->mtd, ofs, len, retlen, buf);
 
+#ifdef CONFIG_JFFS2_SUMMARY
 	if (jffs2_sum_active()) {
 		struct kvec vecs[1];
 		int res;
@@ -48,5 +49,7 @@ int jffs2_flash_direct_write(struct jffs2_sb_info *c, loff_t ofs, size_t len,
 			return res;
 		}
 	}
+#endif
+
 	return ret;
 }

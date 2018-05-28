@@ -128,45 +128,7 @@ struct page {
 		atomic_t compound_mapcount;
 	};
 
-	/* Second double word */
-	struct {
-		union {
-			pgoff_t index;		/* Our offset within mapping. */
-//			void *freelist;		/* sl[aou]b first free object */
-			/* page_deferred_list().prev	-- second tail page */
-		};
-
-//		union {
-			/*
-			 * Keep _count separate from slub cmpxchg_double data.
-			 * As the rest of the double word is protected by
-			 * slab_lock but _count is not.
-			 */
-//			unsigned counters;
-
-//			struct {
-
-//				union {
-					/*
-					 * Count of ptes mapped in mms, to show
-					 * when page is mapped & limit reverse
-					 * map searches.
-					 */
-//					atomic_t _mapcount;
-
-//					struct { /* SLUB */
-//						unsigned inuse:16;
-//						unsigned objects:15;
-//						unsigned frozen:1;
-//					};
-//					int units;	/* SLOB */
-//				};
-//				atomic_t _count;		/* Usage count, see below. */
-//			};
-//			unsigned int active;	/* SLAB */
-//		};
-	};
-
+	pgoff_t index;
 	void *virtual;
 };
 
@@ -403,8 +365,6 @@ extern const struct file_operations jffs2_file_operations;
 extern const struct inode_operations jffs2_dir_inode_operations;
 extern const struct file_operations jffs2_dir_operations;
 
-//#define jffs2_flush_wbuf_gc(c, i) ({ do{} while(0); (void)(c), (void) i, 0; })
-//#define jffs2_flush_wbuf_pad(c) ({ do{} while(0); (void)(c), 0; })
 #define jffs2_wbuf_dirty(c) (!!(c)->wbuf_len)
 #define jffs2_can_mark_obsolete(c) (c->mtd->flags & (MTD_BIT_WRITEABLE))
 #define jffs2_is_readonly(c) (OFNI_BS_2SFFJ(c)->s_flags & SB_RDONLY)

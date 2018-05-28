@@ -57,6 +57,9 @@ void drop_nlink(struct inode *inode)
 
 void ihold(struct inode * inode)
 {
+	inode->i_count++;
+	if (inode->i_count < 2)
+		printf("jffs2: inode #%llu refs < 2\n", inode->i_ino);
 }
 
 struct inode *new_inode(struct super_block *sb)
@@ -79,8 +82,10 @@ struct inode * iget_locked(struct super_block *sb, unsigned long ino)
 	struct inode *inode = NULL;
 	jffs2_object_t *o = object_get(ino);
 
-	if (o != NULL)
+	if (o != NULL) {
+		o->inode->i_count++;
 		return o->inode;
+	}
 
 	inode = new_inode(sb);
 
@@ -95,25 +100,36 @@ struct inode * iget_locked(struct super_block *sb, unsigned long ino)
 	return inode;
 }
 
+
 void iput(struct inode *inode)
 {
 	jffs2_object_t *o = object_get(inode->i_ino);
 
 	inode->i_count--;
 	o->refs--;
-
 	object_put(o);
+
+/*
+   if (!inode->i_count) {
+		object_destroy(o);
+		jffs2_common.sb->s_op->evict_inode(inode);
+		jffs2_common.sb->s_op->destroy_inode(inode);
+	}
+*/
 }
+
 
 void clear_inode(struct inode *inode)
 {
-
+	inode->i_state = I_FREEING | I_CLEAR;
 }
+
 
 bool is_bad_inode(struct inode *inode)
 {
 	return 0;
 }
+
 
 struct inode *ilookup(struct super_block *sb, unsigned long ino)
 {
@@ -125,14 +141,17 @@ struct inode *ilookup(struct super_block *sb, unsigned long ino)
 	return NULL;
 }
 
+
 int insert_inode_locked(struct inode *inode)
 {
 	return 0;
 }
 
+
 void make_bad_inode(struct inode *inode)
 {
 }
+
 
 ssize_t generic_file_splice_read(struct file *filp, loff_t *off,
 		struct pipe_inode_info *piinfo, size_t sz, unsigned int ui) 
@@ -140,10 +159,12 @@ ssize_t generic_file_splice_read(struct file *filp, loff_t *off,
 	return 0;
 }
 
+
 int generic_file_readonly_mmap(struct file *filp, struct vm_area_struct *vma)
 {
 	return 0;
 }
+
 
 ssize_t generic_file_write_iter(struct kiocb *kio, struct iov_iter *iov)
 {
@@ -162,10 +183,12 @@ int generic_file_open(struct inode *inode, struct file *filp)
 	return 0;
 }
 
+
 int file_write_and_wait_range(struct file *file, loff_t start, loff_t end)
 {
 	return 0;
 }
+
 
 const char *simple_get_link(struct dentry *dentry, struct inode *inode, struct delayed_call *dc)
 {
@@ -177,14 +200,17 @@ void truncate_setsize(struct inode *inode, loff_t newsize)
 	inode->i_size = newsize;
 }
 
+
 void truncate_inode_pages_final(struct address_space *addr_space)
 {
 }
+
 
 void inode_init_once(struct inode *inode)
 {
 	memset(inode, 0, sizeof(struct inode));
 }
+
 
 int register_filesystem(struct file_system_type *fs)
 {
@@ -193,6 +219,7 @@ int register_filesystem(struct file_system_type *fs)
 
 	return 0;
 }
+
 
 int unregister_filesystem(struct file_system_type *fs)
 {
@@ -204,6 +231,7 @@ int sync_filesystem(struct super_block *sb)
 {
 	return 0;
 }
+
 
 struct dentry *generic_fh_to_dentry(struct super_block *sb,
 	struct fid *fid, int fh_len, int fh_type,

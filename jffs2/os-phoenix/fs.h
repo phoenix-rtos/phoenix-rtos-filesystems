@@ -46,6 +46,8 @@
 #define I_DIRTY_DATASYNC		(1 << 1)
 #define __I_NEW					3
 #define I_NEW					(1 << __I_NEW)
+#define I_FREEING				(1 << 5)
+#define I_CLEAR					(1 << 6)
 
 struct timespec current_time(struct inode *inode);
 
