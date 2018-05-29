@@ -17,6 +17,7 @@
 #define _OS_PHOENIX_FS_H_
 
 #include <sys/stat.h>
+#include <sys/file.h>
 #include <dirent.h>
 
 #include "../linux/list.h"
@@ -145,9 +146,9 @@ struct inode {
 static inline bool dir_emit_dots(struct file *file, struct dir_context *ctx)
 {
 	if (ctx->pos == 0)
-		return ctx->actor(ctx, ".", 1, ctx->pos, file_inode(file)->i_ino, DT_DIR);
+		return ctx->actor(ctx, ".", 1, ctx->pos, file_inode(file)->i_ino, otDir);
 	else if (ctx->pos == 1)
-		return ctx->actor(ctx, "..", 2, ctx->pos, file->f_pino, DT_DIR);
+		return ctx->actor(ctx, "..", 2, ctx->pos, file->f_pino, otDir);
 	return 1;
 }
 
@@ -158,7 +159,20 @@ static inline int dir_print(struct dir_context *ctx, const char *name, int len, 
 	ctx->dent->d_reclen = 1;
 	ctx->dent->d_namlen = len;
 	ctx->dent->d_ino = ino;
-	ctx->dent->d_type = type;
+	switch (type) {
+		case DT_REG:
+			ctx->dent->d_type = otFile;
+			break;
+		case DT_DIR:
+			ctx->dent->d_type = otDir;
+			break;
+		case DT_CHR:
+		case DT_BLK:
+			ctx->dent->d_type = otDev;
+			break;
+		default:
+			ctx->dent->d_type = otUnknown;
+	}
 	memcpy(ctx->dent->d_name, name, len);
 	ctx->dent->d_name[len] = '\0';
 	return 0;
