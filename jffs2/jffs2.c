@@ -428,6 +428,11 @@ static int jffs2_srv_read(oid_t *oid, offs_t offs, void *data, unsigned long len
 	if (IS_ERR(inode))
 		return -EINVAL;
 
+	if(S_ISDIR(inode->i_mode)) {
+		iput(inode);
+		return -EISDIR;
+	}
+
 	f = JFFS2_INODE_INFO(inode);
 	c = JFFS2_SB_INFO(inode->i_sb);
 
@@ -448,9 +453,144 @@ static int jffs2_srv_read(oid_t *oid, offs_t offs, void *data, unsigned long len
 }
 
 
+
+static int jffs2_srv_prepare_write(struct inode *inode, loff_t offs, unsigned long len)
+{
+	struct jffs2_inode_info *f = JFFS2_INODE_INFO(inode);
+	struct jffs2_sb_info *c = JFFS2_SB_INFO(inode->i_sb);
+	struct jffs2_raw_inode ri;
+	struct jffs2_full_dnode *fn;
+	uint32_t alloc_len;
+	int ret;
+
+	if (len > inode->i_size) {
+
+		jffs2_dbg(1, "Writing new hole frag 0x%x-0x%x between current EOF and new page\n",
+			  (unsigned int)inode->i_size, len);
+
+		ret = jffs2_reserve_space(c, sizeof(ri), &alloc_len,
+					  ALLOC_NORMAL, JFFS2_SUMMARY_INODE_SIZE);
+		if (ret)
+			return ret;
+
+		mutex_lock(&f->sem);
+		memset(&ri, 0, sizeof(ri));
+
+		ri.magic = cpu_to_je16(JFFS2_MAGIC_BITMASK);
+		ri.nodetype = cpu_to_je16(JFFS2_NODETYPE_INODE);
+		ri.totlen = cpu_to_je32(sizeof(ri));
+		ri.hdr_crc = cpu_to_je32(crc32(0, &ri, sizeof(struct jffs2_unknown_node) - 4));
+
+		ri.ino = cpu_to_je32(f->inocache->ino);
+		ri.version = cpu_to_je32(++f->highest_version);
+		ri.mode = cpu_to_jemode(inode->i_mode);
+		ri.uid = cpu_to_je16(i_uid_read(inode));
+		ri.gid = cpu_to_je16(i_gid_read(inode));
+		ri.isize = cpu_to_je32(max((uint32_t)inode->i_size, len));
+		ri.atime = ri.ctime = ri.mtime = cpu_to_je32(get_seconds());
+		ri.offset = cpu_to_je32(inode->i_size);
+		ri.dsize = cpu_to_je32(len - inode->i_size);
+		ri.csize = cpu_to_je32(0);
+		ri.compr = JFFS2_COMPR_ZERO;
+		ri.node_crc = cpu_to_je32(crc32(0, &ri, sizeof(ri)-8));
+		ri.data_crc = cpu_to_je32(0);
+
+		fn = jffs2_write_dnode(c, f, &ri, NULL, 0, ALLOC_NORMAL);
+
+		if (IS_ERR(fn)) {
+			ret = PTR_ERR(fn);
+			jffs2_complete_reservation(c);
+			mutex_unlock(&f->sem);
+			return ret;
+		}
+
+		ret = jffs2_add_full_dnode_to_inode(c, f, fn);
+
+		if (f->metadata) {
+			jffs2_mark_node_obsolete(c, f->metadata->raw);
+			jffs2_free_full_dnode(f->metadata);
+			f->metadata = NULL;
+		}
+
+		if (ret) {
+			jffs2_dbg(1, "Eep. add_full_dnode_to_inode() failed in write_begin, returned %d\n",
+				  ret);
+			jffs2_mark_node_obsolete(c, fn->raw);
+			jffs2_free_full_dnode(fn);
+			jffs2_complete_reservation(c);
+			mutex_unlock(&f->sem);
+
+			return ret;
+		}
+		jffs2_complete_reservation(c);
+		inode->i_size = len;
+		mutex_unlock(&f->sem);
+	}
+
+	return 0;
+}
+
 static int jffs2_srv_write(oid_t *oid, offs_t offs, void *data, unsigned long len)
 {
-	return 0;
+	struct inode *inode;
+	struct jffs2_inode_info *f;
+	struct jffs2_sb_info *c;
+	struct jffs2_raw_inode *ri;
+	uint32_t writelen = 0;
+	int ret;
+
+	if (!oid->id)
+		return -EINVAL;
+
+	ri = jffs2_alloc_raw_inode();
+
+	if (ri == NULL) {
+		return -ENOMEM;
+	}
+
+	inode = jffs2_iget(jffs2_common.sb, oid->id);
+
+	f = JFFS2_INODE_INFO(inode);
+	c = JFFS2_SB_INFO(inode->i_sb);
+
+	if (IS_ERR(inode))
+		return -EINVAL;
+
+	if(S_ISDIR(inode->i_mode)) {
+		iput(inode);
+		return -EISDIR;
+	}
+
+	if ((ret = jffs2_srv_prepare_write(inode, offs, len))) {
+		jffs2_free_raw_inode(ri);
+		iput(inode);
+		return ret;
+	}
+
+	f = JFFS2_INODE_INFO(inode);
+	c = JFFS2_SB_INFO(inode->i_sb);
+
+	ri->ino = cpu_to_je32(inode->i_ino);
+	ri->mode = cpu_to_jemode(inode->i_mode);
+	ri->uid = cpu_to_je16(i_uid_read(inode));
+	ri->gid = cpu_to_je16(i_gid_read(inode));
+	ri->isize = cpu_to_je32((uint32_t)inode->i_size);
+	ri->atime = ri->ctime = ri->mtime = cpu_to_je32(get_seconds());
+
+	ret = jffs2_write_inode_range(c, f, ri, data, offs, len, &writelen);
+
+	if (!ret) {
+		if (writelen > inode->i_size) {
+			inode->i_size = writelen;
+			inode->i_blocks = (inode->i_size + 511) >> 9;
+			inode->i_ctime = inode->i_mtime = ITIME(je32_to_cpu(ri->ctime));
+		}
+	} else
+		printf("jffs2: read error %d\n", ret);
+
+	jffs2_free_raw_inode(ri);
+	iput(inode);
+	return ret;
 }
 
 
