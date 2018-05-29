@@ -25,7 +25,6 @@ jffs2_common_t jffs2_common;
 int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 			     u_char *buf)
 {
-
 	int err;
 	*retlen = 0;
 

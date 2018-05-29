@@ -59,7 +59,7 @@ static inline void rb_set_parent(struct rb_node *node, struct rb_node *parent)
 	node->n.parent = &parent->n;
 }
 
-
+/* functions below are taken from Linux kernel */
 void rb_replace_node(struct rb_node *victim, struct rb_node *new,
 		     struct rb_root *root)
 {

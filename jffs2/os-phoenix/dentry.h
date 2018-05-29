@@ -20,7 +20,6 @@
 
 struct qstr {
 	u32 len;
-	u32 hash;
 	const unsigned char *name;
 };
 

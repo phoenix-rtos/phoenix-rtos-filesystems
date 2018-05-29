@@ -61,29 +61,14 @@ extern void down_write(struct rw_semaphore *sem);
 
 #define MAX_LOCKDEP_SUBCLASSES		8UL
 
-/*
- * Lock-classes are keyed via unique addresses, by embedding the
- * lockclass-key into the kernel (or module) .data section. (For
- * static locks we use the lock address itself as the key.)
- */
 struct lockdep_subclass_key {
-	char __one_byte;
-} __attribute__ ((__packed__));
+};
 
 struct lock_class_key {
 	struct lockdep_subclass_key	subkeys[MAX_LOCKDEP_SUBCLASSES];
 };
 
-
-extern void __init_rwsem(struct rw_semaphore *sem, const char *name,
-			 struct lock_class_key *key);
-
-#define init_rwsem(sem)						\
-do {								\
-	static struct lock_class_key __key;			\
-								\
-	__init_rwsem((sem), #sem, &__key);			\
-} while (0)
+void init_rwsem(struct rw_semaphore *sem);
 
 #define mutex_init(x) mutexCreate(&((x)->h))
 

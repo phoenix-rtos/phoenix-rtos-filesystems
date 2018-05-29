@@ -162,14 +162,6 @@ void kernel_signal_stop(void)
 
 void siginitset(sigset_t *set, unsigned long mask)
 {
-	set->sig[0] = mask;
-	switch (_NSIG_WORDS) {
-	default:
-		memset(&set->sig[1], 0, sizeof(long)*(_NSIG_WORDS-1));
-		break;
-	case 2: set->sig[1] = 0;
-	case 1: ;
-	}
 }
 
 int sigprocmask(int how, sigset_t *set, sigset_t *oldset)
@@ -236,6 +228,7 @@ void kunmap(struct page *page)
 {
 }
 
+//taken form Linux kernel
 unsigned int full_name_hash(void *salt, const char * name, unsigned int len)
 {
 	unsigned hash = 0;

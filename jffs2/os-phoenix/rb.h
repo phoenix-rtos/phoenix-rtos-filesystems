@@ -83,6 +83,8 @@ struct rb_node *rb_next_postorder(const struct rb_node *node);
 
 struct rb_node *rb_first_postorder(const struct rb_root *root);
 
+
+/* macros below are taken from Linux kernel */
 #define rb_entry_safe(ptr, type, member) \
 	({ typeof(ptr) ____ptr = (ptr); \
 	   ____ptr ? rb_entry(____ptr, type, member) : NULL; \

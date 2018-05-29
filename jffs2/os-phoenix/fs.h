@@ -13,6 +13,9 @@
  * %LICENSE%
  */
 
+
+/* Some parts of this file are copied from Linux kernel */
+
 #ifndef _OS_PHOENIX_FS_H_
 #define _OS_PHOENIX_FS_H_
 

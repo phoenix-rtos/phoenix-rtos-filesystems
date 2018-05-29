@@ -16,7 +16,7 @@
 #include "../os-phoenix.h"
 #include "crc32.h"
 
-
+//taken from Linux kernel
 u32 crc32(u32 crc, void *p, size_t len)
 {
 	int i;

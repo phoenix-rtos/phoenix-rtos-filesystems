@@ -65,8 +65,7 @@ void down_write(struct rw_semaphore *sem)
 	mutexUnlock(sem->lock);
 }
 
-void __init_rwsem(struct rw_semaphore *sem, const char *name,
-			 struct lock_class_key *key)
+void init_rwsem(struct rw_semaphore *sem)
 {
 	if (sem == NULL)
 		return;
