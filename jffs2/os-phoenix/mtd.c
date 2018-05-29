@@ -15,7 +15,6 @@
 
 #include "../os-phoenix.h"
 
-
 #include "mtd.h"
 
 jffs2_common_t jffs2_common;

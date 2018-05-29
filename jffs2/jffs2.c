@@ -50,6 +50,11 @@ static int jffs2_srv_lookup(oid_t *dir, const char *name, oid_t *res)
 	if (IS_ERR(inode))
 		return -EINVAL;
 
+	if (!S_ISDIR(inode->i_mode)) {
+		iput(inode);
+		return -ENOTDIR;
+	}
+
 	dentry = malloc(sizeof(struct dentry));
 	res->port = jffs2_common.port;
 
@@ -313,9 +318,52 @@ static int jffs2_srv_unlink(oid_t *dir, const char *name)
 }
 
 
-static int jffs2_srv_create(oid_t *oid, const char *name, int type, int mode, u32 port)
+static int jffs2_srv_create(oid_t *dir, const char *name, oid_t *oid, int type, int mode, u32 port)
 {
-	return -1;
+	oid_t toid = { 0 };
+	struct inode *idir;
+	struct dentry *dentry;
+	int ret = 0;
+
+	idir = jffs2_iget(jffs2_common.sb, dir->id);
+
+	if (IS_ERR(idir))
+		return -ENOENT;
+
+	if (!S_ISDIR(idir->i_mode)) {
+		iput(idir);
+		return -ENOTDIR;
+	}
+
+	if ((ret = jffs2_srv_lookup(dir, name, &toid)) == EOK) {
+		iput(idir);
+		return -EEXIST;
+	}
+
+	dentry = malloc(sizeof(struct dentry));
+	dentry->d_name.name = strdup(name);
+	dentry->d_name.len = strlen(name);
+
+	switch (type) {
+		case otFile:
+			mode = S_IFREG | S_IRWXU | S_IRWXG | S_IRWXO;
+			oid->port = jffs2_common.port;
+			ret = idir->i_op->create(idir, dentry, mode, 0);
+			break;
+		case otDir:
+			oid->port = jffs2_common.port;
+			ret = idir->i_op->mkdir(idir, dentry, mode);
+		default:
+			ret = -EINVAL;
+			break;
+	}
+
+	iput(idir);
+
+	if (!ret)
+		oid->id = d_inode(dentry)->i_ino;
+
+	return ret;
 }
 
 
@@ -468,7 +516,7 @@ int main(void)
 				break;
 
 			case mtCreate:
-				msg.o.create.err = jffs2_srv_create(&msg.o.create.oid, msg.i.data, msg.i.create.type, msg.i.create.mode, msg.i.create.port);
+				msg.o.create.err = jffs2_srv_create(&msg.i.create.dir, msg.i.data, &msg.o.create.oid, msg.i.create.type, msg.i.create.mode, msg.i.create.port);
 				break;
 
 			case mtDestroy:

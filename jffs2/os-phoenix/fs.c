@@ -64,7 +64,17 @@ void ihold(struct inode * inode)
 
 struct inode *new_inode(struct super_block *sb)
 {
-	return sb->s_op->alloc_inode(sb);
+	struct inode *inode;
+
+   inode = sb->s_op->alloc_inode(sb);
+
+	if (inode != NULL) {
+		inode->i_sb = sb;
+		inode->i_count = 1;
+		inode->i_mapping = malloc(sizeof(struct address_space));
+		inode->i_state = I_NEW;
+	}
+	return inode;
 }
 
 void unlock_new_inode(struct inode *inode)
@@ -91,10 +101,6 @@ struct inode * iget_locked(struct super_block *sb, unsigned long ino)
 
 	if (inode != NULL) {
 		inode->i_ino = ino;
-		inode->i_state = I_NEW;
-		inode->i_sb = sb;
-		inode->i_count = 1;
-		inode->i_mapping = malloc(sizeof(struct address_space));
 		object_create(0, inode);
 	}
 	return inode;
@@ -144,6 +150,12 @@ struct inode *ilookup(struct super_block *sb, unsigned long ino)
 
 int insert_inode_locked(struct inode *inode)
 {
+	jffs2_object_t *o = object_get(inode->i_ino);
+
+	if (o == NULL)
+		o = object_create(0, inode);
+
+	object_put(o);
 	return 0;
 }
 

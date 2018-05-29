@@ -18,7 +18,6 @@
 #include "../os-phoenix.h"
 #include "wait.h"
 
-struct workqueue_struct *system_long_wq = NULL;
 
 void wake_up(wait_queue_head_t *wq_head)
 {
@@ -82,14 +81,16 @@ bool queue_delayed_work(struct workqueue_struct *wq,
 				      unsigned long delay)
 {
 	mutexLock(dwork->work.lock);
-	dwork->delay = delay;
 	if (dwork->work.state == WORK_PENDING) {
 		mutexUnlock(dwork->work.lock);
 		return 0;
 	}
+
+	dwork->delay = delay;
+	dwork->work.state = WORK_PENDING;
 	mutexUnlock(dwork->work.lock);
 
-	beginthread(delayed_work_starter, 3, &dw_stack, 4096, dwork);
+	beginthread(delayed_work_starter, 4, &dw_stack, 4096, dwork);
 	return 1;
 }
 

@@ -47,7 +47,6 @@
 
 
 struct delayed_call {
-	int todo;
 };
 
 
@@ -56,27 +55,22 @@ struct vm_area_struct {
 
 
 struct pipe_inode_info {
-	int todo;
 };
 
 
 struct kiocb {
-	int todo;
 };
 
 
 struct iov_iter {
-	int todo;
 };
 
 
 struct kstat {
-	int todo;
 };
 
 
 struct path {
-	int todo;
 };
 
 
@@ -468,16 +462,18 @@ struct jffs2_inode_info;
 
 extern struct workqueue_struct *system_long_wq;
 
+#include "jffs2_fs_i.h"
+
 static inline void jffs2_init_inode_info(struct jffs2_inode_info *f)
 {
-/*	f->highest_version = 0;
+	f->highest_version = 0;
 	f->fragtree = RB_ROOT;
 	f->metadata = NULL;
 	f->dents = NULL;
 	f->target = NULL;
 	f->flags = 0;
 	f->usercompr = 0;
-*/
+
 }
 
 
@@ -564,8 +560,11 @@ typedef struct _jffs2_common_t {
 	u32 port;
 	oid_t root;
 	struct super_block *sb;
+	struct workqueue_struct *system_long_wq;
 } jffs2_common_t;
 
 extern jffs2_common_t jffs2_common;
+
+#define system_long_wq jffs2_common.system_long_wq
 
 #endif /* _OS_PHOENIX_H_ */

@@ -45,8 +45,11 @@ void wake_up(wait_queue_head_t *wq_head);
 // work queues
 
 struct workqueue_struct {
-	int todo;
 };
+
+static inline void init_workqueue(struct workqueue_struct *wq)
+{
+}
 
 struct work_struct;
 typedef void (*work_func_t)(struct work_struct *work);
