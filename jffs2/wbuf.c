@@ -11,17 +11,8 @@
  *
  */
 
-//#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include "os-phoenix.h"
-//#include <linux/kernel.h>
-//#include <linux/slab.h>
-//#include <linux/mtd/mtd.h>
-//#include <linux/crc32.h>
-//#include <linux/mtd/rawnand.h>
-//#include <linux/jiffies.h>
-//#include <linux/sched.h>
-//#include <linux/writeback.h>
 
 #include "nodelist.h"
 

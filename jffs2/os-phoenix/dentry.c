@@ -62,7 +62,7 @@ bool d_is_dir(const struct dentry *dentry)
 	return S_ISDIR(d_inode(dentry)->i_mode);
 }
 
-//not used
+/* not used */
 struct dentry *d_obtain_alias(struct inode *inode)
 {
 	return NULL;

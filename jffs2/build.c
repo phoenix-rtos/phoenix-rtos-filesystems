@@ -10,15 +10,8 @@
  *
  */
 
-//#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include "os-phoenix.h"
-//#include <linux/kernel.h>
-//#include <linux/sched.h>
-//#include <linux/slab.h>
-//#include <linux/vmalloc.h>
-//#include <linux/mtd/mtd.h>
-//#include <linux/mm.h> /* kvfree() */
 #include "nodelist.h"
 
 static void jffs2_build_remove_unlinked_inode(struct jffs2_sb_info *,

@@ -19,8 +19,6 @@
    anyway. */
 #define MAX_SUMMARY_SIZE 65536
 
-//#include <linux/uio.h>
-//#include <linux/jffs2.h>
 
 #define BLK_STATE_ALLFF		0
 #define BLK_STATE_CLEAN		1

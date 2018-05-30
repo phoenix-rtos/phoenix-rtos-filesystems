@@ -37,7 +37,7 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 
 	*retlen = 0;
 	memset(buf, 0, len);
-//	printf("mtd_read offs 0x%x, len 0x%x\n", from, len);
+
 	if (!len)
 		return 0;
 
@@ -98,7 +98,7 @@ int mtd_write_oob(struct mtd_info *mtd, loff_t to, struct mtd_oob_ops *ops)
 }
 
 
-// not supported in nand
+/* not supported in nand */
 int mtd_point(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 			      void **virt, resource_size_t *phys)
 {
@@ -176,7 +176,6 @@ struct dentry *mount_mtd(struct file_system_type *fs_type, int flags,
 	imgfd = open("/init/test.jffs2", 'r');
 
 	while ((ret = read(imgfd, nand_em + offs, 1024)) > 0) {
-		//printf("file system values 0x%x for 0x%x\n", *(u32 *)(nand_em + offs), offs);
 
 		offs += ret;
 		if (offs == 1048576)

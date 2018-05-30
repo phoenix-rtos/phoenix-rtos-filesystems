@@ -13,9 +13,7 @@
 #ifndef _JFFS2_FS_I
 #define _JFFS2_FS_I
 
-//#include <linux/rbtree.h>
-//#include <linux/posix_acl.h>
-//#include <linux/mutex.h>
+
 #include "os-phoenix.h"
 
 struct jffs2_inode_info {

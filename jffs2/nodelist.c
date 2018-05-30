@@ -9,15 +9,7 @@
  *
  */
 
-//#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
-//#include <linux/kernel.h>
-//#include <linux/sched.h>
-//#include <linux/fs.h>
-//#include <linux/mtd/mtd.h>
-//#include <linux/rbtree.h>
-//#include <linux/crc32.h>
-//#include <linux/pagemap.h>
 #include "os-phoenix.h"
 #include "nodelist.h"
 

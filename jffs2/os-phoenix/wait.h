@@ -42,8 +42,7 @@ void wake_up(wait_queue_head_t *wq_head);
 
 void sleep_on_spinunlock(wait_queue_head_t *wq, spinlock_t *s);
 
-// work queues
-
+/* work queues */
 struct workqueue_struct {
 };
 
