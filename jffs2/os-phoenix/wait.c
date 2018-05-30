@@ -38,7 +38,6 @@ void add_wait_queue(struct wait_queue_head *wq_head, struct wait_queue_entry *wq
 {
 	mutexLock(wq_head->lock);
 	wq_head->cnt++;
-	condWait(wq_head->cond, wq_head->lock, 0);
 	mutexUnlock(wq_head->lock);
 }
 
@@ -46,9 +45,21 @@ void add_wait_queue(struct wait_queue_head *wq_head, struct wait_queue_entry *wq
 void remove_wait_queue(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry)
 {
 	mutexLock(wq_head->lock);
-	wq_head->cnt--;
+	if (wq_head->cnt) {
+		condWait(wq_head->cond, wq_head->lock, 0);
+		wq_head->cnt--;
+	}
 	mutexUnlock(wq_head->lock);
 }
+
+void sleep_on_spinunlock(wait_queue_head_t *wq, spinlock_t *s)
+{
+	DECLARE_WAITQUEUE(__wait, current);
+	add_wait_queue((wq), &__wait);	
+	spin_unlock(s);
+	remove_wait_queue((wq), &__wait);
+}
+
 
 static void delayed_work_starter(void *arg)
 {

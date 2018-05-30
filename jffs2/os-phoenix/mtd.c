@@ -17,15 +17,13 @@
 
 #include "mtd.h"
 
-jffs2_common_t jffs2_common;
-
 #define MTD_PAGE_SIZE 4096
 #define MTD_BLOCK_SIZE (64 * MTD_PAGE_SIZE)
 
 int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 			     u_char *buf)
 {
-	int err;
+	int ret;
 	*retlen = 0;
 
 	if (!len)
@@ -33,10 +31,8 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 
 	memset(mtd->data_buf, 0, mtd->writesize);
 	if (from % mtd->writesize) {
-		if ((err = flashdrv_read(mtd->dma, from / mtd->writesize, mtd->data_buf, mtd->meta_buf))) {
-			if (err != 0xff10)
+		if ((ret = flashdrv_read(mtd->dma, (from / mtd->writesize) + mtd->start, mtd->data_buf, mtd->meta_buf)) && ret != 0xff10)
 				return -1;
-		}
 
 		*retlen += mtd->writesize - (from % mtd->writesize);
 		if (*retlen > len)
@@ -51,10 +47,8 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 		return 0;
 
 	while (len >= mtd->writesize) {
-		if ((err = flashdrv_read(mtd->dma, from / mtd->writesize, mtd->data_buf, mtd->meta_buf))) {
-			if (err != 0xff10)
-				return -1;
-		}
+		if ((ret = flashdrv_read(mtd->dma, (from / mtd->writesize) + mtd->start, mtd->data_buf, mtd->meta_buf)) && ret != 0xff10)
+			return -1;
 
 		memcpy(buf + *retlen, mtd->data_buf, mtd->writesize);
 		len -= mtd->writesize;
@@ -64,10 +58,9 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 
 	memset(mtd->data_buf, 0, mtd->writesize);
 	if (len > 0) {
-		if ((err = flashdrv_read(mtd->dma, from / mtd->writesize, mtd->data_buf, mtd->meta_buf))) {
-			if (err != 0xff10)
-				return -1;
-		}
+		if ((ret = flashdrv_read(mtd->dma, (from / mtd->writesize) + mtd->start, mtd->data_buf, mtd->meta_buf)) && ret != 0xff10)
+			return -1;
+
 		memcpy(buf + *retlen, mtd->data_buf, len);
 		*retlen += len;
 	}
@@ -78,15 +71,20 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 int mtd_write(struct mtd_info *mtd, loff_t to, size_t len, size_t *retlen,
 		const u_char *buf)
 {
+	int ret;
 	*retlen = 0;
 
 	if (!len)
 		return 0;
 
 	while (len) {
-		memset(mtd->meta_buf, 0xff, sizeof(flashdrv_meta_t));
+
+		if ((ret = flashdrv_read(mtd->dma, (to / mtd->writesize) + mtd->start, NULL, mtd->meta_buf)) && ret != 0xff10)
+			return -1;
+
 		memcpy(mtd->data_buf, buf + *retlen, mtd->writesize);
-		if (flashdrv_write(mtd->dma, to / mtd->writesize, mtd->data_buf, mtd->meta_buf))
+
+		if (flashdrv_write(mtd->dma, (to / mtd->writesize) + mtd->start, mtd->data_buf, mtd->meta_buf))
 			return -1;
 
 		len -= mtd->writesize;
@@ -126,10 +124,8 @@ int mtd_read_oob(struct mtd_info *mtd, loff_t from, struct mtd_oob_ops *ops)
 	int ret = 0;
 
 	while (ops->oobretlen < ops->ooblen) {
-		if ((ret = flashdrv_read(mtd->dma, from / mtd->writesize, mtd->data_buf, mtd->meta_buf))) {
-			if (ret != 0xff10)
+		if ((ret = flashdrv_read(mtd->dma, (from / mtd->writesize) + mtd->start, NULL, mtd->meta_buf)) && ret != 0xff10)
 				return -1;
-		}
 
 		memcpy(ops->oobbuf + ops->oobretlen, mtd->meta_buf, ops->ooblen > mtd->oobsize ? mtd->oobsize : ops->ooblen);
 		ops->oobretlen += ops->ooblen > mtd->oobsize ? mtd->oobsize : ops->ooblen;
@@ -145,11 +141,10 @@ int mtd_write_oob(struct mtd_info *mtd, loff_t to, struct mtd_oob_ops *ops)
 	if (ops->ooblen > mtd->oobsize)
 		return -1;
 
-	memset(mtd->data_buf, 0xff, mtd->writesize);
 	memset(mtd->meta_buf, 0xff, sizeof(flashdrv_meta_t));
 	memcpy(mtd->meta_buf, ops->oobbuf, ops->ooblen);
 
-	if (flashdrv_write(mtd->dma, to / mtd->writesize, mtd->data_buf, mtd->meta_buf))
+	if (flashdrv_write(mtd->dma, (to / mtd->writesize) + mtd->start, NULL, mtd->meta_buf))
 		return -1;
 
 	ops->oobretlen = ops->ooblen;
@@ -176,7 +171,7 @@ int mtd_erase(struct mtd_info *mtd, struct erase_info *instr)
 	if (instr->len != mtd->erasesize || instr->addr % mtd->erasesize)
 		return -1;
 
-	if (flashdrv_erase(mtd->dma, instr->addr / mtd->writesize))
+	if (flashdrv_erase(mtd->dma, (instr->addr / mtd->writesize) + mtd->start))
 		return -1;
 
 	instr->state = MTD_ERASE_DONE;
@@ -192,7 +187,7 @@ int mtd_block_markbad(struct mtd_info *mtd, loff_t ofs)
 	memset(mtd->meta_buf, 0xff, mtd->writesize);
 	memset(mtd->data_buf, 0, 2);
 
-	if (flashdrv_writeraw(mtd->dma, ofs / mtd->writesize, mtd->data_buf, mtd->writesize))
+	if (flashdrv_writeraw(mtd->dma, (ofs / mtd->writesize) + mtd->start, mtd->data_buf, mtd->writesize))
 		return -1;
 
 	return 0;
@@ -224,7 +219,7 @@ void *mtd_kmalloc_up_to(const struct mtd_info *mtd, size_t *size)
 int mtd_block_isbad(struct mtd_info *mtd, loff_t ofs)
 {
 
-	if (flashdrv_readraw(mtd->dma, ofs / mtd->writesize, mtd->data_buf, mtd->writesize))
+	if (flashdrv_readraw(mtd->dma, (ofs / mtd->writesize) + mtd->start, mtd->data_buf, mtd->writesize))
 		return -1;
 
 	if(!((char *)mtd->data_buf)[0])
@@ -265,9 +260,10 @@ struct dentry *mount_mtd(struct file_system_type *fs_type, int flags,
 	mtd->erasesize = MTD_BLOCK_SIZE;
 	mtd->writesize = MTD_PAGE_SIZE;
 	mtd->flags = MTD_WRITEABLE;
-	mtd->size = MTD_BLOCK_SIZE * 5;
+	mtd->size = MTD_BLOCK_SIZE * jffs2_common.size;
 	mtd->oobsize = 16;
 	mtd->oobavail = 16;
+	mtd->start = jffs2_common.start_block * 64;
 
 	struct super_block *sb = malloc(sizeof(struct super_block));
 	sb->s_mtd = mtd;

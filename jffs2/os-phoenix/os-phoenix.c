@@ -80,7 +80,6 @@ void *ERR_PTR(long error)
 
 void *ERR_CAST(const void *ptr)
 {
-	/* cast away the const */
 	return (void *) ptr;
 }
 
@@ -228,7 +227,7 @@ void kunmap(struct page *page)
 {
 }
 
-//taken form Linux kernel
+/* taken form Linux kernel */
 unsigned int full_name_hash(void *salt, const char * name, unsigned int len)
 {
 	unsigned hash = 0;

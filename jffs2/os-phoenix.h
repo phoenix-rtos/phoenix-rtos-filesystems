@@ -222,18 +222,6 @@ unsigned long msecs_to_jiffies(const unsigned int m);
 
 long schedule_timeout_interruptible(long timeout);
 
-
-#define sleep_on_spinunlock(wq, s)				\
-	do {										\
-		DECLARE_WAITQUEUE(__wait, current);		\
-		add_wait_queue((wq), &__wait);			\
-		set_current_state(TASK_UNINTERRUPTIBLE);\
-		spin_unlock(s);							\
-		schedule();								\
-		remove_wait_queue((wq), &__wait);		\
-	} while(0)
-
-
 struct task_struct {
 	pid_t pid;
 };
@@ -559,6 +547,9 @@ void rcu_barrier(void);
 typedef struct _jffs2_common_t {
 	u32 port;
 	oid_t root;
+	u32 start_block;
+	u32 size;
+	char *mount_path;
 	struct super_block *sb;
 	struct workqueue_struct *system_long_wq;
 } jffs2_common_t;

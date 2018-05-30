@@ -17,6 +17,8 @@
 #ifndef _OS_PHOENIX_SLAB_H_
 #define _OS_PHOENIX_SLAB_H_
 
+/* definitions taken from Linux kernel */
+
 struct kmem_cache {
 	unsigned int object_size;/* The original size of the object */
 	unsigned int size;	/* The aligned/padded/added on size  */

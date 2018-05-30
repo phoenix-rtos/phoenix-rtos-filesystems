@@ -27,7 +27,7 @@ struct qstr {
 struct dentry {
 	struct qstr d_name;
 	struct inode *d_inode;
-	struct super_block *d_sb;	/* The root of the dentry tree */
+	struct super_block *d_sb;
 };
 
 

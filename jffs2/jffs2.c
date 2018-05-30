@@ -31,6 +31,8 @@
 
 #define JFFS2_ROOT_DIR &jffs2_common.root
 
+jffs2_common_t jffs2_common;
+
 extern int jffs2_readdir(struct file *file, struct dir_context *ctx);
 
 static int jffs2_srv_lookup(oid_t *dir, const char *name, oid_t *res)
@@ -324,7 +326,6 @@ static int jffs2_srv_create(oid_t *dir, const char *name, oid_t *oid, int type, 
 	struct inode *idir;
 	struct dentry *dentry;
 	int ret = 0;
-
 	idir = jffs2_iget(jffs2_common.sb, dir->id);
 
 	if (IS_ERR(idir))
@@ -335,7 +336,7 @@ static int jffs2_srv_create(oid_t *dir, const char *name, oid_t *oid, int type, 
 		return -ENOTDIR;
 	}
 
-	if ((ret = jffs2_srv_lookup(dir, name, &toid)) == EOK) {
+	if (jffs2_srv_lookup(dir, name, &toid) > 0) {
 		iput(idir);
 		return -EEXIST;
 	}
@@ -600,7 +601,7 @@ static int jffs2_srv_truncate(oid_t *oid, unsigned long len)
 }
 
 
-int main(void)
+int main(int argc, char **argv)
 {
 	oid_t toid = { 0 };
 	msg_t msg;
@@ -610,6 +611,16 @@ int main(void)
 
 	printf("jffs2: Starting jffs2 server at port %d\n", jffs2_common.port);
 
+	if (argc >= 4) {
+		jffs2_common.start_block = atoi(argv[1]);
+		jffs2_common.size = atoi(argv[2]);
+		jffs2_common.mount_path = argv[3];
+	} else {
+		jffs2_common.start_block = 0;
+		jffs2_common.size = 5;
+		jffs2_common.mount_path = "/";
+	}
+
 	object_init();
 	if(init_jffs2_fs() != EOK) {
 		printf("jffs2: Error initialising jffs2\n");
@@ -617,9 +628,8 @@ int main(void)
 	}
 
 	toid.id = 1;
-	/* Try to mount fs as root */
-	if (portRegister(jffs2_common.port, "/", &toid) < 0) {
-		printf("jffs2: Can't mount on directory %s\n", "/");
+	if (portRegister(jffs2_common.port, jffs2_common.mount_path, &toid) < 0) {
+		printf("jffs2: Can't mount on directory %s\n", jffs2_common.mount_path);
 		return -1;
 	}
 

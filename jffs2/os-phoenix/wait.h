@@ -24,9 +24,7 @@ typedef struct wait_queue_head{
 	int cnt;
 } wait_queue_head_t;
 
-/*
- *  * A single wait-queue entry structure:
- *   */
+
 struct wait_queue_entry {
 };
 
@@ -41,6 +39,8 @@ void remove_wait_queue(struct wait_queue_head *wq_head, struct wait_queue_entry 
 void init_waitqueue_head(wait_queue_head_t *wq_head);
 
 void wake_up(wait_queue_head_t *wq_head);
+
+void sleep_on_spinunlock(wait_queue_head_t *wq, spinlock_t *s);
 
 // work queues
 

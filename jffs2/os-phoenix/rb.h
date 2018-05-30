@@ -22,7 +22,6 @@
 
 #define RB_ROOT	(struct rb_root) { NULL, }
 
-//#define rb_parent(r)   ((struct rb_node *)((r)->__rb_parent_color & ~3))
 #define rb_parent(r) container_of(r->n.parent, struct rb_node, n)
 
 #define rb_left(r) container_of(r->n.left, struct rb_node, n)

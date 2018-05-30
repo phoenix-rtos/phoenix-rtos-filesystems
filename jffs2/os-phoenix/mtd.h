@@ -13,11 +13,13 @@
  * %LICENSE%
  */
 
+/* parts of this file are taken form Linux kernel */
 
 #ifndef _OS_PHOENIX_MTD_H_
 #define _OS_PHOENIX_MTD_H_
 
 #include "../../../phoenix-rtos-devices/storage/imx6ull-flash/flashdrv.h"
+
 
 #define MTD_ERASE_PENDING		0x01
 #define MTD_ERASING				0x02
@@ -40,6 +42,7 @@
 #define MTD_BIT_WRITEABLE		0x800	/* Single bits can be flipped */
 #define MTD_NO_ERASE			0x1000	/* No erase necessary */
 #define MTD_POWERUP_LOCK		0x2000	/* Always locked after reset */
+
 
 enum {
 	MTD_OPS_PLACE_OOB = 0,
@@ -74,8 +77,6 @@ struct erase_info {
 	struct erase_info *next;
 };
 
-//struct _flashdrv_dma_t;
-//typedef struct _flashdrv_dma_t flashdrv_dma_t;
 
 struct mtd_info {
 	int todo;
@@ -91,7 +92,9 @@ struct mtd_info {
 	flashdrv_dma_t *dma;
 	void *data_buf;
 	void *meta_buf;
+	u32 start;
 };
+
 
 int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 			     u_char *buf);
