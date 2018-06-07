@@ -22,7 +22,10 @@
 void wake_up(wait_queue_head_t *wq_head)
 {
 	mutexLock(wq_head->lock);
-	condSignal(wq_head->cond);
+	while(wq_head->cnt > 0) {
+		condSignal(wq_head->cond);
+		wq_head->cnt--;
+	}
 	mutexUnlock(wq_head->lock);
 }
 
@@ -63,55 +66,80 @@ void sleep_on_spinunlock(wait_queue_head_t *wq, spinlock_t *s)
 
 static void delayed_work_starter(void *arg)
 {
-	struct delayed_work *dwork = (struct delayed_work *)arg;
-	usleep(dwork->delay);
+	struct workqueue_struct *wq = (struct workqueue_struct *)arg;
+	struct delayed_work *dwork;
 
-	mutexLock(dwork->work.lock);
-	if (dwork->work.state == WORK_CANCEL) {
-		condSignal(dwork->work.cond);
-		mutexUnlock(dwork->work.lock);
-		return;
+	while (1) {
+		mutexLock(wq->lock);
+		while (wq->dw == NULL)
+			condWait(wq->cond, wq->lock, 0);
+
+		dwork = wq->dw;
+		mutexUnlock(wq->lock);
+
+		usleep(dwork->delay);
+
+		mutexLock(dwork->work.lock);
+		if (dwork->work.state == WORK_DEFAULT) {
+			dwork->work.state = WORK_PENDING;
+			mutexUnlock(dwork->work.lock);
+
+			mutexLock(wq->lock);
+			wq->dw = NULL;
+			mutexUnlock(wq->lock);
+
+			dwork->work.func(&dwork->work);
+
+			mutexLock(dwork->work.lock);
+			dwork->work.state = WORK_DEFAULT;
+			mutexUnlock(dwork->work.lock);
+			continue;
+		} else if (dwork->work.state == WORK_CANCEL) {
+			condSignal(dwork->work.cond);
+			mutexUnlock(dwork->work.lock);
+			continue;
+		} else {
+			mutexUnlock(dwork->work.lock);
+			continue;
+		}
 	}
-	dwork->work.state = WORK_PENDING;
-	mutexUnlock(dwork->work.lock);
-
-	dwork->work.func(&dwork->work);
-
-	mutexLock(dwork->work.lock);
-	if(dwork->work.state == WORK_CANCEL)
-		condSignal(dwork->work.cond);
-	dwork->work.state = WORK_DEFAULT;
-	mutexUnlock(dwork->work.lock);
-	endthread();
 }
 
-static char __attribute__((aligned(8))) dw_stack[4096];
+static char __attribute__((aligned(8))) wq_stack[4096];
 
 bool queue_delayed_work(struct workqueue_struct *wq,
 				      struct delayed_work *dwork,
 				      unsigned long delay)
 {
-	mutexLock(dwork->work.lock);
-	if (dwork->work.state == WORK_PENDING) {
-		mutexUnlock(dwork->work.lock);
+	dwork->delay = delay;
+	mutexLock(wq->lock);
+
+	if (wq->dw == dwork) {
+		mutexUnlock(wq->lock);
 		return 0;
+	} else if (wq->dw == NULL) {
+		wq->dw = dwork;
+		condSignal(wq->cond);
 	}
 
-	dwork->delay = delay;
-	dwork->work.state = WORK_PENDING;
-	mutexUnlock(dwork->work.lock);
-
-	beginthread(delayed_work_starter, 4, &dw_stack, 4096, dwork);
+	mutexUnlock(wq->lock);
 	return 1;
 }
 
 bool cancel_delayed_work_sync(struct delayed_work *dwork)
 {
 	mutexLock(dwork->work.lock);
-	if (dwork->work.state != WORK_CANCEL) {
-		dwork->work.state = WORK_CANCEL;
-		condWait(dwork->work.cond, dwork->work.lock, 0);
-	}
+	dwork->work.state = WORK_CANCEL;
+	condWait(dwork->work.cond, dwork->work.lock, 0);
 	mutexUnlock(dwork->work.lock);
+
 	return 1;
+}
+
+void init_workqueue(struct workqueue_struct *wq)
+{
+	wq->dw = NULL;
+	mutexCreate(&wq->lock);
+	condCreate(&wq->cond);
+	beginthread(delayed_work_starter, 4, &wq_stack, 4096, wq);
 }

@@ -43,27 +43,21 @@ void wake_up(wait_queue_head_t *wq_head);
 void sleep_on_spinunlock(wait_queue_head_t *wq, spinlock_t *s);
 
 /* work queues */
-struct workqueue_struct {
-};
-
-static inline void init_workqueue(struct workqueue_struct *wq)
-{
-}
-
 struct work_struct;
 typedef void (*work_func_t)(struct work_struct *work);
 
 enum {
 	WORK_DEFAULT,
 	WORK_PENDING,
-	WORK_CANCEL
+	WORK_CANCEL,
+	WORK_EXIT
 };
 
 struct work_struct {
 	work_func_t func;
+	u8 state;
 	handle_t lock;
 	handle_t cond;
-	u8 state;
 };
 
 struct delayed_work {
@@ -72,13 +66,22 @@ struct delayed_work {
 };
 
 
+struct workqueue_struct {
+	handle_t lock;
+	handle_t cond;
+	struct delayed_work *dw;
+};
+
+
+void init_workqueue(struct workqueue_struct *wq);
+
+
 static inline void INIT_DELAYED_WORK(struct delayed_work *dwork, work_func_t work_func) 
 {
 	dwork->work.func = work_func;
-
+	dwork->work.state = WORK_DEFAULT;
 	mutexCreate(&dwork->work.lock);
 	condCreate(&dwork->work.cond);
-	dwork->work.state = WORK_DEFAULT;
 }
 
 

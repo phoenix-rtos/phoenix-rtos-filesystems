@@ -226,6 +226,8 @@ void inode_init_once(struct inode *inode)
 
 int register_filesystem(struct file_system_type *fs)
 {
+	system_long_wq = malloc(sizeof(struct workqueue_struct));
+	init_workqueue(system_long_wq);
 	if (fs->mount(fs, 0, "jffs2", NULL) == NULL)
 		return -1;
 
