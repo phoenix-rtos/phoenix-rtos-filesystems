@@ -25,6 +25,9 @@ void *page_address(const struct page *page)
 
 void put_page(struct page *page)
 {
+	if (page->virtual)
+		free(page->virtual);
+	free(page);
 }
 
 
@@ -53,7 +56,16 @@ void flush_dcache_page(struct page *pg)
 
 struct page *read_cache_page(struct address_space *mapping, pgoff_t index, filler_t *filler, void *data)
 {
-	return NULL;
+	struct inode *inode = (struct inode *)data;
+	struct page *pg = malloc(sizeof(struct page));
+
+	pg->index = index;
+	pg->virtual = malloc(PAGE_SIZE);
+
+	if (filler(inode, pg))
+		return NULL;
+
+	return pg;
 }
 
 uid_t from_kuid(struct user_namespace *to, kuid_t kuid)
@@ -220,11 +232,12 @@ void kvfree(const void *addr)
 
 void *kmap(struct page *page)
 {
-	return NULL;
+	return page->virtual;
 }
 
 void kunmap(struct page *page)
 {
+//	free(page->virtual);
 }
 
 /* taken form Linux kernel */
