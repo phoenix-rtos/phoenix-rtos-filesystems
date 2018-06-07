@@ -20,10 +20,12 @@ void up_read(struct rw_semaphore *sem)
 {
 	mutexLock(sem->lock);
 
-	if (sem->cnt) sem->cnt--;
+	if (sem->cnt < 0xffffffff) sem->cnt++;
 
-	if (sem->wait)
-		condSignal(sem->cond);
+	if (sem->wwait)
+		condSignal(sem->wcond);
+	else if (sem->rwait)
+		condSignal(sem->rcond);
 
 	mutexUnlock(sem->lock);
 }
@@ -32,23 +34,28 @@ void down_read(struct rw_semaphore *sem)
 {
 	mutexLock(sem->lock);
 
-	while (sem->cnt < 0) {
-		sem->wait++;
-		condWait(sem->cond, sem->lock, 0);
-		sem->wait--;
-	}
+	sem->rwait++;
+	while (sem->wwait)
+		condWait(sem->rcond, sem->lock, 0);
 
-	sem->cnt++;
+	while (!sem->cnt)
+		condWait(sem->rcond, sem->lock, 0);
+
+	sem->rwait--;
+	if (sem->cnt) sem->cnt--;
+
 	mutexUnlock(sem->lock);
 }
 
 void up_write(struct rw_semaphore *sem)
 {
 	mutexLock(sem->lock);
-	sem->cnt = 0;
+	sem->cnt = 0xffffffff;
 
-	if (sem->wait)
-		condSignal(sem->cond);
+	if (sem->wwait)
+		condSignal(sem->wcond);
+	else if (sem->rwait)
+		condSignal(sem->rcond);
 
 	mutexUnlock(sem->lock);
 }
@@ -56,12 +63,14 @@ void up_write(struct rw_semaphore *sem)
 void down_write(struct rw_semaphore *sem)
 {
 	mutexLock(sem->lock);
-	while (sem->cnt != 0) {
-		sem->wait++;
-		condWait(sem->cond, sem->lock, 50000);
-		sem->wait--;
-	}
-	sem->cnt = -1;
+
+	sem->wwait++;
+	while (sem->cnt != 0xffffffff)
+		condWait(sem->wcond, sem->lock, 0);
+
+	sem->wwait--;
+	sem->cnt = 0;
+
 	mutexUnlock(sem->lock);
 }
 
@@ -71,7 +80,9 @@ void init_rwsem(struct rw_semaphore *sem)
 		return;
 
 	mutexCreate(&sem->lock);
-	condCreate(&sem->cond);
-	sem->cnt = 0;
-	sem->wait = 0;
+	condCreate(&sem->wcond);
+	condCreate(&sem->rcond);
+	sem->cnt = 0xffffffff;
+	sem->rwait = 0;
+	sem->wwait = 0;
 }
