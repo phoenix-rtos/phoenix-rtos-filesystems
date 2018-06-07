@@ -149,9 +149,9 @@ struct inode {
 static inline bool dir_emit_dots(struct file *file, struct dir_context *ctx)
 {
 	if (ctx->pos == 0)
-		return ctx->actor(ctx, ".", 1, ctx->pos, file_inode(file)->i_ino, otDir);
+		return ctx->actor(ctx, ".", 1, ctx->pos, file_inode(file)->i_ino, DT_DIR);
 	else if (ctx->pos == 1)
-		return ctx->actor(ctx, "..", 2, ctx->pos, file->f_pino, otDir);
+		return ctx->actor(ctx, "..", 2, ctx->pos, file->f_pino, DT_DIR);
 	return 1;
 }
 

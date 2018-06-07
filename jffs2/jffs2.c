@@ -332,6 +332,10 @@ static int jffs2_srv_create(oid_t *dir, const char *name, oid_t *oid, int type, 
 	struct inode *idir;
 	struct dentry *dentry;
 	int ret = 0;
+
+	if (name == NULL || !strlen(name))
+		return -EINVAL;
+
 	idir = jffs2_iget(jffs2_common.sb, dir->id);
 
 	if (IS_ERR(idir))
@@ -358,8 +362,15 @@ static int jffs2_srv_create(oid_t *dir, const char *name, oid_t *oid, int type, 
 			ret = idir->i_op->create(idir, dentry, mode, 0);
 			break;
 		case otDir:
+			mode = S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO;
 			oid->port = jffs2_common.port;
 			ret = idir->i_op->mkdir(idir, dentry, mode);
+			break;
+		case otDev:
+			mode = S_IFCHR | S_IRWXU | S_IRWXG | S_IRWXO;
+			oid->port = port;
+			ret = idir->i_op->mknod(idir, dentry, mode, port);
+			break;
 		default:
 			ret = -EINVAL;
 			break;
@@ -394,8 +405,8 @@ static int jffs2_srv_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsig
 	if (IS_ERR(inode))
 		return -EINVAL;
 
-	if (!((inode->i_mode >> 14) & 1))
-		return -EINVAL;
+	if (!(S_ISDIR(inode->i_mode)))
+		return -ENOTDIR;
 
 	file.f_pino = JFFS2_INODE_INFO(inode)->inocache->pino_nlink;
 	file.f_inode = inode;
