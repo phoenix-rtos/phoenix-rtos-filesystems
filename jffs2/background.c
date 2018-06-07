@@ -89,7 +89,9 @@ static void jffs2_garbage_collect_thread(void *_c)
 			set_current_state (TASK_INTERRUPTIBLE);
 			spin_unlock(&c->erase_completion_lock);
 			jffs2_dbg(1, "%s(): sleeping...\n", __func__);
-			schedule();
+			mutexLock(c->erase_wait.lock);
+			condWait(c->erase_wait.cond, c->erase_wait.lock, 500000000);
+			mutexUnlock(c->erase_wait.lock);
 		} else {
 			spin_unlock(&c->erase_completion_lock);
 		}

@@ -230,6 +230,7 @@ static int jffs2_srv_link(oid_t *dir, const char *name, oid_t *oid)
 {
 	struct inode *idir, *inode;
 	struct dentry *old, *new;
+	oid_t toid;
 	int ret;
 
 	if (!dir->id || !oid->id)
@@ -242,6 +243,11 @@ static int jffs2_srv_link(oid_t *dir, const char *name, oid_t *oid)
 
 	if (IS_ERR(idir))
 		return -ENOENT;
+
+	if (jffs2_srv_lookup(dir, name, &toid) > 0) {
+		iput(idir);
+		return -EEXIST;
+	}
 
 	inode = jffs2_iget(jffs2_common.sb, oid->id);
 
@@ -289,7 +295,7 @@ static int jffs2_srv_unlink(oid_t *dir, const char *name)
 	if (IS_ERR(idir))
 		return -ENOENT;
 
-	if (jffs2_srv_lookup(dir, name, &oid) != EOK) {
+	if (jffs2_srv_lookup(dir, name, &oid) <= 0) {
 		iput(idir);
 		return -ENOENT;
 	}
@@ -447,7 +453,7 @@ static int jffs2_srv_read(oid_t *oid, offs_t offs, void *data, unsigned long len
 	if (!ret)
 		ret = len > inode->i_size - offs ? inode->i_size - offs : len;
 	else
-		printf("jffs2: read error %d\n", ret);
+		printf("jffs2: Read error %d\n", ret);
 
 	iput(inode);
 	return ret;
@@ -587,7 +593,7 @@ static int jffs2_srv_write(oid_t *oid, offs_t offs, void *data, unsigned long le
 			inode->i_ctime = inode->i_mtime = ITIME(je32_to_cpu(ri->ctime));
 		}
 	} else
-		printf("jffs2: read error %d\n", ret);
+		printf("jffs2: Write error %d\n", ret);
 
 	jffs2_free_raw_inode(ri);
 	iput(inode);
