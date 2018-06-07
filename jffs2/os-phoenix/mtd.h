@@ -79,7 +79,6 @@ struct erase_info {
 
 
 struct mtd_info {
-	int todo;
 	u_char type;
 	const char *name;
 	uint32_t flags;
@@ -87,12 +86,13 @@ struct mtd_info {
 	uint32_t erasesize;
 	uint32_t writesize;
 	uint64_t size;
-	uint32_t oobsize;   // Amount of OOB data per block (e.g. 16)
-	uint32_t oobavail;  // Available OOB bytes per block
+	uint32_t oobsize;
+	uint32_t oobavail;
 	flashdrv_dma_t *dma;
 	void *data_buf;
 	void *meta_buf;
 	u32 start;
+	handle_t lock;
 };
 
 

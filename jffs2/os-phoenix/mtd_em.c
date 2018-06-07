@@ -173,7 +173,7 @@ struct dentry *mount_mtd(struct file_system_type *fs_type, int flags,
 		return NULL;
 	}
 
-	imgfd = open("/init/test.jffs2", 'r');
+	imgfd = open("/init/jffs2_ram.img", 'r');
 
 	while ((ret = read(imgfd, nand_em + offs, 1024)) > 0) {
 
