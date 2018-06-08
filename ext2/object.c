@@ -15,6 +15,7 @@
 
 #include <stdlib.h>
 #include <sys/rb.h>
+#include <sys/file.h>
 #include <sys/threads.h>
 
 #include "ext2.h"
@@ -56,7 +57,7 @@ int object_destroy(ext2_object_t *o)
 		return -EBUSY;
 	}
 
-	if (o->type == 0 && dir_is_empty(o) != EOK)
+	if (o->type == otDir && dir_is_empty(o) != EOK)
 		return -EBUSY;
 
 	lib_rbRemove(&ext2_objects.used, &o->node);
@@ -121,7 +122,7 @@ ext2_object_t *object_create(id_t id, ext2_inode_t **inode, int mode)
 	if (*inode == NULL) {
 		*inode = malloc(ext2->inode_size);
 
-		id = inode_create(*inode, mode);
+		id = inode_create(*inode, mode, id);
 
 		if (!id) {
 			free(*inode);

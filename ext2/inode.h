@@ -20,7 +20,7 @@
 extern ext2_inode_t *inode_get(u32 ino);
 
 
-extern u32 inode_create(ext2_inode_t *inode, u32 mode);
+extern u32 inode_create(ext2_inode_t *inode, u32 mode, u32 pino);
 
 
 extern int inode_free(u32 ino, ext2_inode_t *inode);

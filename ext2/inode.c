@@ -154,16 +154,16 @@ static int find_group_file(u32 pino)
 	return -1;
 }
 
-u32 inode_create(ext2_inode_t *inode, u32 mode)
+u32 inode_create(ext2_inode_t *inode, u32 mode, u32 pino)
 {
 	u32 ino;
 	int group;
 	void *inode_bmp;
 
 	if (mode & EXT2_S_IFDIR)
-		group = find_group_dir(2);
+		group = find_group_dir(pino);
 	else
-		group = find_group_file(2);
+		group = find_group_file(pino);
 
 	if (group == -1)
 		return 0;

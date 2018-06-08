@@ -482,7 +482,7 @@ static void init_desc(void *conf)
 }
 
 
-extern int dummyfs_create(oid_t *oid, int type, int mode, u32 port);
+extern int dummyfs_create(oid_t *dir, const char *name, oid_t *oid, int type, int mode, u32 port);
 extern int dummyfs_link(oid_t *dir, const char *name, oid_t *oid);
 extern int dummyfs_write(oid_t *oid, offs_t offs, char *buff, unsigned int len);
 extern int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res);
@@ -505,8 +505,7 @@ void exec_modules(void *arg)
 
 	memcpy(path, "/init/", 6);
 	dummyfs_lookup(NULL, "/", &root);
-	dummyfs_create(&init, otDir, 0, 0);
-	dummyfs_link(&root, "init", &init);
+	dummyfs_create(&root, "init", &init, otDir, 0, 0);
 
 	while (cnt < dc.mods_cnt) {
 		argc = 1;
@@ -515,8 +514,7 @@ void exec_modules(void *arg)
 		if (dc.mods[cnt].name[0] == 'X')
 			x++;
 
-		dummyfs_create(&toid, otFile, 0, 0);
-		if (dummyfs_link(&init, dc.mods[cnt].name + 1, &toid) == EOK)
+		if (dummyfs_create(&init, dc.mods[cnt].name + 1, &toid, otFile, 0, 0) == EOK)
 			dummyfs_write(&toid, 0, dc.mods[cnt].data, dc.mods[cnt].size);
 
 		if (x) {

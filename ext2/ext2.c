@@ -20,6 +20,7 @@
 #include <string.h>
 #include <sys/msg.h>
 #include <sys/mman.h>
+#include <sys/file.h>
 #include <dirent.h>
 
 #include "ext2.h"
@@ -33,6 +34,10 @@
 #include "pc-ata.h"
 
 #include "../../phoenix-rtos-kernel/include/sysinfo.h"
+
+
+static int ext2_link(oid_t *dir, const char *name, oid_t *oid);
+static int ext2_destroy(oid_t *oid);
 
 
 static int ext2_lookup(oid_t *dir, const char *name, oid_t *res)
@@ -166,11 +171,12 @@ static int ext2_getattr(oid_t *oid, int type, int *attr)
 }
 
 
-static int ext2_create(oid_t *oid, int type, int mode, u32 port)
+static int ext2_create(oid_t *dir, const char *name, oid_t *oid, int type, int mode, u32 port)
 {
 
 	ext2_object_t *o;
 	ext2_inode_t *inode = NULL;
+	int ret;
 
 	switch (type) {
 	case 0: /* dir */
@@ -184,7 +190,7 @@ static int ext2_create(oid_t *oid, int type, int mode, u32 port)
 		break;
 	}
 
-	o = object_create(0, &inode, mode);
+	o = object_create(dir->id, &inode, mode);
 
 	if (o == NULL) {
 		if (inode == NULL)
@@ -199,6 +205,12 @@ static int ext2_create(oid_t *oid, int type, int mode, u32 port)
 		o->oid.port = port;
 	*oid = o->oid;
 
+	if ((ret = ext2_link(dir, name, &o->oid)) != EOK) {
+		object_put(o);
+		ext2_destroy(&o->oid);
+		return ret;
+	}
+
 	object_put(o);
 
 	return EOK;
@@ -211,6 +223,9 @@ static int ext2_destroy(oid_t *oid)
 
 	if (o == NULL)
 		return -EINVAL;
+
+	if (o->type == otFile)
+		ext2_truncate(oid, 0);
 
 	object_destroy(o);
 	return EOK;
@@ -430,18 +445,16 @@ int main(void)
 	progsz = syspageprog(NULL, -1);
 	root.id = 2;
 	if (ext2_lookup(&root, "syspage", &sysoid) < 0) {
-		ext2_create(&sysoid, 0, 0, 0);
-		ext2_link(&root, "syspage", &sysoid);
+		ext2_create(&root, "syspage", &sysoid, otDir, 0, 0);
 	}
 
 	for (i = 0; i < progsz; i++) {
 		syspageprog(&prog, i);
 		prog_addr = (void *)mmap(NULL, (prog.size + 0xfff) & ~0xfff, 0x1 | 0x2, 0, OID_PHYSMEM, prog.addr);
 
-		if (ext2_lookup(&sysoid, prog.name, &toid) < 0) {
-			ext2_create(&toid, 1, 0, 0);
-			ext2_link(&sysoid, prog.name, &toid);
-		} else
+		if (ext2_lookup(&sysoid, prog.name, &toid) < 0)
+			ext2_create(&sysoid, prog.name, &toid, otFile, 0, 0);
+		else
 			ext2_truncate(&toid, prog.size);
 		ext2_write(&toid, 0, prog_addr, prog.size);
 
@@ -493,7 +506,7 @@ int main(void)
 				break;
 
 			case mtCreate:
-				msg.o.create.err = ext2_create(&msg.o.create.oid, msg.i.create.type, msg.i.create.mode, msg.i.create.port);
+				msg.o.create.err = ext2_create(&msg.i.create.dir, msg.i.data, &msg.o.create.oid, msg.i.create.type, msg.i.create.mode, msg.i.create.port);
 				break;
 
 			case mtDestroy:

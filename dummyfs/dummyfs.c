@@ -58,6 +58,7 @@ int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res)
 			len++;
 
 		err = dir_find(d, name + len, res);
+
 		if (err <= 0)
 			break;
 		else {
@@ -300,9 +301,10 @@ int dummyfs_unlink(oid_t *dir, const char *name)
 }
 
 
-int dummyfs_create(oid_t *oid, int type, int mode, u32 port)
+int dummyfs_create(oid_t *dir, const char *name, oid_t *oid, int type, int mode, u32 port)
 {
 	dummyfs_object_t *o;
+	int ret;
 
 	o = object_create();
 
@@ -316,8 +318,15 @@ int dummyfs_create(oid_t *oid, int type, int mode, u32 port)
 	memcpy(oid, &o->oid, sizeof(oid_t));
 
 	object_unlock(o);
-	object_put(o);
 
+	if((ret = dummyfs_link(dir, name, &o->oid)) != EOK) {
+		object_put(o);
+		object_remove(o);
+		free(o);
+		return ret;
+	}
+
+	object_put(o);
 	return EOK;
 }
 
@@ -439,14 +448,12 @@ int fetch_modules(void)
 	int i, progsz;
 
 	progsz = syspageprog(NULL, -1);
-	dummyfs_create(&sysoid, otDir, 0, 0);
-	dummyfs_link(&root, "syspage", &sysoid);
+	dummyfs_create(&root, "syspage", &sysoid, otDir, 0, 0);
 
 	for (i = 0; i < progsz; i++) {
 		syspageprog(&prog, i);
 		prog_addr = (void *)mmap(NULL, (prog.size + 0xfff) & ~0xfff, 0x1 | 0x2, 0, OID_PHYSMEM, prog.addr);
-		dummyfs_create(&toid, otFile, 0, 0);
-		dummyfs_link(&sysoid, prog.name, &toid);
+		dummyfs_create(&sysoid, prog.name, &toid, otFile, 0, 0);
 		dummyfs_write(&toid, 0, prog_addr, prog.size);
 
 		munmap(prog_addr, (prog.size + 0xfff) & ~0xfff);
@@ -458,13 +465,13 @@ int fetch_modules(void)
 
 int main(void)
 {
-	oid_t toid = { 0 };
 	oid_t root = { 0 };
 	msg_t msg;
 	dummyfs_object_t *o;
 	unsigned int rid;
 
 #ifndef TARGET_IA32
+	oid_t toid = { 0 };
 	u32 reserved;
 #endif
 
@@ -481,7 +488,7 @@ int main(void)
 	portCreate(&dummyfs_common.port);
 
 	/* Try to mount fs as root */
-	if (portRegister(dummyfs_common.port, "/", &toid) < 0) {
+	if (portRegister(dummyfs_common.port, "/", &root) < 0) {
 		printf("dummyfs: Can't mount on directory %s\n", "/");
 		return -1;
 	}
@@ -497,10 +504,16 @@ int main(void)
 	mutexCreate(&dummyfs_common.mutex);
 
 	/* Create root directory */
-	if (dummyfs_create(&root, otDir, 0, 0) != EOK)
+	o = object_create();
+
+	if (o == NULL)
 		return -1;
 
-	o = object_get(root.id);
+	o->type = otDir;
+	o->oid.port = dummyfs_common.port;
+	o->mode = 0;
+
+	memcpy(&root, &o->oid, sizeof(oid_t));
 	dir_add(o, ".", otDir, &root);
 	dir_add(o, "..", otDir, &root);
 
@@ -539,7 +552,7 @@ int main(void)
 				break;
 
 			case mtCreate:
-				msg.o.create.err = dummyfs_create(&msg.o.create.oid, msg.i.create.type, msg.i.create.mode, msg.i.create.port);
+				msg.o.create.err = dummyfs_create(&msg.i.create.dir, msg.i.data, &msg.o.create.oid, msg.i.create.type, msg.i.create.mode, msg.i.create.port);
 				break;
 
 			case mtDestroy:
