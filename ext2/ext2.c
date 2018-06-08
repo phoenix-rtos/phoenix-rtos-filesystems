@@ -506,7 +506,7 @@ int main(void)
 				break;
 
 			case mtCreate:
-				msg.o.create.err = ext2_create(&msg.i.create.dir, msg.i.data, &msg.o.create.oid, msg.i.create.type, msg.i.create.mode, msg.i.create.port);
+				msg.o.create.err = ext2_create(&msg.i.create.dir, msg.i.data, &msg.o.create.oid, msg.i.create.type, msg.i.create.mode, msg.i.create.dev.port);
 				break;
 
 			case mtDestroy:

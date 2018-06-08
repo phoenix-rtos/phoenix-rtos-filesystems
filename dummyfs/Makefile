@@ -4,7 +4,7 @@
 # Copyright 2017, 2018 Phoenix Systems
 #
 
-SRCS = dummyfs.c file.c dir.c object.c
+SRCS = dummyfs.c file.c dir.c object.c dev.c
 
 ifneq (, $(findstring arm-imx, $(TARGET)))
 	SRCS += usb.c
