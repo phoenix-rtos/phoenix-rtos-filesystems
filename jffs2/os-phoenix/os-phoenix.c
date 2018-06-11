@@ -98,7 +98,7 @@ void *ERR_CAST(const void *ptr)
 
 bool IS_ERR(const void *ptr)
 {
-	return (unsigned long)ptr < 0xff;
+	return (unsigned long)ptr >= (unsigned long)-0xfff;
 }
 
 

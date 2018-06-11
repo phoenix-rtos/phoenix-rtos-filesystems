@@ -147,22 +147,12 @@ struct page *read_cache_page(struct address_space *mapping, pgoff_t index, fille
 
 extern unsigned int dirty_writeback_interval; /* centiseconds */
 
-#define TESTPAGEFLAG_FALSE(uname)					\
-static inline int Page##uname(const struct page *page) { return 0; }
 
-#define SETPAGEFLAG_NOOP(uname)						\
-static inline void SetPage##uname(struct page *page) {  }
-
-#define CLEARPAGEFLAG_NOOP(uname)					\
-static inline void ClearPage##uname(struct page *page) {  }
-
-TESTPAGEFLAG_FALSE(Locked);
-
-SETPAGEFLAG_NOOP(Error);
-CLEARPAGEFLAG_NOOP(Error);
-
-SETPAGEFLAG_NOOP(Uptodate);
-CLEARPAGEFLAG_NOOP(Uptodate);
+#define PageLocked(x) { }
+#define SetPageError(x) { }
+#define ClearPageError(x) { }
+#define SetPageUptodate(x) { }
+#define ClearPageUptodate(x) { }
 
 
 #define BUG() do { } while (0)
@@ -191,7 +181,6 @@ CLEARPAGEFLAG_NOOP(Uptodate);
 #define JFFS2_F_I_ATIME(f) (OFNI_EDONI_2SFFJ(f)->i_atime.tv_sec)
 
 struct user_namespace {
-	int todo;
 };
 
 struct user_namespace init_user_ns;
@@ -544,6 +533,13 @@ int match_int(substring_t *s, int *result);
 
 void rcu_barrier(void);
 
+typedef struct _partition_t {
+	u32 start;
+	u32 size;
+	char *mount;
+	int flags;
+} partition_t;
+
 typedef struct _jffs2_common_t {
 	u32 port;
 	oid_t root;
@@ -552,6 +548,8 @@ typedef struct _jffs2_common_t {
 	char *mount_path;
 	struct super_block *sb;
 	struct workqueue_struct *system_long_wq;
+	u32 part_cnt;
+	partition_t *part;
 } jffs2_common_t;
 
 extern jffs2_common_t jffs2_common;

@@ -97,7 +97,7 @@ static void delayed_work_starter(void *arg)
 		} else if (dwork->work.state == WORK_CANCEL) {
 			condSignal(dwork->work.cond);
 			mutexUnlock(dwork->work.lock);
-			continue;
+			endthread();
 		} else {
 			mutexUnlock(dwork->work.lock);
 			continue;
@@ -105,7 +105,6 @@ static void delayed_work_starter(void *arg)
 	}
 }
 
-static char __attribute__((aligned(8))) wq_stack[4096];
 
 bool queue_delayed_work(struct workqueue_struct *wq,
 				      struct delayed_work *dwork,
@@ -126,6 +125,7 @@ bool queue_delayed_work(struct workqueue_struct *wq,
 	return 1;
 }
 
+
 bool cancel_delayed_work_sync(struct delayed_work *dwork)
 {
 	mutexLock(dwork->work.lock);
@@ -135,6 +135,9 @@ bool cancel_delayed_work_sync(struct delayed_work *dwork)
 
 	return 1;
 }
+
+
+static char __attribute__((aligned(8))) wq_stack[4096];
 
 void init_workqueue(struct workqueue_struct *wq)
 {

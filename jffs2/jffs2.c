@@ -29,7 +29,6 @@
 #include "os-phoenix/object.h"
 #include "nodelist.h"
 
-#define JFFS2_ROOT_DIR &jffs2_common.root
 
 jffs2_common_t jffs2_common;
 
@@ -411,7 +410,8 @@ static int jffs2_srv_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsig
 	file.f_pino = JFFS2_INODE_INFO(inode)->inocache->pino_nlink;
 	file.f_inode = inode;
 
-	jffs2_readdir(&file, &ctx);
+	inode->i_fop->iterate_shared(&file, &ctx);
+
 	iput(inode);
 
 	return ctx.emit;
@@ -683,7 +683,7 @@ int main(int argc, char **argv)
 				break;
 
 			case mtCreate:
-				msg.o.create.err = jffs2_srv_create(&msg.i.create.dir, msg.i.data, &msg.o.create.oid, msg.i.create.type, msg.i.create.mode, msg.i.create.port);
+				msg.o.create.err = jffs2_srv_create(&msg.i.create.dir, msg.i.data, &msg.o.create.oid, msg.i.create.type, msg.i.create.mode, (u32)msg.i.create.dev.id);
 				break;
 
 			case mtDestroy:

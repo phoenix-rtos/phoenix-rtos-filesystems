@@ -16,17 +16,12 @@
 #include "jffs2_fs_sb.h"
 #include "nodelist.h"
 
+static int jffs2_readdir (struct file *, struct dir_context *);
 
-#ifdef __PHOENIX
-int jffs2_readdir(struct file *file, struct dir_context *ctx);
-#else
-static int jffs2_readdir(struct file *file, struct dir_context *ctx);
-#endif
-
-static struct dentry *jffs2_lookup (struct inode *,struct dentry *,
-				    unsigned int);
 static int jffs2_create (struct inode *,struct dentry *,umode_t,
 			 bool);
+static struct dentry *jffs2_lookup (struct inode *,struct dentry *,
+				    unsigned int);
 static int jffs2_link (struct dentry *,struct inode *,struct dentry *);
 static int jffs2_unlink (struct inode *,struct dentry *);
 static int jffs2_symlink (struct inode *,struct dentry *,const char *);
@@ -115,11 +110,8 @@ static struct dentry *jffs2_lookup(struct inode *dir_i, struct dentry *target,
 
 /***********************************************************************/
 
-#ifdef __PHOENIX
-int jffs2_readdir(struct file *file, struct dir_context *ctx)
-#else
+
 static int jffs2_readdir(struct file *file, struct dir_context *ctx)
-#endif
 {
 	struct inode *inode = file_inode(file);
 	struct jffs2_inode_info *f = JFFS2_INODE_INFO(inode);
@@ -133,7 +125,6 @@ static int jffs2_readdir(struct file *file, struct dir_context *ctx)
 
 	mutex_lock(&f->sem);
 	for (fd = f->dents; fd; fd = fd->next) {
-
 		curofs++;
 		/* First loop: curofs = 2; pos = 2 */
 		if (curofs < ctx->pos) {
@@ -153,7 +144,6 @@ static int jffs2_readdir(struct file *file, struct dir_context *ctx)
 			break;
 		ctx->pos++;
 	}
-
 	mutex_unlock(&f->sem);
 	return 0;
 }
