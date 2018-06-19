@@ -6,36 +6,11 @@
 # Copyright 2018 Phoenix Systems
 # Author: Kamil Amanowicz
 #
-SIL ?=
-MAKEFLAGS += --no-print-directory
-export SIL TARGET CC CFLAGS MKDEP MKDEPFLAGS AR ARFLAGS LD LDFLAGS LDLIBS OBJDUMP STRIP
-MKDEP = $(CROSS)gcc -MM
-MKDEPFLAGS = $(CFLAGS)
-
-CROSS ?= arm-phoenix-
-CC = $(CROSS)gcc
-AR = $(CROSS)ar
-ARFLAGS = -r
-LD = $(CROSS)ld
-LDFLAGS = -nostdlib -z max-page-size=0x1000
-LDFLAGS += --gc-sections
-OBJCOPY = $(CROSS)objcopy
-OBJDUMP = $(CROSS)objdump
-STRIP = $(CROSS)strip
 
 
-CFLAGS =  -Os -Wall -Wno-pointer-sign -Wno-discarded-qualifiers -Wno-unused-value\
-		  -g -I$(SRCDIR) -nostartfiles -nostdlib\
-		  -mcpu=cortex-a7 -mtune=cortex-a7 -mfpu=neon-vfpv4 -mfloat-abi=hard -mthumb\
-		  -fomit-frame-pointer -ffreestanding -mno-unaligned-access\
-		  -DVERSION=\"$(VERSION)\" -DARCH=\"arch/arm-imx/arch.h\"\
-		  -DCONFIG_JFFS2_CMODE_NONE -DCONFIG_JFFS2_FS_WRITEBUFFER -DLIBFLASHDRV\
-#		  -DJFFS2_DBG_READINODE_MESSAGES -DJFFS2_DBG_FSBUILD_MESSAGES
 
-CFLAGS += -fdata-sections -ffunction-sections
-GCCLIB := $(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
-PHOENIXLIB := $(shell $(CC) $(CFLAGS) -print-file-name=libphoenix.a)
-LDLIBS := $(PHOENIXLIB) $(GCCLIB)
+CFLAGS += -Wno-pointer-sign -Wno-discarded-qualifiers -Wno-unused-value -Wno-strict-prototypes\
+	-DCONFIG_JFFS2_CMODE_NONE -DCONFIG_JFFS2_FS_WRITEBUFFER -DLIBFLASHDRV
 
 #-DJFFS2_DBG_READINODE_MESSAGES
 LIBS := flashdrv.o
@@ -92,10 +67,22 @@ endif
 
 OBJS = $(SRCS:.c=.o)
 
-GCCLIB := $(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
 BIN = jffs2
 
-all: jffs2
+all: check $(BIN)
+
+
+check:
+	@(if test -z "$(TARGET)"; then\
+		echo "Error: Only main Makefile can be used for compilation!";\
+		exit 1;\
+	fi;)
+
+
+.c.o:
+	@(printf " CC    %-24s  \n" "$<"; $(CC) -c $(CFLAGS) $< -o $@)
+
+-include .depend
 
 .c.o:
 flashdrv.o: ../../phoenix-rtos-devices/storage/imx6ull-flash/flashdrv.c
@@ -106,4 +93,4 @@ jffs2: $(OBJS) $(LIBS)
 	$(STRIP) $(BIN)_unstripped -o $(BIN)
 
 clean:
-	rm -f *.o os-phoenix/*.o *~ core
+	$(SIL)rm -f *.o os-phoenix/*.o *~ core

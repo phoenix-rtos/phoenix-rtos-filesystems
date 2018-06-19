@@ -9,7 +9,7 @@
 ifneq (, $(findstring arm-imx, $(TARGET)))
 	CROSS ?= arm-phoenix-
 
-	SUBDIRS = dummyfs
+	SUBDIRS = dummyfs jffs2
 
 	MKDEP = $(CROSS)gcc -MM
 	MKDEPFLAGS = $(CFLAGS)
