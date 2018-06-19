@@ -504,8 +504,6 @@ int fetch_modules(void)
 
 #endif
 
-#ifdef NANDBOOT
-
 #include "../../phoenix-rtos-devices/storage/imx6ull-flash/flashdrv.h"
 
 void init(void *arg)
@@ -617,11 +615,10 @@ retry_jffs2:
 	endthread();
 }
 
-#endif
 
 char __attribute__((aligned(8))) stack[4096];
 
-int main(void)
+int main(int argc,char **argv)
 {
 	oid_t root = { 0 };
 	msg_t msg;
@@ -676,11 +673,10 @@ int main(void)
 	dir_add(o, ".", otDir, &root);
 	dir_add(o, "..", otDir, &root);
 
-#ifdef NANDBOOT
-	beginthread(init, 4, &stack, 4096, NULL);
-#else
-	fetch_modules();
-#endif
+	if (argc > 1 && !strcmp(argv[1], "NANDBOOT"))
+		beginthread(init, 4, &stack, 4096, NULL);
+	else
+		fetch_modules();
 
 	for (;;) {
 		if (msgRecv(dummyfs_common.port, &msg, &rid) < 0) {

@@ -13,11 +13,8 @@ endif
 OBJS = $(SRCS:.c=.o)
 BIN = dummyfs
 
-ifeq ($(NANDBOOT), 1)
-	CFLAGS += -DLIBFLASHDRV
-	CFLAGS += -DNANDBOOT
-	LIBS := flashdrv.o
-endif
+CFLAGS += -DLIBFLASHDRV
+LIBS := flashdrv.o
 
 all: check $(BIN)
 
