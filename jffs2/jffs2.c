@@ -121,6 +121,10 @@ static int jffs2_srv_setattr(oid_t *oid, int type, int attr)
 	struct jffs2_inode_info *f;
 	struct dentry dentry;
 	int ret;
+	struct jffs2_sb_info *c = JFFS2_SB_INFO(jffs2_common.sb);
+
+	if (jffs2_is_readonly(c))
+		return -EROFS;
 
 	inode = jffs2_iget(jffs2_common.sb, oid->id);
 	if (IS_ERR(inode))
@@ -231,6 +235,10 @@ static int jffs2_srv_link(oid_t *dir, const char *name, oid_t *oid)
 	struct dentry *old, *new;
 	oid_t toid;
 	int ret;
+	struct jffs2_sb_info *c = JFFS2_SB_INFO(jffs2_common.sb);
+
+	if (jffs2_is_readonly(c))
+		return -EROFS;
 
 	if (!dir->id || !oid->id)
 		return -EINVAL;
@@ -282,6 +290,10 @@ static int jffs2_srv_unlink(oid_t *dir, const char *name)
 	struct dentry *dentry;
 	oid_t oid;
 	int ret;
+	struct jffs2_sb_info *c = JFFS2_SB_INFO(jffs2_common.sb);
+
+	if (jffs2_is_readonly(c))
+		return -EROFS;
 
 	if (!dir->id)
 		return -EINVAL;
@@ -331,6 +343,10 @@ static int jffs2_srv_create(oid_t *dir, const char *name, oid_t *oid, int type, 
 	struct inode *idir;
 	struct dentry *dentry;
 	int ret = 0;
+	struct jffs2_sb_info *c = JFFS2_SB_INFO(jffs2_common.sb);
+
+	if (jffs2_is_readonly(c))
+		return -EROFS;
 
 	if (name == NULL || !strlen(name))
 		return -EINVAL;
@@ -557,6 +573,10 @@ static int jffs2_srv_write(oid_t *oid, offs_t offs, void *data, unsigned long le
 	uint32_t writelen = 0;
 	int ret;
 
+	c = JFFS2_SB_INFO(jffs2_common.sb);
+	if (jffs2_is_readonly(c))
+		return -EROFS;
+
 	if (!oid->id)
 		return -EINVAL;
 
@@ -614,6 +634,10 @@ static int jffs2_srv_write(oid_t *oid, offs_t offs, void *data, unsigned long le
 
 static int jffs2_srv_truncate(oid_t *oid, unsigned long len)
 {
+	struct jffs2_sb_info *c = JFFS2_SB_INFO(jffs2_common.sb);
+	if (jffs2_is_readonly(c))
+		return -EROFS;
+
 	return jffs2_srv_setattr(oid, 3, len);
 }
 
