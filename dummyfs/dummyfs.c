@@ -68,7 +68,6 @@ int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res)
 	}
 
 	object_lock(d);
-
 	while (name[len] != '\0') {
 		while (name[len] == '/')
 			len++;
@@ -505,6 +504,123 @@ int fetch_modules(void)
 
 #endif
 
+#ifdef NANDBOOT
+
+#include "../../phoenix-rtos-devices/storage/imx6ull-flash/flashdrv.h"
+
+void init(void *arg)
+{
+	flashdrv_dma_t *dma;
+	char *rbuf;
+	void *prog;
+	flashdrv_meta_t *meta;
+	int ret, i;
+	oid_t root = {dummyfs_common.port, 0};
+	oid_t toid = { 0 };
+	int mod_start;
+	char *argv[5] = { 0 };
+
+	if ((rbuf = mmap(NULL, SIZE_PAGE, PROT_READ | PROT_WRITE, MAP_UNCACHED, OID_NULL, 0)) == MAP_FAILED) {
+		printf("dummyfs: flash read buffer mmap failed\n");
+		return;
+	}
+
+	if ((meta = mmap(NULL, SIZE_PAGE, PROT_READ | PROT_WRITE, MAP_UNCACHED, OID_NULL, 0)) == MAP_FAILED) {
+		printf("dummyfs: flash oob buffer mmap failed\n");
+		return;
+	}
+
+	flashdrv_init();
+
+	dma = flashdrv_dmanew();
+
+	flashdrv_reset(dma);
+
+	prog = mmap(NULL, 32 * SIZE_PAGE, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_UNCACHED, OID_NULL, 0);
+
+	mod_start = 530;
+
+retry_uart:
+	memset(prog, 0, 32 * SIZE_PAGE);
+	argv[1] = NULL;
+	argv[0] = "imx6ull-uart";
+
+	for (i = 0; i < 16; i++) {
+		ret = flashdrv_read(dma, mod_start + i, rbuf, meta);
+		if (!ret)
+			memcpy(prog + (i * SIZE_PAGE), rbuf, SIZE_PAGE);
+		else if (ret == 0xfe04) {
+			if  (mod_start > 1024) {
+				printf("dummyfs: Critical flash error\n");
+				endthread();
+			}
+			mod_start = 1042;
+			goto retry_uart;
+		}
+	}
+
+	dummyfs_lookup(NULL, ".", &root);
+	dummyfs_create(&root, argv[0], &toid, otFile, 0, NULL);
+	dummyfs_write(&toid, 0, prog, 16 * SIZE_PAGE);
+
+	if (vfork() == 0) {
+		if(execve("/imx6ull-uart", argv, NULL) != EOK)
+			printf("dummyfs: Failed to start %s\n", argv[0]);
+	}
+
+	while(write(0, "", 1) < 0)
+		usleep(500000);
+
+retry_jffs2:
+	memset(prog, 0, 22 * SIZE_PAGE);
+	for (i = 0; i < 32; i++) {
+		ret = flashdrv_read(dma, mod_start + 16 + i, rbuf, meta);
+		if (!ret)
+			memcpy(prog + (i * SIZE_PAGE), rbuf, SIZE_PAGE);
+		else if (ret == 0xfe04) {
+			if (mod_start > 1024) {
+				printf("dummyfs: Critical flash error\n");
+				endthread();
+			}
+			mod_start = 1058;
+			goto retry_jffs2;
+		}
+	}
+
+	dummyfs_lookup(NULL, ".", &root);
+	dummyfs_create(&root, "jffs2", &toid, otFile, 0, NULL);
+	dummyfs_write(&toid, 0, prog, 22 * SIZE_PAGE);
+
+	argv[0] = "jffs2";
+	argv[1] = "64";
+	argv[2] = "64";
+	argv[3] = "/";
+	argv[4] = NULL;
+
+	if (vfork() == 0) {
+		if(execve("/jffs2", argv, NULL) != EOK)
+			printf("dummyfs: Failed to start jffs2\n");
+	}
+	toid.port = dummyfs_common.port;
+	lookup("/", &toid);
+	while (toid.port == dummyfs_common.port) {
+		usleep(100000);
+		lookup("/", &toid);
+	}
+	argv[0] = "/bin/psh";
+
+	if (vfork() == 0) {
+		if(execve(argv[0], argv, NULL) != EOK)
+			printf("dummyfs: Failed to start %s\n", argv[0]);
+	}
+
+	endthread();
+}
+
+#endif
+
+char __attribute__((aligned(8))) stack[4096];
+
 int main(void)
 {
 	oid_t root = { 0 };
@@ -560,7 +676,11 @@ int main(void)
 	dir_add(o, ".", otDir, &root);
 	dir_add(o, "..", otDir, &root);
 
+#ifdef NANDBOOT
+	beginthread(init, 4, &stack, 4096, NULL);
+#else
 	fetch_modules();
+#endif
 
 	for (;;) {
 		if (msgRecv(dummyfs_common.port, &msg, &rid) < 0) {

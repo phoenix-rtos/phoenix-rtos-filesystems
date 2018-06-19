@@ -13,6 +13,11 @@ endif
 OBJS = $(SRCS:.c=.o)
 BIN = dummyfs
 
+ifeq ($(NANDBOOT), 1)
+	CFLAGS += -DLIBFLASHDRV
+	CFLAGS += -DNANDBOOT
+	LIBS := flashdrv.o
+endif
 
 all: check $(BIN)
 
@@ -29,10 +34,12 @@ check:
 
 -include .depend
 
+flashdrv.o: ../../phoenix-rtos-devices/storage/imx6ull-flash/flashdrv.c
+	@(printf " CC    %-24s  \n" "$<"; $(CC) -c $(CFLAGS) "$<" -o "$@")
 
-$(BIN): $(OBJS)
+$(BIN): $(OBJS) $(LIBS)
 	@echo " LD    $@"
-	$(SIL)$(LD) $(LDFLAGS) -o $(BIN)_unstripped $(OBJS) $(LDLIBS)
+	$(SIL)$(LD) $(LDFLAGS) -o $(BIN)_unstripped $^ $(LDLIBS)
 	@echo " STRIP $@"
 	$(SIL)$(STRIP) $(BIN)_unstripped -o $(BIN) 2>/dev/null
 
