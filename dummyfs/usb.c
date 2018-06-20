@@ -92,10 +92,9 @@ static int dc_setup(setup_packet_t *setup)
 			break;
 
 		default:
-			if (*(u32 *)setup == 0xdeadc0de) {
+			if (*(u32 *)setup == 0xdeadc0de)
 				dc.op = DC_OP_EXIT;
-				dtd_exec(0, pIN, 0, DIR_IN);
-			} else {
+			else {
 				fsz = setup->val << 16;
 				fsz |= setup->idx;
 				dtd_exec(0, pOUT, setup->len, DIR_OUT);
@@ -307,10 +306,8 @@ static int dtd_exec_chain(int endpt, void *vaddr, int sz, int dir)
 		i = 0;
 
 		while (i < 4 && sz > 0) {
-	//		printf("vaddr 0x%p ", vaddr);
 			current->buff_ptr[i] = ((va2pa((void *)vaddr)) & ~0xfff) + ((addr_t)vaddr & 0xfff);
 			vaddr = (void *)((addr_t)vaddr & ~0xfff) + 0x1000;
-	//		printf("paddr 0x%x \n", current->buff_ptr[i]);
 			i++;
 			sz -= 0x1000;
 		}
