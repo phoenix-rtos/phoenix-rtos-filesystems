@@ -11,8 +11,8 @@
 
 CFLAGS += -Wno-pointer-sign -Wno-discarded-qualifiers -Wno-unused-value -Wno-strict-prototypes\
 	-DCONFIG_JFFS2_CMODE_NONE -DCONFIG_JFFS2_FS_WRITEBUFFER -DLIBFLASHDRV
-
 #-DJFFS2_DBG_READINODE_MESSAGES
+
 LIBS := flashdrv.o
 
 #linux base jffs2 files + writebuffer for nand support
