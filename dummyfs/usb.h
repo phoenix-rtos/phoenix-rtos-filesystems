@@ -1,8 +1,6 @@
 /*
  * Phoenix-RTOS
  *
- * Operating system kernel
- *
  * dummyfs - usb device controller driver
  *
  * Copyright 2018 Phoenix Systems
@@ -13,6 +11,7 @@
  *
  * %LICENSE%
  */
+
 #ifndef _USB_H_
 #define _USB_H_
 

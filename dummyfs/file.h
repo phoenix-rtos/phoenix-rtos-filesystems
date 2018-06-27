@@ -1,8 +1,6 @@
 /*
  * Phoenix-RTOS
  *
- * Operating system kernel
- *
  * dummyfs
  *
  * Copyright 2012, 2016, 2018 Phoenix Systems
