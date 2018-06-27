@@ -103,6 +103,7 @@ static int dc_setup(setup_packet_t *setup)
 				dtd_exec(1, pOUT, 0x80, DIR_OUT);
 				strcpy(dc.mods[dc.mods_cnt].args, (const char *)OUT);
 				dc.op = DC_OP_RECEIVE;
+				dc.mods_cnt++;
 			}
 			break;
 	}
@@ -283,13 +284,19 @@ static int dtd_build(dtd_t *dtd, u32 paddr, u32 size)
 static int dtd_exec_chain(int endpt, void *vaddr, int sz, int dir)
 {
 	u32 qh, offs, shift;
-	int i, dcnt = 1;
-	dtd_t *prev = NULL, *current, *first;
+	int i, dcnt, dtdn;
+	dtd_t *prev, *current, *first;
+	int size = sz;
+
+again:
+	prev = NULL;
+	dcnt = 1;
+	dtdn = 0;
 
 	first = dtd_get(endpt, dir);
 	current = first;
 
-	while (sz > 0) {
+	while (sz > 0 && dtdn < 64) {
 
 		if (prev != NULL) {
 			dcnt++;
@@ -311,6 +318,7 @@ static int dtd_exec_chain(int endpt, void *vaddr, int sz, int dir)
 		}
 
 		prev = current;
+		dtdn++;
 	}
 
 	current->dtd_next = 1;
@@ -328,14 +336,13 @@ static int dtd_exec_chain(int endpt, void *vaddr, int sz, int dir)
 	*(dc.base + endptprime) |= 1 << shift;
 	while (!(*(dc.base + endptprime) & (1 << shift)) && (*(dc.base + endptstat) & (1 << shift)));
 
-	while (!(*(dc.base + endptcomplete) & (1 << shift)));
-	*(dc.base + endptcomplete) |= 1 << shift;
-	while (*(dc.base + usbsts) & 1);
-	*(dc.base + usbsts) |= 1;
-
+	while ((current->dtd_token >> 7) & 1) usleep(10000);
 	dc.endptqh[qh].head = dc.endptqh[qh].tail;
 
-	return 0;
+	if (sz > 0)
+		goto again;
+
+	return size;
 }
 
 
@@ -542,8 +549,7 @@ void exec_modules(void *arg)
 int fetch_modules(void)
 {
 	endpt_init_t bulk_endpt;
-	int res;
-
+	int res, modn;
 
 	void *conf = mmap(NULL, 0x1000, PROT_WRITE | PROT_READ, MAP_UNCACHED, OID_NULL, 0);
 
@@ -612,17 +618,16 @@ int fetch_modules(void)
 		mutexUnlock(dc.lock);
 
 		if (dc.op == DC_OP_RECEIVE) {
-
-			if (dc.mods_cnt >= MOD_MAX) {
+			modn = dc.mods_cnt - 1;
+			if (modn >= MOD_MAX) {
 				printf("dummyfs: Maximum modules number reached (%d), stopping usb...\n", MOD_MAX);
 				break;
 			} else
 				dc.op = DC_OP_NONE;
 
-			dc.mods[dc.mods_cnt].data = mmap(NULL, (dc.mods[dc.mods_cnt].size + 0xfff) & ~0xfff, PROT_WRITE | PROT_READ, MAP_UNCACHED, OID_NULL, 0);
-			dtd_exec_chain(1, dc.mods[dc.mods_cnt].data, dc.mods[dc.mods_cnt].size, DIR_OUT);
-			dc.mods_cnt++;
 			dc.op = DC_OP_NONE;
+			dc.mods[modn].data = mmap(NULL, (dc.mods[modn].size + 0xfff) & ~0xfff, PROT_WRITE | PROT_READ, MAP_UNCACHED, OID_NULL, 0);
+			dtd_exec_chain(1, dc.mods[modn].data, dc.mods[modn].size, DIR_OUT);
 		} else if (dc.op == DC_OP_INIT && endpt_init(1, &bulk_endpt) != EOK) {
 			dc.op = DC_OP_NONE;
 			return 0;
