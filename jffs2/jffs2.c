@@ -618,8 +618,8 @@ static int jffs2_srv_write(oid_t *oid, offs_t offs, void *data, unsigned long le
 	ret = jffs2_write_inode_range(c, f, ri, data, offs, len, &writelen);
 
 	if (!ret) {
-		if (writelen > inode->i_size) {
-			inode->i_size = writelen;
+		if (offs + writelen > inode->i_size) {
+			inode->i_size = offs + writelen;
 			inode->i_blocks = (inode->i_size + 511) >> 9;
 			inode->i_ctime = inode->i_mtime = ITIME(je32_to_cpu(ri->ctime));
 		}
@@ -628,7 +628,7 @@ static int jffs2_srv_write(oid_t *oid, offs_t offs, void *data, unsigned long le
 
 	jffs2_free_raw_inode(ri);
 	iput(inode);
-	return ret;
+	return ret ? ret : writelen;
 }
 
 
