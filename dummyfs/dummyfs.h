@@ -19,7 +19,7 @@
 #include <errno.h>
 
 
-#define DUMMYFS_SIZE_MAX 4 * 1024 * 1024
+#define DUMMYFS_SIZE_MAX 32 * 1024 * 1024
 
 enum {	otDir = 0,
 		otFile,
