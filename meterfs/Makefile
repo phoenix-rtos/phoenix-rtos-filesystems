@@ -4,7 +4,7 @@
 #
 
 
-SRCS = spi.c flash.c #node.c meterfs.c
+SRCS = spi.c flash.c node.c meterfs.c
 OBJS = $(SRCS:.c=.o)
 BIN = meterfs
 

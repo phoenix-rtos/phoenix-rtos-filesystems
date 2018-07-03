@@ -30,12 +30,6 @@
 
 #define TOTAL_SIZE(f)           (((f)->filesz * ((f)->recordsz + sizeof(entry_t))) / (f)->recordsz)
 #define SECTORS(f, sectorsz)    (((TOTAL_SIZE(f) + sectorsz - 1) / sectorsz) + 1)
-#define FATAL(fmt, ...) \
-	do { \
-		printf("meterfs: FATAL: " fmt "\n", ##__VA_ARGS__); \
-		for (;;) \
-			usleep(10000000); \
-	} while (0)
 
 
 static const unsigned char magic[4] = { 0xaa, 0x41, 0x4b, 0x55 };
@@ -54,16 +48,6 @@ struct {
 	unsigned int filecnt;
 	size_t sectorsz;
 	size_t flashsz;
-
-	union {
-		unsigned char buff[256];
-		fsdata_t data;
-		fsopen_t open;
-		fsclose_t close;
-		fsmount_t mount;
-		fslookup_t lckup;
-		fsfcntl_t fcntl;
-	} msg_buff;
 } meterfs_common;
 
 
@@ -694,61 +678,7 @@ int meterfs_configure(unsigned int id, unsigned int cmd, unsigned long arg)
 	}
 }
 
-
-int meterfs_mount(unsigned int port, const char *path)
-{
-	size_t len, i;
-	oid_t oid;
-
-	if (path[0] != '/')
-		return -EINVAL;
-
-	len = strlen(path);
-	if (len < 2)
-		return -EINVAL;
-
-	for (i = 1; i < len; ++i) {
-		if (path[i] == '/') {
-			/* This fs does not support directories */
-			return -EINVAL;
-		}
-	}
-
-	oid.port = port;
-
-	return node_add(NULL, path + 1, &oid);
-}
-
-
-int meterfs_umount(const char *path)
-{
-	size_t len, i;
-	oid_t oid;
-	int err;
-
-	if (path[0] != '/')
-		return -EINVAL;
-
-	len = strlen(path);
-	if (len < 2)
-		return -EINVAL;
-
-	for (i = 1; i < len; ++i) {
-		if (path[i] == '/') {
-			/* This fs does not support directories */
-			return -EINVAL;
-		}
-	}
-
-	err = node_findMount(&oid, path + 1);
-
-	if (err)
-		return err;
-
-	return node_remove(oid.id);
-}
-
-
+#if 0
 int meterfs_lookup(fslookup_t *lckup)
 {
 	size_t len, i;
@@ -787,7 +717,7 @@ int meterfs_lookup(fslookup_t *lckup)
 	return EOK;
 }
 
-#if 0
+
 void dump_header(void)
 {
 	header_t h;
@@ -1171,25 +1101,16 @@ int main(void)
 	int s, err, cnt;
 	unsigned int id;
 	oid_t oid;
-	msghdr_t hdr;
 
 	spi_init();
 	flash_init(&meterfs_common.flashsz, &meterfs_common.sectorsz);
 	node_init();
 
 //flash_chipErase();
-
-	if (meterfs_common.flashsz == 0)
-		FATAL("Could not detect flash memory");
-
 	meterfs_checkfs();
-
-	if (portCreate(&meterfs_common.port) != EOK)
-		FATAL("Could not create port");
-
-	if (portRegister(meterfs_common.port, "/") != EOK)
-		FATAL("Could not register port");
-
+	portCreate(&meterfs_common.port);
+	portRegister(meterfs_common.port, "/", NULL);
+#if 0
 //beginthread(meterfs_test, 4, malloc(1024), 1024, NULL);
 //beginthread(dummyDriver, 4, malloc(1024), 1024, NULL);
 
@@ -1306,5 +1227,6 @@ int main(void)
 				break;
 		}
 	}
+#endif
 }
 
