@@ -15,7 +15,7 @@
 #define _METERFS_FLASH_H_
 
 
-extern int (*flash_write)(unsigned int, void *, size_t);
+extern void (*flash_write)(unsigned int, void *, size_t);
 
 
 extern void flash_chipErase(void);

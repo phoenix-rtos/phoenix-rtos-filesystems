@@ -16,12 +16,12 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <errno.h>
-#include <sys/fs.h>
 #include <sys/threads.h>
 #include <sys/pwman.h>
 #include <sys/mount.h>
 #include <sys/msg.h>
 #include <string.h>
+
 #include "meterfs.h"
 #include "spi.h"
 #include "flash.h"
@@ -39,6 +39,12 @@
 
 
 static const unsigned char magic[4] = { 0xaa, 0x41, 0x4b, 0x55 };
+
+
+msg_t gmsg;
+
+
+oid_t multidrv;
 
 
 struct {

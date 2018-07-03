@@ -3,7 +3,7 @@
  *
  * Meterfs - STM32L1x SPI routines
  *
- * Copyright 2017 Phoenix Systems
+ * Copyright 2017, 2018 Phoenix Systems
  * Author: Aleksander Kaminski
  *
  * This file is part of Phoenix-RTOS.
@@ -17,123 +17,61 @@
 #include <sys/interrupt.h>
 #include <unistd.h>
 
+#include "common.h"
 #include "spi.h"
-
-
-typedef struct {
-	int mask;
-	int state;
-} __attribute__((packed)) gpioset_t;
-
-
-typedef struct {
-	char pin;
-	char mode;
-	char af;
-	char otype;
-	char ospeed;
-	char pupd;
-} __attribute__((packed)) gpioconfig_t;
-
-
-typedef struct {
-	char pin;
-	char state;
-	char edge;
-} __attribute__((packed)) gpiointerrupt_t;
-
-
-typedef struct {
-	int len;
-} __attribute__((packed)) gpiodelay_t;
-
-
-typedef struct {
-	char type;
-	int port;
-
-	union {
-		gpioset_t set;
-		gpioconfig_t config;
-		gpiointerrupt_t interrupt;
-		gpiodelay_t delay;
-	};
-} __attribute__((packed)) gpiomsg_t;
-
-
-struct {
-	volatile unsigned int *base;
-	volatile unsigned int *rcc;
-
-	volatile char spi_ready;
-	handle_t mutex;
-	handle_t cond;
-	handle_t inth;
-
-	unsigned int gpio;
-} spi_common;
-
-
-enum { cr1 = 0, cr2, sr, dr, crcpr, rxcrcr, txcrcr, i2scfgr, i2spr };
-
-
-enum { rcc_apb2enr = 8 };
-
-
-enum { GPIO_CONFIG, GPIO_INTERRUPT, GPIO_GET, GPIO_SET, GPIO_DELAY };
-
-
-enum { GPIOA = 0, GPIOB, GPIOC, GPIOD, GPIOE, GPIOF, GPIOG, GPIOH };
-
-
-static int spi_irqHandler(unsigned int n, void *arg)
-{
-	*(spi_common.base + cr2) &= ~(1 << 7);
-	spi_common.spi_ready = 1;
-
-	return spi_common.cond;
-}
 
 
 static void gpio_pinSet(int port, int pin, int state)
 {
-	gpiomsg_t devctl;
+	multi_i_t *iptr = (multi_i_t *)gmsg.i.raw;
 
-	devctl.port = port;
-	devctl.type = GPIO_SET;
-	devctl.set.mask = 1 << pin;
-	devctl.set.state = !!state << pin;
+	gmsg.type = mtDevCtl;
+	gmsg.i.data = NULL;
+	gmsg.i.size = 0;
+	gmsg.o.data = NULL;
+	gmsg.o.size = 0;
 
-	send(spi_common.gpio, DEVCTL, &devctl, sizeof(devctl), NORMAL, NULL, 0);
+	iptr->type = gpio_set;
+	iptr->gpio_set.port = port;
+	iptr->gpio_set.mask = 1 << pin;
+	iptr->gpio_set.state = !!state << pin;
+
+	msgSend(multidrv.port, &gmsg);
 }
 
 
 static void gpio_pinConfig(int port, char pin, char mode, char af, char ospeed, char otype, char pupd)
 {
-	gpiomsg_t devctl;
+	multi_i_t *iptr = (multi_i_t *)gmsg.i.raw;
 
-	devctl.port = port;
-	devctl.type = GPIO_CONFIG;
-	devctl.config.pin = pin;
-	devctl.config.mode = mode;
-	devctl.config.af = af;
-	devctl.config.otype = otype;
-	devctl.config.ospeed = ospeed;
-	devctl.config.pupd = pupd;
+	gmsg.type = mtDevCtl;
+	gmsg.i.data = NULL;
+	gmsg.i.size = 0;
+	gmsg.o.data = NULL;
+	gmsg.o.size = 0;
 
-	send(spi_common.gpio, DEVCTL, &devctl, sizeof(devctl), NORMAL, NULL, 0);
+	iptr->type = gpio_def;
+	iptr->gpio_def.port = port;
+	iptr->gpio_def.pin = pin;
+	iptr->gpio_def.mode = mode;
+	iptr->gpio_def.af = af;
+	iptr->gpio_def.ospeed = ospeed;
+	iptr->gpio_def.otype = otype;
+	iptr->gpio_def.pupd = pupd;
+
+	msgSend(multidrv.port, &gmsg);
 }
 
 
 void spi_csControl(int state)
 {
-	gpio_pinSet(GPIOE, 12, !state);
+	gpio_pinSet(gpioe, 12, !state);
 }
 
 
 void spi_powerCtrl(int state)
 {
-	gpio_pinSet(GPIOA, 4, state);
+	gpio_pinSet(gpioa, 4, state);
 
 	if (state) {
 		usleep(5000);
@@ -141,100 +79,56 @@ void spi_powerCtrl(int state)
 }
 
 
-static unsigned char spi_readwrite(unsigned char txd)
+void spi_read(unsigned char cmd, unsigned int addr, unsigned char flags, void *buff, size_t bufflen)
 {
-	unsigned char rxd;
+	multi_i_t *iptr = (multi_i_t *)gmsg.i.raw;
 
-	mutexLock(spi_common.mutex);
-	spi_common.spi_ready = 0;
+	gmsg.type = mtDevCtl;
+	gmsg.i.data = NULL;
+	gmsg.i.size = 0;
 
-	/* Initiate transmission */
-	*(spi_common.base + dr) = txd;
-	*(spi_common.base + cr2) |= 1 << 7;
+	iptr->type = spi_get;
+	iptr->spi_rw.cmd = cmd;
+	iptr->spi_rw.addr = addr;
+	iptr->spi_rw.flags = flags;
 
-	while (!spi_common.spi_ready)
-		condWait(spi_common.cond, spi_common.mutex, 1);
+	gmsg.o.data = buff;
+	gmsg.o.size = bufflen;
 
-	rxd = *(spi_common.base + dr);
-	mutexUnlock(spi_common.mutex);
-
-	return rxd;
+	msgSend(multidrv.port, &gmsg);
 }
 
 
-void spi_transaction(unsigned char cmd, unsigned int addr, unsigned char flags, unsigned char *buff, size_t bufflen)
+void spi_write(unsigned char cmd, unsigned int addr, unsigned char flags, const void *buff, size_t bufflen)
 {
-	int i;
+	multi_i_t *iptr = (multi_i_t *)gmsg.i.raw;
 
-	spi_csControl(1);
+	gmsg.type = mtDevCtl;
+	gmsg.o.data = NULL;
+	gmsg.o.size = 0;
 
-	spi_readwrite(cmd);
+	iptr->type = spi_set;
+	iptr->spi_rw.cmd = cmd;
+	iptr->spi_rw.addr = addr;
+	iptr->spi_rw.flags = flags;
 
-	if (flags & spi_address) {
-		for (i = 0; i < 3; ++i) {
-			spi_readwrite((addr >> 16) & 0xff);
-			addr <<= 8;
-		}
-	}
+	gmsg.i.data = (void *)buff;
+	gmsg.i.size = bufflen;
 
-	if (flags & spi_dummy)
-		spi_readwrite(0);
-
-	if (flags & spi_read) {
-		for (i = 0; i < bufflen; ++i)
-			buff[i] = spi_readwrite(0);
-	}
-	else {
-		for (i = 0; i < bufflen; ++i)
-			spi_readwrite(buff[i]);
-	}
-
-	spi_csControl(0);
+	msgSend(multidrv.port, &gmsg);
 }
 
 
 void spi_init(void)
 {
-	oid_t t;
+	while (lookup("/multi", &multidrv) < 0)
+		usleep(50000);
 
-	spi_common.base = (void *)0x40013000; /* SPI1 */
-	spi_common.rcc = (void *)0x40023800;  /* RCC */
-
-	spi_common.spi_ready = 1;
-
-	while (lookup("/gpiodrv", &t));
-	spi_common.gpio = t.port;
-
-	mutexCreate(&spi_common.mutex);
-	condCreate(&spi_common.cond);
-
-	/* Enable SPI1 clock */
-	*(spi_common.rcc + rcc_apb2enr) |= 1 << 12;
-	__asm__ volatile ("dmb");
-
-	/* Disable SPI */
-	*(spi_common.base + cr1) &= 1 << 6;
-	__asm__ volatile ("dmb");
-
-	/* 1 MHz baudrate, master, mode 0 */
-	*(spi_common.base + cr1) = (1 << 2);
-
-	/* Motorola frame format, SS output enable */
-	*(spi_common.base + cr2) = (1 << 2);
-
-	/* SPI mode enabled */
-	*(spi_common.base + i2scfgr) = 0;
-
-	/* Enable SPI */
-	*(spi_common.base + cr1) |= 1 << 6;
-
-	interrupt(16 + 35, spi_irqHandler, NULL, spi_common.cond, &spi_common.inth);
-
-	gpio_pinConfig(GPIOA, 4, 1, 0, 1, 0, 0);  /* SPI PWEN */
-	gpio_pinConfig(GPIOE, 12, 1, 0, 1, 0, 0); /* SPI /CS */
-	gpio_pinConfig(GPIOE, 13, 2, 5, 1, 0, 0); /* SPI SCK */
-	gpio_pinConfig(GPIOE, 14, 2, 5, 1, 0, 0); /* SPI MISO */
-	gpio_pinConfig(GPIOE, 15, 2, 5, 1, 0, 0); /* SPI MOSI */
+	gpio_pinConfig(gpioa, 4, 1, 0, 1, 0, 0);  /* SPI PWEN */
+	gpio_pinConfig(gpioe, 12, 1, 0, 1, 0, 0); /* SPI /CS */
+	gpio_pinConfig(gpioe, 13, 2, 5, 1, 0, 0); /* SPI SCK */
+	gpio_pinConfig(gpioe, 14, 2, 5, 1, 0, 0); /* SPI MISO */
+	gpio_pinConfig(gpioe, 15, 2, 5, 1, 0, 0); /* SPI MOSI */
 
 	spi_csControl(0);
 	spi_powerCtrl(0);

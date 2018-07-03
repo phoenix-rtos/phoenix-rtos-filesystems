@@ -1,11 +1,10 @@
 #
-# Misc. FAT
+# Meterfs
 # Copyright 2012 Pawel Pisarczyk
 #
 
 
-
-SRCS = meterfs.c spi.c flash.c node.c
+SRCS = spi.c flash.c #node.c meterfs.c
 OBJS = $(SRCS:.c=.o)
 BIN = meterfs
 
