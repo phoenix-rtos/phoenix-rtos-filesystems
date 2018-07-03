@@ -14,29 +14,28 @@
 #ifndef _METERFS_OPENED_H_
 #define _METERFS_OPENED_H_
 
-#include ARCH
+#include <arch.h>
 #include "files.h"
 
-
-extern int node_add(file_t *file, const char *name, oid_t *oid);
-
-
-extern int node_remove(unsigned int id);
+int node_add(file_t *file, id_t id);
 
 
-extern file_t *node_findFile(unsigned int id);
+file_t *node_getByName(const char *name, id_t *id);
 
 
-extern int node_findMount(oid_t *oid, const char *name);
+file_t *node_getById(id_t id);
 
 
-extern int node_claim(const char *name, unsigned int *id);
+int node_put(id_t id);
 
 
-extern void node_cleanAll(void);
+void node_cleanAll(void);
 
 
-extern void node_init(void);
+int node_getMaxId(void);
+
+
+void node_init(void);
 
 
 #endif

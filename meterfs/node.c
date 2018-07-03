@@ -53,7 +53,7 @@ int node_add(file_t *file, id_t id)
 	if ((r = malloc(sizeof(node_t))) == NULL)
 		return -ENOMEM;
 
-	r->refs = 1;
+	r->refs = 0;
 	r->id = id;
 	memcpy(&r->file, file, sizeof(file_t));
 
@@ -63,7 +63,42 @@ int node_add(file_t *file, id_t id)
 }
 
 
-int node_remove(id_t id)
+file_t *node_getByName(const char *name, id_t *id)
+{
+	node_t *p;
+
+	p = lib_treeof(node_t, linkage, lib_rbMinimum(tree.root));
+
+	while (p != NULL) {
+		if (strncmp(name, p->file.header.name, sizeof(p->file.header.name)) == 0) {
+			(*id) = p->id;
+			++(p->refs);
+			return &p->file;
+		}
+
+		p = lib_treeof(node_t, linkage, lib_rbNext(&p->linkage));
+	}
+
+	return NULL;
+}
+
+
+file_t *node_getById(id_t id)
+{
+	node_t *p, t;
+
+	t.id = id;
+
+	if ((p = lib_treeof(node_t, linkage, lib_rbFind(&tree, &t.linkage))) == NULL)
+		return NULL;
+
+	++(p->refs);
+
+	return &p->file;
+}
+
+
+int node_put(id_t id)
 {
 	node_t *r, t;
 
@@ -72,50 +107,12 @@ int node_remove(id_t id)
 	if ((r = lib_treeof(node_t, linkage, lib_rbFind(&tree, &t.linkage))) == NULL)
 		return -ENOENT;
 
-	if ((--r->refs) > 0)
-		return EOK;
-
-	lib_rbRemove(&tree, &r->linkage);
-
-	free(r);
-
-	return EOK;
-}
-
-
-file_t *node_find(unsigned int id)
-{
-	node_t t, *p;
-
-	t.id = id;
-
-	if ((p = lib_treeof(node_t, linkage, lib_rbFind(&tree, &t.linkage))) == NULL)
-		return NULL;
-
-	return &p->file;
-}
-
-
-int node_claim(const char *name, unsigned int *id)
-{
-	node_t *p;
-
-	if (tree.root == NULL)
-		return -1;
-
-	p = lib_treeof(node_t, linkage, lib_rbMinimum(tree.root));
-
-	while (p != NULL) {
-		if (strncmp(name, p->file.header.name, sizeof(p->file.header.name)) == 0) {
-			(*id) = p->id;
-			++(p->refs);
-			return EOK;
-		}
-
-		p = lib_treeof(node_t, linkage, lib_rbNext(&p->linkage));
+	if ((--r->refs) <= 0) {
+		lib_rbRemove(&tree, &r->linkage);
+		free(r);
 	}
 
-	return -ENOENT;
+	return EOK;
 }
 
 
@@ -127,6 +124,17 @@ void node_cleanAll(void)
 		lib_rbRemove(&tree, &p->linkage);
 		free(p);
 	}
+}
+
+
+int node_getMaxId(void)
+{
+	node_t *p;
+
+	if ((p = lib_treeof(node_t, linkage, lib_rbMaximum(tree.root))) != NULL)
+		return p->id;
+	else
+		return 0;
 }
 
 
