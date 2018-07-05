@@ -19,7 +19,6 @@
 
 #define EBADFD			66
 #define ENOTEMPTY		39
-#define ENAMETOOLONG	63
 #define	EBADMSG			74		/* Not a data message */
 #define	EOPNOTSUPP		95		/* Operation not supported on transport endpoint */
 #define	EUCLEAN			117		/* Structure needs cleaning */
