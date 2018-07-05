@@ -648,6 +648,9 @@ int main(int argc, char **argv)
 	msg_t msg;
 	unsigned int rid;
 
+	while(write(0, "", 1) < 0)
+		usleep(500000);
+
 	portCreate(&jffs2_common.port);
 
 	printf("jffs2: Starting jffs2 server at port %d\n", jffs2_common.port);
