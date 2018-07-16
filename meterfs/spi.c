@@ -17,8 +17,13 @@
 #include <sys/interrupt.h>
 #include <unistd.h>
 
-#include "common.h"
 #include "spi.h"
+
+
+extern oid_t multidrv;
+
+
+extern msg_t gmsg;
 
 
 static void gpio_pinSet(int port, int pin, int state)

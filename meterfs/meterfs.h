@@ -14,6 +14,27 @@
 #ifndef _METERFS_H_
 #define _METERFS_H_
 
-enum { METERFS_ALOCATE = 0, METERFS_RESIZE, METERFS_RECORDSZ, METERFS_CHIPERASE };
+enum { meterfs_allocate = 0, meterfs_resize, meterfs_chiperase };
+
+typedef struct {
+	int type;
+	union {
+		struct {
+			size_t sectors;
+			size_t filesz;
+			size_t recordsz;
+		} allocate;
+
+		struct {
+			size_t filesz;
+			size_t recordsz;
+		} resize;
+	};
+} meterfs_i_devctl_t;
+
+
+typedef struct {
+	int err;
+} meterfs_o_devctl_t;
 
 #endif
