@@ -21,10 +21,10 @@
 #include <sys/msg.h>
 #include <sys/interrupt.h>
 #include <sys/platform.h>
+#include <phoenix/arch/ia32.h>
+#include <errno.h>
 
 #include "pc-ata.h"
-
-#include "../../phoenix-rtos-kernel/include/arch/ia32.h"
 
 
 static pci_id_t ata_pci_tbl[] = {

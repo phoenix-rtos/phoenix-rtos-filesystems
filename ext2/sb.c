@@ -14,6 +14,8 @@
  */
 
 #include <stdlib.h>
+#include <errno.h>
+#include <string.h>
 
 #include "ext2.h"
 #include "sb.h"

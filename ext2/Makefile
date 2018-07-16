@@ -8,7 +8,7 @@ SRCS = ext2.c mbr.c inode.c block.c file.c pc-ata.c dir.c object.c sb.c
 OBJS = $(SRCS:.c=.o)
 BIN = ext2
 
-CFLAGS += -I../../phoenix-rtos-devices/storage/ata/
+CFLAGS += -I../../phoenix-rtos-devices/storage/pc-ata/
 
 
 all: check $(BIN)

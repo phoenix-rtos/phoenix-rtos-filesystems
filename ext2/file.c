@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <pc-ata.h>
+#include <string.h>
 
 #include "ext2.h"
 #include "file.h"

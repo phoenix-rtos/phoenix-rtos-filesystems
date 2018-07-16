@@ -17,6 +17,8 @@
 #include <sys/rb.h>
 #include <sys/file.h>
 #include <sys/threads.h>
+#include <errno.h>
+#include <string.h>
 
 #include "ext2.h"
 #include "block.h"
