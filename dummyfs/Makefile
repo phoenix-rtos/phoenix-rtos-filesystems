@@ -13,9 +13,6 @@ endif
 OBJS = $(SRCS:.c=.o)
 BIN = dummyfs
 
-CFLAGS += -DLIBFLASHDRV
-LIBS := flashdrv.o
-
 all: check $(BIN)
 
 
@@ -30,9 +27,6 @@ check:
 	@(printf " CC    %-24s  \n" "$<"; $(CC) -c $(CFLAGS) $<)
 
 -include .depend
-
-flashdrv.o: ../../phoenix-rtos-devices/storage/imx6ull-flash/flashdrv.c
-	@(printf " CC    %-24s  \n" "$<"; $(CC) -c $(CFLAGS) "$<" -o "$@")
 
 $(BIN): $(OBJS) $(LIBS)
 	@echo " LD    $@"
