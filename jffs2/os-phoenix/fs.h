@@ -159,7 +159,6 @@ static inline int dir_print(struct dir_context *ctx, const char *name, int len, 
 {
 	ctx->pos++;
 	ctx->emit++;
-	ctx->dent->d_reclen = 1;
 	ctx->dent->d_namlen = len;
 	ctx->dent->d_ino = ino;
 	switch (type) {

@@ -430,6 +430,8 @@ static int jffs2_srv_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsig
 
 	iput(inode);
 
+	dent->d_reclen = ctx.pos - offs;
+
 	return ctx.emit;
 }
 
