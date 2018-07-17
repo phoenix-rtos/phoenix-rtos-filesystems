@@ -14,18 +14,24 @@
 #ifndef _METERFS_H_
 #define _METERFS_H_
 
-enum { meterfs_allocate = 0, meterfs_resize, meterfs_chiperase };
+#include <arch.h>
+
+enum { meterfs_allocate = 0, meterfs_resize, meterfs_info, meterfs_chiperase };
 
 typedef struct {
 	int type;
 	union {
+		oid_t oid;
+
 		struct {
 			size_t sectors;
 			size_t filesz;
 			size_t recordsz;
+			char name[8];
 		} allocate;
 
 		struct {
+			oid_t oid;
 			size_t filesz;
 			size_t recordsz;
 		} resize;
@@ -35,6 +41,12 @@ typedef struct {
 
 typedef struct {
 	int err;
+	struct {
+		size_t sectors;
+		size_t filesz;
+		size_t recordsz;
+		size_t recordcnt;
+	} info;
 } meterfs_o_devctl_t;
 
 #endif

@@ -401,64 +401,6 @@ int meterfs_readRecord(file_t *f, void *buff, size_t bufflen, unsigned int idx, 
 }
 
 
-int meterfs_alocateFile(fileheader_t *f)
-{
-	header_t h;
-	fileheader_t t;
-	unsigned int addr, i, headerNew;
-
-	/* Check if sectorcnt is valid */
-	if (SECTORS(f, meterfs_common.sectorsz) > f->sectorcnt || f->sectorcnt < 2)
-		return -EINVAL;
-
-	flash_read(meterfs_common.hcurrAddr, &h, sizeof(h));
-
-	if (h.filecnt >= MAX_FILE_CNT)
-		return -ENOMEM;
-
-	/* Find free sectors */
-	if (h.filecnt != 0) {
-		flash_read(meterfs_common.hcurrAddr + HGRAIN + (h.filecnt - 1) * HGRAIN, &t, sizeof(t));
-
-		f->sector = t.sector + t.sectorcnt;
-		addr = f->sector * meterfs_common.sectorsz;
-
-		if (addr + (f->sectorcnt * meterfs_common.sectorsz) >= meterfs_common.flashsz)
-			return -ENOMEM;
-	}
-	else {
-		addr = meterfs_common.h1Addr << 1;
-		f->sector = addr / meterfs_common.sectorsz;
-	}
-
-	/* Prepare data space */
-	for (i = 0; i < f->sectorcnt; ++i)
-		flash_eraseSector((f->sector + i) * meterfs_common.sectorsz);
-
-	headerNew = (meterfs_common.hcurrAddr == 0) ? meterfs_common.h1Addr : 0;
-	meterfs_eraseFileTable((headerNew == 0) ? 0 : 1);
-
-	/* Copy data from the old header */
-	for (i = 0; i < h.filecnt; ++i) {
-		flash_read(meterfs_common.hcurrAddr + HGRAIN + (i * HGRAIN), &t, sizeof(t));
-		flash_write(headerNew + HGRAIN + (i * HGRAIN), &t, sizeof(t));
-	}
-
-	/* Store new file header */
-	flash_write(headerNew + HGRAIN + (h.filecnt * HGRAIN), f, sizeof(fileheader_t));
-
-	/* Commit new header and update global info */
-	h.filecnt += 1;
-	h.id.no += 1;
-
-	flash_write(headerNew, &h, sizeof(h));
-	meterfs_common.filecnt += 1;
-	meterfs_common.hcurrAddr = headerNew;
-
-	return EOK;
-}
-
-
 /*
  * Meterfs interface functions
  */
@@ -524,140 +466,91 @@ int meterfs_lookup(const char *name, oid_t *res)
 }
 
 
-int meterfs_create(const char *name, oid_t *oid)
+int meterfs_allocateFile(const char *name, size_t sectorcnt)
 {
-	file_t f;
+	header_t h;
+	fileheader_t hdr, t;
+	unsigned int addr, i, headerNew;
 
-	if (meterfs_getFileInfoName(name, &f.header) >= 0)
+	if (meterfs_getFileInfoName(name, &hdr) >= 0)
 		return -EEXIST;
 
-	strncpy(f.header.name, name, sizeof(f.header.name));
-	f.header.filesz = 0;
-	f.header.recordsz = 0;
-	f.header.sector = 0;
-	f.header.sectorcnt = 0;
+	strncpy(hdr.name, name, sizeof(hdr.name));
+	hdr.filesz = 0;
+	hdr.recordsz = 0;
+	hdr.sector = 0;
+	hdr.sectorcnt = sectorcnt;
 
-	f.firstidx.no = 0;
-	f.firstidx.nvalid = 1;
-	f.lastidx.no = 0;
-	f.lastidx.nvalid = 1;
-	f.firstoff = 0;
-	f.lastoff = 0;
-	f.recordcnt = 0;
+	/* Check if sectorcnt is valid */
+	if (SECTORS(&hdr, meterfs_common.sectorsz) > hdr.sectorcnt || hdr.sectorcnt < 2)
+		return -EINVAL;
 
-	oid->port = meterfs_common.port;
-	oid->id = node_getMaxId();
+	flash_read(meterfs_common.hcurrAddr, &h, sizeof(h));
 
-	node_add(&f, oid->id);
+	if (h.filecnt >= MAX_FILE_CNT)
+		return -ENOMEM;
+
+	/* Find free sectors */
+	if (h.filecnt != 0) {
+		flash_read(meterfs_common.hcurrAddr + HGRAIN + (h.filecnt - 1) * HGRAIN, &t, sizeof(t));
+
+		hdr.sector = t.sector + t.sectorcnt;
+		addr = hdr.sector * meterfs_common.sectorsz;
+
+		if (addr + (hdr.sectorcnt * meterfs_common.sectorsz) >= meterfs_common.flashsz)
+			return -ENOMEM;
+	}
+	else {
+		addr = meterfs_common.h1Addr << 1;
+		hdr.sector = addr / meterfs_common.sectorsz;
+	}
+
+	/* Prepare data space */
+	for (i = 0; i < hdr.sectorcnt; ++i)
+		flash_eraseSector((hdr.sector + i) * meterfs_common.sectorsz);
+
+	headerNew = (meterfs_common.hcurrAddr == 0) ? meterfs_common.h1Addr : 0;
+	meterfs_eraseFileTable((headerNew == 0) ? 0 : 1);
+
+	/* Copy data from the old header */
+	for (i = 0; i < h.filecnt; ++i) {
+		flash_read(meterfs_common.hcurrAddr + HGRAIN + (i * HGRAIN), &t, sizeof(t));
+		flash_write(headerNew + HGRAIN + (i * HGRAIN), &t, sizeof(t));
+	}
+
+	/* Store new file header */
+	flash_write(headerNew + HGRAIN + (h.filecnt * HGRAIN), &hdr, sizeof(fileheader_t));
+
+	/* Commit new header and update global info */
+	h.filecnt += 1;
+	h.id.no += 1;
+
+	flash_write(headerNew, &h, sizeof(h));
+	meterfs_common.filecnt += 1;
+	meterfs_common.hcurrAddr = headerNew;
 
 	return EOK;
 }
 
-#if 0
-int meterfs_configure(unsigned int id, unsigned int cmd, unsigned long arg)
-{
-	file_t *f;
 
-	if (cmd != METERFS_CHIPERASE && (f = node_findFile(id)) == NULL)
+int meterfs_resizeFile(const char *name, size_t filesz, size_t recordsz)
+{
+	fileheader_t hdr;
+
+	if (meterfs_getFileInfoName(name, &hdr) < 0)
 		return -ENOENT;
 
-	switch (cmd) {
-		case METERFS_ALOCATE:
-			if (f->header.sector != 0)
-				return -EPERM;
+	if (!hdr.sector || !hdr.sectorcnt)
+		return -EFAULT;
 
-			if (arg < 2)
-				return -EINVAL;
+	hdr.filesz = filesz;
+	hdr.recordsz = recordsz;
 
-			if (f->header.filesz == 0 || f->header.recordsz == 0)
-				return -EINVAL;
+	if (SECTORS(&hdr, meterfs_common.sectorsz) > hdr.sectorcnt)
+		return -EINVAL;
 
-			if (f->header.filesz > (arg - 1) * meterfs_common.sectorsz)
-				return -EINVAL;
-
-			f->header.sectorcnt = arg;
-
-			f->firstidx.no = 0;
-			f->firstidx.nvalid = 1;
-			f->lastidx.no = 0;
-			f->lastidx.nvalid = 1;
-			f->firstoff = 0;
-			f->lastoff = 0;
-			f->recordcnt = 0;
-
-			return meterfs_alocateFile(&f->header);
-
-		case METERFS_RESIZE:
-			if (f->header.sector != 0) {
-				if (f->header.recordsz && f->header.recordsz > arg)
-					return -EINVAL;
-
-				if (arg > (f->header.sectorcnt - 1) * meterfs_common.sectorsz)
-					return -EINVAL;
-
-				f->header.filesz = arg;
-
-				f->firstidx.no = 0;
-				f->firstidx.nvalid = 1;
-				f->lastidx.no = 0;
-				f->lastidx.nvalid = 1;
-				f->firstoff = 0;
-				f->lastoff = 0;
-				f->recordcnt = 0;
-
-				return meterfs_updateFileInfo(&f->header);
-			}
-			else {
-				if (f->header.recordsz && f->header.recordsz > arg)
-					return -EINVAL;
-
-				f->header.filesz = arg;
-
-				return EOK;
-			}
-
-		case METERFS_RECORDSZ:
-			if (f->header.sector != 0) {
-				if (f->header.filesz && arg > f->header.filesz)
-					return -EINVAL;
-
-				if (arg > (f->header.sectorcnt - 1) * meterfs_common.sectorsz)
-					return -EINVAL;
-
-				f->header.recordsz = arg;
-
-				f->firstidx.no = 0;
-				f->firstidx.nvalid = 1;
-				f->lastidx.no = 0;
-				f->lastidx.nvalid = 1;
-				f->firstoff = 0;
-				f->lastoff = 0;
-				f->recordcnt = 0;
-
-				return meterfs_updateFileInfo(&f->header);
-			}
-			else {
-				if (f->header.filesz && f->header.filesz < arg)
-					return -EINVAL;
-
-				f->header.recordsz = arg;
-
-				return EOK;
-			}
-
-		case METERFS_CHIPERASE:
-			flash_chipErase();
-			node_cleanAll();
-			meterfs_checkfs();
-
-			return EOK;
-
-		default:
-			return -EINVAL;
-	}
+	return meterfs_updateFileInfo(&hdr);
 }
-
-#endif
 
 
 int meterfs_readFile(oid_t *oid, offs_t offs, char *buff, size_t bufflen)
@@ -668,6 +561,9 @@ int meterfs_readFile(oid_t *oid, offs_t offs, char *buff, size_t bufflen)
 
 	if (oid->port != meterfs_common.port || (f = node_getById(oid->id)) == NULL)
 		return -ENOENT;
+
+	if (!f->header.filesz || !f->header.recordsz)
+		return 0;
 
 	idx = pos / f->header.recordsz;
 	pos %= f->header.recordsz;
@@ -693,13 +589,57 @@ int meterfs_writeFile(oid_t *oid, const char *buff, size_t bufflen)
 	if (oid->port != meterfs_common.port || (f = node_getById(oid->id)) == NULL)
 		return -ENOENT;
 
+	if (!f->header.filesz || !f->header.recordsz)
+		return 0;
+
 	return meterfs_writeRecord(f, buff, bufflen);
 }
 
 
-int meterfs_devctl(meterfs_i_devctl_t *devctl)
+int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o)
 {
-	return -ENOSYS;
+	file_t *p;
+	int err = -EINVAL;
+
+	switch (i->type) {
+		case meterfs_allocate:
+			if ((err = meterfs_allocateFile(i->allocate.name, i->allocate.sectors)) < 0)
+				return err;
+
+			err = meterfs_resizeFile(i->allocate.name, i->allocate.filesz, i->allocate.recordsz);
+			break;
+
+		case meterfs_resize:
+			if (i->resize.oid.port != meterfs_common.port)
+				return -ENOENT;
+
+			if ((p = node_getById(i->resize.oid.id)) == NULL)
+				return -ENOENT;
+
+			if ((err = meterfs_resizeFile(p->header.name, i->resize.filesz, i->resize.recordsz)) == EOK) {
+				p->header.filesz = i->resize.filesz;
+				p->header.recordsz = i->resize.recordsz;
+			}
+			break;
+
+		case meterfs_info:
+			if ((p = node_getById(i->oid.id)) == NULL)
+				return -ENOENT;
+
+			o->info.sectors = p->header.sectorcnt;
+			o->info.filesz = p->header.filesz;
+			o->info.recordsz = p->header.recordsz;
+			o->info.recordcnt = p->recordcnt;
+			break;
+
+		case meterfs_chiperase:
+			flash_chipErase();
+			node_cleanAll();
+			meterfs_checkfs();
+			break;
+	}
+
+	return err;
 }
 
 
@@ -718,10 +658,7 @@ int main(void)
 	node_init();
 
 	printf("meterfs: Started\n");
-
-//flash_chipErase();
 	meterfs_checkfs();
-
 	printf("meterfs: Filesystem check done\n");
 
 	portCreate(&meterfs_common.port);
@@ -753,7 +690,7 @@ int main(void)
 				break;
 
 			case mtDevCtl:
-				odevctl->err = meterfs_devctl(idevctl);
+				odevctl->err = meterfs_devctl(idevctl, odevctl);
 				break;
 
 			default:
