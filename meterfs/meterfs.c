@@ -578,6 +578,8 @@ int meterfs_readFile(oid_t *oid, offs_t offs, char *buff, size_t bufflen)
 		++idx;
 	}
 
+	node_put(oid->id);
+
 	return i;
 }
 
@@ -585,6 +587,7 @@ int meterfs_readFile(oid_t *oid, offs_t offs, char *buff, size_t bufflen)
 int meterfs_writeFile(oid_t *oid, const char *buff, size_t bufflen)
 {
 	file_t *f;
+	int err;
 
 	if (oid->port != meterfs_common.port || (f = node_getById(oid->id)) == NULL)
 		return -ENOENT;
@@ -592,7 +595,11 @@ int meterfs_writeFile(oid_t *oid, const char *buff, size_t bufflen)
 	if (!f->header.filesz || !f->header.recordsz)
 		return 0;
 
-	return meterfs_writeRecord(f, buff, bufflen);
+	err = meterfs_writeRecord(f, buff, bufflen);
+
+	node_put(oid->id);
+
+	return err;
 }
 
 
@@ -620,6 +627,8 @@ int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o)
 				p->header.filesz = i->resize.filesz;
 				p->header.recordsz = i->resize.recordsz;
 			}
+
+			node_put(i->resize.oid.id);
 			break;
 
 		case meterfs_info:
@@ -630,6 +639,8 @@ int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o)
 			o->info.filesz = p->header.filesz;
 			o->info.recordsz = p->header.recordsz;
 			o->info.recordcnt = p->recordcnt;
+
+			node_put(i->oid.id);
 			break;
 
 		case meterfs_chiperase:
