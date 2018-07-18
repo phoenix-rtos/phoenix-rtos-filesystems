@@ -7,7 +7,7 @@
 #
 
 CROSS ?= arm-phoenix-
-SUBDIRS = meterfs
+SUBDIRS = meterfs meterfs/test
 
 MKDEP = $(CROSS)gcc -MM
 MKDEPFLAGS = $(CFLAGS)

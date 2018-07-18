@@ -3,7 +3,7 @@
  *
  * Meterfs data types definitions
  *
- * Copyright 2017 Phoenix Systems
+ * Copyright 2017, 2018 Phoenix Systems
  * Author: Aleksander Kaminski
  *
  * This file is part of Phoenix-RTOS.
@@ -41,7 +41,7 @@ typedef struct {
 
 typedef struct {
 	int err;
-	struct {
+	struct _info {
 		size_t sectors;
 		size_t filesz;
 		size_t recordsz;

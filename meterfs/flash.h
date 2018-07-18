@@ -3,7 +3,7 @@
  *
  * Meterfs - SST25VF016B SPI flash routines
  *
- * Copyright 2017 Phoenix Systems
+ * Copyright 2017, 2018 Phoenix Systems
  * Author: Aleksander Kaminski
  *
  * This file is part of Phoenix-RTOS.
