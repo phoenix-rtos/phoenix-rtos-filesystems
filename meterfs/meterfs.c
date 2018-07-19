@@ -48,6 +48,7 @@ struct {
 	unsigned int filecnt;
 	size_t sectorsz;
 	size_t flashsz;
+	msg_t msg;
 } meterfs_common;
 
 
@@ -656,10 +657,9 @@ int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o)
 
 int main(void)
 {
-	msg_t msg;
 	unsigned int rid;
-	meterfs_i_devctl_t *idevctl = (meterfs_i_devctl_t *)msg.i.raw;
-	meterfs_o_devctl_t *odevctl = (meterfs_o_devctl_t *)msg.o.raw;
+	meterfs_i_devctl_t *idevctl = (meterfs_i_devctl_t *)meterfs_common.msg.i.raw;
+	meterfs_o_devctl_t *odevctl = (meterfs_o_devctl_t *)meterfs_common.msg.o.raw;
 
 	while (lookup("/multi", &multidrv) < 0)
 		usleep(10000);
@@ -677,28 +677,31 @@ int main(void)
 	portRegister(meterfs_common.port, "/", NULL);
 
 	for (;;) {
-		if (msgRecv(meterfs_common.port, &msg, &rid) < 0)
+		if (msgRecv(meterfs_common.port, &meterfs_common.msg, &rid) < 0)
 			continue;
 
-		switch (msg.type) {
+		switch (meterfs_common.msg.type) {
 			case mtRead:
-				msg.o.io.err = meterfs_readFile(&msg.i.io.oid, msg.i.io.offs, msg.o.data, msg.o.size);
+				meterfs_common.msg.o.io.err = meterfs_readFile(&meterfs_common.msg.i.io.oid,
+					meterfs_common.msg.i.io.offs, meterfs_common.msg.o.data, meterfs_common.msg.o.size);
 				break;
 
 			case mtWrite:
-				msg.o.io.err = meterfs_writeFile(&msg.i.io.oid, msg.i.data, msg.i.size);
+				meterfs_common.msg.o.io.err = meterfs_writeFile(&meterfs_common.msg.i.io.oid,
+					meterfs_common.msg.i.data, meterfs_common.msg.i.size);
 				break;
 
 			case mtLookup:
-				msg.o.lookup.err = meterfs_lookup(msg.i.data, &msg.o.lookup.res);
+				meterfs_common.msg.o.lookup.err = meterfs_lookup(meterfs_common.msg.i.data,
+					&meterfs_common.msg.o.lookup.res);
 				break;
 
 			case mtOpen:
-				msg.o.io.err = meterfs_open(&msg.i.openclose.oid);
+				meterfs_common.msg.o.io.err = meterfs_open(&meterfs_common.msg.i.openclose.oid);
 				break;
 
 			case mtClose:
-				msg.o.io.err = meterfs_close(&msg.i.openclose.oid);
+				meterfs_common.msg.o.io.err = meterfs_close(&meterfs_common.msg.i.openclose.oid);
 				break;
 
 			case mtDevCtl:
@@ -706,11 +709,11 @@ int main(void)
 				break;
 
 			default:
-				msg.o.io.err = -EINVAL;
+				meterfs_common.msg.o.io.err = -EINVAL;
 				break;
 		}
 
-		msgRespond(meterfs_common.port, &msg, rid);
+		msgRespond(meterfs_common.port, &meterfs_common.msg, rid);
 	}
 }
 

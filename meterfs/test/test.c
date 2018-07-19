@@ -55,13 +55,13 @@ int test_allocate(const char *name, size_t sectors, size_t filesz, size_t record
 	i->allocate.filesz = filesz;
 	i->allocate.recordsz = recordsz;
 
-	printf("test: Allocating file \"%s\": %zu sectors, file size %zu, record size %zu ", name, sectors, filesz, recordsz);
+	printf("test: Allocating file \"%s\": %zu sectors, file size %zu, record size %zu\n", name, sectors, filesz, recordsz);
 
 	err = msgSend(test_common.meterfs_oid.port, &test_common.msg);
 
 	err = (err < 0) ? err : o->err;
 
-	printf("(%s)\n", strerror(err));
+	printf("test: (%d)\n", err);
 
 	return err;
 }
@@ -83,13 +83,13 @@ int test_resize(oid_t *oid, size_t filesz, size_t recordsz)
 	i->resize.filesz = filesz;
 	i->resize.recordsz = recordsz;
 
-	printf("test: Resizing file #%u: new file size %zu, new record size %zu ", oid->id, filesz, recordsz);
+	printf("test: Resizing file #%u: new file size %zu, new record size %zu\n", oid->id, filesz, recordsz);
 
 	err = msgSend(test_common.meterfs_oid.port, &test_common.msg);
 
 	err = (err < 0) ? err : o->err;
 
-	printf("(%s)\n", strerror(err));
+	printf("test: (%d)\n", err);
 
 	return err;
 }
@@ -108,13 +108,13 @@ int test_chiperase(void)
 	test_common.msg.i.size = 0;
 	i->type = meterfs_chiperase;
 
-	printf("test: Performing chip erase ");
+	printf("test: Performing chip erase\n");
 
 	err = msgSend(test_common.meterfs_oid.port, &test_common.msg);
 
 	err = (err < 0) ? err : o->err;
 
-	printf("(%s)\n", strerror(err));
+	printf("test: (%d)\n", err);
 
 	return err;
 }
@@ -139,12 +139,12 @@ int test_fileinfo(oid_t *oid, struct _info *info)
 	if (info != NULL)
 		memcpy(info, &o->info, sizeof(*info));
 
-	printf("test: Got file #%u info: %zu sectors, %zu records, file size %zu, record size %zu ",
+	printf("test: Got file #%u info: %zu sectors, %zu records, file size %zu, record size %zu\n",
 		oid->id, o->info.sectors, o->info.recordcnt, o->info.filesz, o->info.recordsz);
 
 	err = (err < 0) ? err : o->err;
 
-	printf("(%s)\n", strerror(err));
+	printf("test: (%d)\n", err);
 
 	return err;
 }
@@ -171,7 +171,7 @@ int test_write(oid_t *oid, void *buff, size_t len)
 
 	err = (err < 0) ? err : test_common.msg.o.io.err;
 
-	printf("(%s)\n", strerror(err));
+	printf("test: (%d)\n", err);
 
 	return err;
 }
@@ -198,7 +198,7 @@ int test_read(oid_t *oid, offs_t offs, void *buff, size_t len)
 
 	err = (err < 0) ? err : test_common.msg.o.io.err;
 
-	printf("result (%s)\n", strerror(err));
+	printf("test: (%d)\n", err);
 
 	return err;
 }
@@ -211,7 +211,7 @@ int test_open(const char *name, oid_t *oid)
 	printf("test: lookup of file \"%s\" ", name);
 
 	if ((err = lookup(name, oid)) < 0) {
-		printf(" failed (%s)\n", strerror(err));
+		printf(" failed (%d)\n", err);
 		return err;
 	}
 
@@ -225,13 +225,13 @@ int test_open(const char *name, oid_t *oid)
 	test_common.msg.o.data = NULL;
 	test_common.msg.i.size = 0;
 
-	printf("test: Open ");
+	printf("test: Open\n");
 
 	err = msgSend(test_common.meterfs_oid.port, &test_common.msg);
 
 	err = (err < 0) ? err : test_common.msg.o.io.err;
 
-	printf("(%s)\n", strerror(err));
+	printf("test: (%d)\n", err);
 
 	return err;
 }
@@ -249,13 +249,13 @@ int test_close(oid_t *oid)
 	test_common.msg.o.data = NULL;
 	test_common.msg.i.size = 0;
 
-	printf("test: Close id %u ", oid->id);
+	printf("test: Close id %u\n", oid->id);
 
 	err = msgSend(test_common.meterfs_oid.port, &test_common.msg);
 
 	err = (err < 0) ? err : test_common.msg.o.io.err;
 
-	printf("(%s)\n", strerror(err));
+	printf("test: (%d)\n", err);
 
 	return err;
 }
