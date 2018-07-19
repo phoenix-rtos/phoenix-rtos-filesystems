@@ -78,9 +78,8 @@ void spi_powerCtrl(int state)
 {
 	gpio_pinSet(gpioa, 4, state);
 
-	if (state) {
-		usleep(5000);
-	}
+	if (state)
+		usleep(10000);
 }
 
 
@@ -88,11 +87,14 @@ void spi_read(unsigned char cmd, unsigned int addr, unsigned char flags, void *b
 {
 	multi_i_t *iptr = (multi_i_t *)gmsg.i.raw;
 
+	spi_csControl(1);
+
 	gmsg.type = mtDevCtl;
 	gmsg.i.data = NULL;
 	gmsg.i.size = 0;
 
 	iptr->type = spi_get;
+	iptr->spi_rw.spi = spi1;
 	iptr->spi_rw.cmd = cmd;
 	iptr->spi_rw.addr = addr;
 	iptr->spi_rw.flags = flags;
@@ -101,6 +103,7 @@ void spi_read(unsigned char cmd, unsigned int addr, unsigned char flags, void *b
 	gmsg.o.size = bufflen;
 
 	msgSend(multidrv.port, &gmsg);
+	spi_csControl(0);
 }
 
 
@@ -108,11 +111,14 @@ void spi_write(unsigned char cmd, unsigned int addr, unsigned char flags, const 
 {
 	multi_i_t *iptr = (multi_i_t *)gmsg.i.raw;
 
+	spi_csControl(1);
+
 	gmsg.type = mtDevCtl;
 	gmsg.o.data = NULL;
 	gmsg.o.size = 0;
 
 	iptr->type = spi_set;
+	iptr->spi_rw.spi = spi1;
 	iptr->spi_rw.cmd = cmd;
 	iptr->spi_rw.addr = addr;
 	iptr->spi_rw.flags = flags;
@@ -121,14 +127,12 @@ void spi_write(unsigned char cmd, unsigned int addr, unsigned char flags, const 
 	gmsg.i.size = bufflen;
 
 	msgSend(multidrv.port, &gmsg);
+	spi_csControl(0);
 }
 
 
 void spi_init(void)
 {
-	while (lookup("/multi", &multidrv) < 0)
-		usleep(50000);
-
 	gpio_pinConfig(gpioa, 4, 1, 0, 1, 0, 0);  /* SPI PWEN */
 	gpio_pinConfig(gpioe, 12, 1, 0, 1, 0, 0); /* SPI /CS */
 	gpio_pinConfig(gpioe, 13, 2, 5, 1, 0, 0); /* SPI SCK */

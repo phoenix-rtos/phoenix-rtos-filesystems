@@ -661,14 +661,15 @@ int main(void)
 	meterfs_i_devctl_t *idevctl = (meterfs_i_devctl_t *)msg.i.raw;
 	meterfs_o_devctl_t *odevctl = (meterfs_o_devctl_t *)msg.o.raw;
 
-	while (lookup("/multidrv", &multidrv) < 0)
+	while (lookup("/multi", &multidrv) < 0)
 		usleep(10000);
+
+	printf("meterfs: Started\n");
 
 	spi_init();
 	flash_init(&meterfs_common.flashsz, &meterfs_common.sectorsz);
 	node_init();
 
-	printf("meterfs: Started\n");
 	meterfs_checkfs();
 	printf("meterfs: Filesystem check done\n");
 
