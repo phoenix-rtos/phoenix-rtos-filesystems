@@ -114,7 +114,6 @@ void iput(struct inode *inode)
 	inode->i_count--;
 	o->refs--;
 	object_put(o);
-
 /*
    if (!inode->i_count) {
 		object_destroy(o);

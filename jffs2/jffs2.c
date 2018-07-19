@@ -27,12 +27,34 @@
 
 #include "os-phoenix.h"
 #include "os-phoenix/object.h"
+#include "os-phoenix/dev.h"
 #include "nodelist.h"
 
 
 jffs2_common_t jffs2_common;
 
-extern int jffs2_readdir(struct file *file, struct dir_context *ctx);
+
+int jffs2_readdir(struct file *file, struct dir_context *ctx);
+
+
+inline int jffs2_is_device(oid_t *oid)
+{
+	return jffs2_common.port != oid->port;
+}
+
+
+struct inode *jffs2_srv_get(oid_t *oid)
+{
+	jffs2_dev_t *dev;
+
+	if (jffs2_is_device(oid)) {
+		dev = dev_find_oid(oid, 0, 0);
+		return jffs2_iget(jffs2_common.sb, dev->ino);
+	}
+
+	return jffs2_iget(jffs2_common.sb, oid->id);
+}
+
 
 static int jffs2_srv_lookup(oid_t *dir, const char *name, oid_t *res)
 {
@@ -43,6 +65,9 @@ static int jffs2_srv_lookup(oid_t *dir, const char *name, oid_t *res)
 
 	if (dir->id == 0)
 		dir->id = 1;
+
+	if (jffs2_is_device(dir))
+		return -EINVAL;
 
 	res->id = 0;
 
@@ -88,7 +113,14 @@ static int jffs2_srv_lookup(oid_t *dir, const char *name, oid_t *res)
 
 		dentry->d_name.len = strlen(dentry->d_name.name);
 
-		dtemp = inode->i_op->lookup(inode, dentry, 0);
+		if (S_ISDIR(inode->i_mode))
+			dtemp = inode->i_op->lookup(inode, dentry, 0);
+		else {
+			free(dentry->d_name.name);
+			free(dentry);
+			iput(inode);
+			return -ENOTDIR;
+		}
 
 		if (dtemp == NULL) {
 			free(dentry->d_name.name);
@@ -104,10 +136,13 @@ static int jffs2_srv_lookup(oid_t *dir, const char *name, oid_t *res)
 		inode = d_inode(dtemp);
 	}
 
+	if (S_ISCHR(inode->i_mode) && dev_find_ino(res->id) != NULL)
+		memcpy(res, &(dev_find_ino(res->id)->dev), sizeof(oid_t));
+
 	free(dentry);
 	iput(inode);
 
-	if (!res->id)
+	if (res->port == jffs2_common.port && !res->id)
 		return -ENOENT;
 
 	return len;
@@ -218,7 +253,7 @@ static int jffs2_srv_getattr(oid_t *oid, int type, int *attr)
 			break;
 
 		case (atPort): /* port */
-			*attr = inode->i_rdev;
+			*attr = jffs2_common.port;
 			break;
 	}
 
@@ -246,6 +281,9 @@ static int jffs2_srv_link(oid_t *dir, const char *name, oid_t *oid)
 	if (name == NULL || !strlen(name))
 		return -EINVAL;
 
+	if (jffs2_is_device(dir))
+		return -EINVAL;
+
 	idir = jffs2_iget(jffs2_common.sb, dir->id);
 
 	if (IS_ERR(idir))
@@ -256,7 +294,7 @@ static int jffs2_srv_link(oid_t *dir, const char *name, oid_t *oid)
 		return -EEXIST;
 	}
 
-	inode = jffs2_iget(jffs2_common.sb, oid->id);
+	inode = jffs2_srv_get(oid);
 
 	if (IS_ERR(inode)) {
 		iput(idir);
@@ -272,6 +310,9 @@ static int jffs2_srv_link(oid_t *dir, const char *name, oid_t *oid)
 	d_instantiate(old, inode);
 
 	ret = idir->i_op->link(old, idir, new);
+
+	if (ret && S_ISCHR(inode->i_mode))
+		dev_inc(oid);
 
 	iput(idir);
 	iput(inode);
@@ -311,7 +352,7 @@ static int jffs2_srv_unlink(oid_t *dir, const char *name)
 		return -ENOENT;
 	}
 
-	inode = jffs2_iget(jffs2_common.sb, oid.id);
+	inode = jffs2_srv_get(&oid);
 
 	if (IS_ERR(inode)) {
 		iput(idir);
@@ -327,6 +368,9 @@ static int jffs2_srv_unlink(oid_t *dir, const char *name)
 
 	ret = idir->i_op->unlink(idir, dentry);
 
+	if (ret && S_ISCHR(inode->i_mode))
+		dev_dec(&oid);
+
 	iput(idir);
 	iput(inode);
 
@@ -337,10 +381,10 @@ static int jffs2_srv_unlink(oid_t *dir, const char *name)
 }
 
 
-static int jffs2_srv_create(oid_t *dir, const char *name, oid_t *oid, int type, int mode, u32 port)
+static int jffs2_srv_create(oid_t *dir, const char *name, oid_t *oid, int type, int mode, oid_t *dev)
 {
 	oid_t toid = { 0 };
-	struct inode *idir;
+	struct inode *idir, *inode;
 	struct dentry *dentry;
 	int ret = 0;
 	struct jffs2_sb_info *c = JFFS2_SB_INFO(jffs2_common.sb);
@@ -349,6 +393,9 @@ static int jffs2_srv_create(oid_t *dir, const char *name, oid_t *oid, int type, 
 		return -EROFS;
 
 	if (name == NULL || !strlen(name))
+		return -EINVAL;
+
+	if (jffs2_is_device(dir))
 		return -EINVAL;
 
 	idir = jffs2_iget(jffs2_common.sb, dir->id);
@@ -362,29 +409,41 @@ static int jffs2_srv_create(oid_t *dir, const char *name, oid_t *oid, int type, 
 	}
 
 	if (jffs2_srv_lookup(dir, name, &toid) > 0) {
+
+		ret = -EEXIST;
+		if (!jffs2_is_device(&toid)) {
+
+			inode = jffs2_iget(jffs2_common.sb, toid.id);
+			if(S_ISCHR(inode->i_mode)) {
+				ret = 0;
+				dev_find_oid(dev, inode->i_ino, 1);
+				oid->id = inode->i_ino;
+			}
+			iput(inode);
+		}
 		iput(idir);
-		return -EEXIST;
+		return ret;
 	}
 
 	dentry = malloc(sizeof(struct dentry));
 	dentry->d_name.name = strdup(name);
 	dentry->d_name.len = strlen(name);
 
+	oid->port = jffs2_common.port;
+
 	switch (type) {
 		case otFile:
 			mode = S_IFREG | S_IRWXU | S_IRWXG | S_IRWXO;
-			oid->port = jffs2_common.port;
 			ret = idir->i_op->create(idir, dentry, mode, 0);
 			break;
 		case otDir:
 			mode = S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO;
-			oid->port = jffs2_common.port;
 			ret = idir->i_op->mkdir(idir, dentry, mode);
 			break;
 		case otDev:
 			mode = S_IFCHR | S_IRWXU | S_IRWXG | S_IRWXO;
-			oid->port = port;
-			ret = idir->i_op->mknod(idir, dentry, mode, port);
+			ret = idir->i_op->mknod(idir, dentry, mode, dev->port);
+			dev_find_oid(dev, d_inode(dentry)->i_ino, 1);
 			break;
 		default:
 			ret = -EINVAL;
@@ -668,6 +727,7 @@ int main(int argc, char **argv)
 	}
 
 	object_init();
+	dev_init();
 	if(init_jffs2_fs() != EOK) {
 		printf("jffs2: Error initialising jffs2\n");
 		return -1;
@@ -712,7 +772,7 @@ int main(int argc, char **argv)
 				break;
 
 			case mtCreate:
-				msg.o.create.err = jffs2_srv_create(&msg.i.create.dir, msg.i.data, &msg.o.create.oid, msg.i.create.type, msg.i.create.mode, (u32)msg.i.create.dev.id);
+				msg.o.create.err = jffs2_srv_create(&msg.i.create.dir, msg.i.data, &msg.o.create.oid, msg.i.create.type, msg.i.create.mode, &msg.i.create.dev);
 				break;
 
 			case mtDestroy:

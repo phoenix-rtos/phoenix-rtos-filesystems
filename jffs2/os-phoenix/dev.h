@@ -18,11 +18,43 @@
 #define _OS_PHOENIX_DEV_H_
 
 #include <sys/stat.h>
+#include <sys/rb.h>
+
+typedef struct _jffs2_dev_t {
+	rbnode_t linkage_oid;
+	rbnode_t linkage_ino;
+	unsigned long ino;
+	unsigned long nlink;
+	oid_t dev;
+} jffs2_dev_t;
+
 
 int old_valid_dev(dev_t dev);
+
 int old_encode_dev(dev_t dev);
+
 int new_encode_dev(dev_t dev);
+
 dev_t old_decode_dev(u16 val);
+
 dev_t new_decode_dev(u32 dev);
+
+
+extern jffs2_dev_t *dev_find_oid(oid_t *oid, unsigned long ino, int create);
+
+
+extern jffs2_dev_t *dev_find_ino(unsigned long ino);
+
+
+extern void dev_destroy(oid_t *oid);
+
+
+extern void dev_inc(oid_t *oid);
+
+
+extern void dev_dec(oid_t *oid);
+
+
+extern void dev_init(void);
 
 #endif /* _OS_PHOENIX_DEV_H_ */
