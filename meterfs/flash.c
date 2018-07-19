@@ -196,11 +196,11 @@ void flash_detect(size_t *flashsz, size_t *sectorsz)
 	else {
 		printf("meterfs: Unknown flash memory\n");
 		flash_write = flash_writeSafe;
-		(*flashsz) = 0;
-		(*sectorsz) = 0;
+		(*flashsz) = 2 * 1024 * 1024;
+		(*sectorsz) = 4 * 1024;
 	}
 
-	printf("meterfs: Capacity 0x%04x, sector %d\n", *flashsz, *sectorsz);
+	printf("meterfs: Capacity %u KiB, sector %u\n", (*flashsz) / 1024, *sectorsz);
 }
 
 

@@ -447,23 +447,25 @@ int meterfs_lookup(const char *name, oid_t *res)
 			break;
 	}
 
-	if (node_getByName(bname, &res->id) != NULL) {
-		res->port = meterfs_common.port;
+	res->port = meterfs_common.port;
 
-		return EOK;
+	if (node_getByName(bname, &res->id) != NULL) {
+		node_put(res->id);
+
+		return i;
+	}
+	else if ((err = meterfs_getFileInfoName(bname, &f.header)) < 0) {
+		return -ENOENT;
 	}
 
-	if ((err = meterfs_getFileInfoName(bname, &f.header)) < 0)
-		return -ENOENT;
-
-	res->port = meterfs_common.port;
 	res->id = err;
 
 	meterfs_getFilePos(&f);
 
-	node_add(&f, res->id);
+	if ((err = node_add(&f, res->id)) < 0)
+		return err;
 
-	return EOK;
+	return i;
 }
 
 
@@ -607,7 +609,7 @@ int meterfs_writeFile(oid_t *oid, const char *buff, size_t bufflen)
 int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o)
 {
 	file_t *p;
-	int err = -EINVAL;
+	int err = EOK;
 
 	switch (i->type) {
 		case meterfs_allocate:
@@ -648,6 +650,10 @@ int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o)
 			flash_chipErase();
 			node_cleanAll();
 			meterfs_checkfs();
+			break;
+
+		default:
+			err = -EINVAL;
 			break;
 	}
 
