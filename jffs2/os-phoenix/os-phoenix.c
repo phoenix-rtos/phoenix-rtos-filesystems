@@ -299,11 +299,6 @@ void seq_printf(struct seq_file *m, const char *fmt, ...)
 {
 }
 
-char *strsep(char **s, const char *ct)
-{
-	return NULL;
-}
-
 int match_token(char *s, const match_table_t table, substring_t args[])
 {
 	return 0;
