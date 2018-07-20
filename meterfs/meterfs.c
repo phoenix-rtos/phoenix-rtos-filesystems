@@ -608,11 +608,24 @@ int meterfs_writeFile(oid_t *oid, const char *buff, size_t bufflen)
 
 int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o)
 {
+	fileheader_t h;
 	file_t *p;
 	int err = EOK;
 
 	switch (i->type) {
 		case meterfs_allocate:
+			if (!i->allocate.filesz || !i->allocate.recordsz)
+				return -EINVAL;
+
+			if (i->allocate.filesz < i->allocate.recordsz)
+				return -EINVAL;
+
+			h.filesz = i->allocate.filesz;
+			h.recordsz = i->allocate.recordsz;
+
+			if (SECTORS(&h, meterfs_common.sectorsz) > i->allocate.sectors)
+				return -EINVAL;
+
 			if ((err = meterfs_allocateFile(i->allocate.name, i->allocate.sectors)) < 0)
 				return err;
 
@@ -670,14 +683,14 @@ int main(void)
 	while (lookup("/multi", &multidrv) < 0)
 		usleep(10000);
 
-	printf("meterfs: Started\n");
+	printf("meterfs: Started.\n");
 
 	spi_init();
 	flash_init(&meterfs_common.flashsz, &meterfs_common.sectorsz);
 	node_init();
 
 	meterfs_checkfs();
-	printf("meterfs: Filesystem check done\n");
+	printf("meterfs: Filesystem check done. Found %u files.\n", meterfs_common.filecnt);
 
 	portCreate(&meterfs_common.port);
 	portRegister(meterfs_common.port, "/", NULL);

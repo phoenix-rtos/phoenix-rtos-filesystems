@@ -269,7 +269,8 @@ int test_close(oid_t *oid)
 
 int main(void)
 {
-	oid_t oid;
+	oid_t oids[20];
+	int opened[20], i;
 	char buff[20];
 
 	while (lookup("/", &test_common.meterfs_oid) < 0)
@@ -277,11 +278,71 @@ int main(void)
 
 	printf("test: Started\n");
 	test_chiperase();
-	test_allocate("test1", 2, 2000, 20);
-	test_open("/test1", &oid);
-	test_write(&oid, "test", 5);
-	test_fileinfo(&oid, NULL);
-	test_read(&oid, 0, buff, 5);
+	test_allocate("test1", 0, 0, 0);
+	test_allocate("test2", 0, 2000, 20);
+	test_allocate("test3", 1, 2000, 20);
+	test_allocate("test4", 2, 20, 200);
+	test_allocate("test5", 4, 20, 20);
+	test_allocate("test6", 3, 2000000, 20);
+	test_allocate("test7", 6, 2000, 20);
+	test_allocate("test8", 7, 2000, 20);
+	test_allocate("test9", 8, 2000, 20);
+	test_allocate("test10", 12, 2000, 20);
+	test_allocate("test11", 10, 2000, 20);
+	test_allocate("test12", 9, 2000, 20);
+
+	opened[0] = test_open("/test1", &oids[0]);
+	opened[1] = test_open("/test2", &oids[1]);
+	opened[2] = test_open("/test3", &oids[2]);
+	opened[3] = test_open("/test4", &oids[3]);
+	opened[4] = test_open("/test5", &oids[4]);
+	opened[5] = test_open("/test6", &oids[5]);
+	opened[6] = test_open("/test7", &oids[6]);
+	opened[7] = test_open("/test8", &oids[7]);
+	opened[8] = test_open("/test9", &oids[8]);
+	opened[9] = test_open("/test10", &oids[9]);
+	opened[10] = test_open("/test11", &oids[10]);
+	opened[11] = test_open("/test12", &oids[11]);
+
+	for (i = 0; i < 12; ++i) {
+		if (!opened[i])
+			test_close(&oids[i]);
+	}
+
+	opened[0] = test_open("/test1", &oids[0]);
+	opened[1] = test_open("/test2", &oids[1]);
+	opened[2] = test_open("/test3", &oids[2]);
+	opened[3] = test_open("/test4", &oids[3]);
+	opened[4] = test_open("/test5", &oids[4]);
+	opened[5] = test_open("/test6", &oids[5]);
+	opened[6] = test_open("/test7", &oids[6]);
+	opened[7] = test_open("/test8", &oids[7]);
+	opened[8] = test_open("/test9", &oids[8]);
+	opened[9] = test_open("/test10", &oids[9]);
+	opened[10] = test_open("/test11", &oids[10]);
+	opened[11] = test_open("/test12", &oids[11]);
+
+	test_write(&oids[11], "a0000", 5);
+	test_write(&oids[11], "a0001", 5);
+	test_write(&oids[11], "a0002", 5);
+	test_write(&oids[11], "a0003", 5);
+	test_write(&oids[11], "a0004", 5);
+	test_write(&oids[11], "a0005", 5);
+	test_write(&oids[11], "a0006", 5);
+	test_write(&oids[11], "a0007", 5);
+	test_write(&oids[11], "a0008", 5);
+	test_write(&oids[11], "a0009", 5);
+	test_write(&oids[11], "a0010", 5);
+	test_write(&oids[11], "a0011", 5);
+	test_write(&oids[11], "a0012", 5);
+	test_write(&oids[11], "a0013", 5);
+	test_write(&oids[11], "a0014", 5);
+	test_write(&oids[11], "a0015", 5);
+
+	test_fileinfo(&oids[11], NULL);
+
+	for (i = 0; i < 16; ++i)
+		test_read(&oids[11], i * 20, buff, 5);
 
 	return 0;
 }
