@@ -124,7 +124,9 @@ static int jffs2_srv_lookup(oid_t *dir, const char *name, oid_t *res)
 
 		if (dtemp == NULL) {
 			free(dentry->d_name.name);
-			break;
+			free(dentry);
+			iput(inode);
+			return -EINVAL;
 		} else
 			res->id = dtemp->d_inode->i_ino;
 
@@ -366,9 +368,12 @@ static int jffs2_srv_unlink(oid_t *dir, const char *name)
 
 	d_instantiate(dentry, inode);
 
-	ret = idir->i_op->unlink(idir, dentry);
+	if (S_ISDIR(inode->i_mode))
+		ret = idir->i_op->rmdir(idir, dentry);
+	else
+		ret = idir->i_op->unlink(idir, dentry);
 
-	if (ret && S_ISCHR(inode->i_mode))
+	if (!ret && S_ISCHR(inode->i_mode))
 		dev_dec(&oid);
 
 	iput(idir);
@@ -517,6 +522,12 @@ static int jffs2_srv_read(oid_t *oid, offs_t offs, void *data, unsigned long len
 
 	inode = jffs2_iget(jffs2_common.sb, oid->id);
 
+	if (S_ISCHR(inode->i_mode)) {
+		printf("jffs2: Can't read from device I'm just a filesystem\n");
+		iput(inode);
+		return -EINVAL;
+	}
+
 	f = JFFS2_INODE_INFO(inode);
 	c = JFFS2_SB_INFO(inode->i_sb);
 
@@ -643,19 +654,27 @@ static int jffs2_srv_write(oid_t *oid, offs_t offs, void *data, unsigned long le
 
 	ri = jffs2_alloc_raw_inode();
 
-	if (ri == NULL) {
+	if (ri == NULL)
 		return -ENOMEM;
-	}
 
 	inode = jffs2_iget(jffs2_common.sb, oid->id);
+
+	if (S_ISCHR(inode->i_mode)) {
+		printf("jffs2: What are you doing? You shouldn't even be here!\n");
+		iput(inode);
+		return -EINVAL;
+	}
 
 	f = JFFS2_INODE_INFO(inode);
 	c = JFFS2_SB_INFO(inode->i_sb);
 
-	if (IS_ERR(inode))
+	if (IS_ERR(inode)) {
+		jffs2_free_raw_inode(ri);
 		return -EINVAL;
+	}
 
 	if(S_ISDIR(inode->i_mode)) {
+		jffs2_free_raw_inode(ri);
 		iput(inode);
 		return -EISDIR;
 	}
