@@ -139,7 +139,7 @@ int test_fileinfo(oid_t *oid, struct _info *info)
 	if (info != NULL)
 		memcpy(info, &o->info, sizeof(*info));
 
-	printf("test: Got file #%u info: %u sectors, %u records, file size %u, record size %u\n",
+	printf("test: Got file #%u info: %u sectors, %u record(s), file size %u, record size %u\n",
 		oid->id, o->info.sectors, o->info.recordcnt, o->info.filesz, o->info.recordsz);
 
 	err = (err < 0) ? err : o->err;
@@ -159,10 +159,10 @@ int test_write(oid_t *oid, void *buff, size_t len)
 	test_common.msg.i.io.offs = 0;
 	test_common.msg.i.io.len = len;
 	test_common.msg.i.io.mode = 0;
-	test_common.msg.i.data = NULL;
-	test_common.msg.i.size = 0;
-	test_common.msg.o.data = buff;
-	test_common.msg.o.size = len;
+	test_common.msg.i.data = buff;
+	test_common.msg.i.size = len;
+	test_common.msg.o.data = NULL;
+	test_common.msg.o.size = 0;
 
 	err = msgSend(test_common.meterfs_oid.port, &test_common.msg);
 
@@ -189,10 +189,10 @@ int test_read(oid_t *oid, offs_t offs, void *buff, size_t len)
 	test_common.msg.i.io.offs = offs;
 	test_common.msg.i.io.len = len;
 	test_common.msg.i.io.mode = 0;
-	test_common.msg.i.data = buff;
-	test_common.msg.i.size = len;
-	test_common.msg.o.data = NULL;
-	test_common.msg.o.size = 0;
+	test_common.msg.i.data = NULL;
+	test_common.msg.i.size = 0;
+	test_common.msg.o.data = buff;
+	test_common.msg.o.size = len;
 
 	err = msgSend(test_common.meterfs_oid.port, &test_common.msg);
 
