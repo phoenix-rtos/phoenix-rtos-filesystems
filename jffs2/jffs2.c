@@ -56,7 +56,7 @@ struct inode *jffs2_srv_get(oid_t *oid)
 }
 
 
-static int jffs2_srv_lookup(oid_t *dir, const char *name, oid_t *res)
+static int jffs2_srv_lookup(oid_t *dir, const char *name, oid_t *res, oid_t *dev)
 {
 	struct dentry *dentry, *dtemp;
 	struct inode *inode = NULL;
@@ -140,7 +140,9 @@ static int jffs2_srv_lookup(oid_t *dir, const char *name, oid_t *res)
 	}
 
 	if (S_ISCHR(inode->i_mode) && dev_find_ino(res->id) != NULL)
-		memcpy(res, &(dev_find_ino(res->id)->dev), sizeof(oid_t));
+		memcpy(dev, &(dev_find_ino(res->id)->dev), sizeof(oid_t));
+	else
+		memcpy(dev, res, sizeof(oid_t));
 
 	free(dentry);
 	iput(inode);
@@ -271,7 +273,7 @@ static int jffs2_srv_link(oid_t *dir, const char *name, oid_t *oid)
 {
 	struct inode *idir, *inode;
 	struct dentry *old, *new;
-	oid_t toid;
+	oid_t toid, t;
 	int ret;
 	struct jffs2_sb_info *c = JFFS2_SB_INFO(jffs2_common.sb);
 
@@ -292,7 +294,7 @@ static int jffs2_srv_link(oid_t *dir, const char *name, oid_t *oid)
 	if (IS_ERR(idir))
 		return -ENOENT;
 
-	if (jffs2_srv_lookup(dir, name, &toid) > 0) {
+	if (jffs2_srv_lookup(dir, name, &t, &toid) > 0) {
 		iput(idir);
 		return -EEXIST;
 	}
@@ -332,7 +334,7 @@ static int jffs2_srv_unlink(oid_t *dir, const char *name)
 {
 	struct inode *idir, *inode;
 	struct dentry *dentry;
-	oid_t oid;
+	oid_t oid, t;
 	int ret;
 	struct jffs2_sb_info *c = JFFS2_SB_INFO(jffs2_common.sb);
 
@@ -350,7 +352,7 @@ static int jffs2_srv_unlink(oid_t *dir, const char *name)
 	if (IS_ERR(idir))
 		return -ENOENT;
 
-	if (jffs2_srv_lookup(dir, name, &oid) <= 0) {
+	if (jffs2_srv_lookup(dir, name, &t, &oid) <= 0) {
 		iput(idir);
 		return -ENOENT;
 	}
@@ -389,7 +391,7 @@ static int jffs2_srv_unlink(oid_t *dir, const char *name)
 
 static int jffs2_srv_create(oid_t *dir, const char *name, oid_t *oid, int type, int mode, oid_t *dev)
 {
-	oid_t toid = { 0 };
+	oid_t toid = { 0 }, t;
 	struct inode *idir, *inode;
 	struct dentry *dentry;
 	int ret = 0;
@@ -414,7 +416,7 @@ static int jffs2_srv_create(oid_t *dir, const char *name, oid_t *oid, int type, 
 		return -ENOTDIR;
 	}
 
-	if (jffs2_srv_lookup(dir, name, &toid) > 0) {
+	if (jffs2_srv_lookup(dir, name, &toid, &t) > 0) {
 
 		ret = -EEXIST;
 		if (!jffs2_is_device(&toid)) {
@@ -814,7 +816,7 @@ int main(int argc, char **argv)
 				break;
 
 			case mtLookup:
-				msg.o.lookup.err = jffs2_srv_lookup(&msg.i.lookup.dir, msg.i.data, &msg.o.lookup.res);
+				msg.o.lookup.err = jffs2_srv_lookup(&msg.i.lookup.dir, msg.i.data, &msg.o.lookup.fil, &msg.o.lookup.dev);
 				break;
 
 			case mtLink:

@@ -487,7 +487,7 @@ static void init_desc(void *conf)
 extern int dummyfs_create(oid_t *dir, const char *name, oid_t *oid, int type, int mode, oid_t *dev);
 extern int dummyfs_link(oid_t *dir, const char *name, oid_t *oid);
 extern int dummyfs_write(oid_t *oid, offs_t offs, char *buff, unsigned int len);
-extern int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res);
+extern int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res, oid_t *dev);
 
 
 char __attribute__((aligned(8))) stack[4096];
@@ -506,7 +506,7 @@ void exec_modules(void *arg)
 	oid_t init = { 0 };
 
 	memcpy(path, "/init/", 6);
-	dummyfs_lookup(NULL, ".", &root);
+	dummyfs_lookup(NULL, ".", NULL, &root);
 	dummyfs_create(&root, "init", &init, otDir, 0, NULL);
 
 	while (cnt < dc.mods_cnt) {

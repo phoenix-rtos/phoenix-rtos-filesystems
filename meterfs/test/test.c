@@ -216,7 +216,7 @@ int test_open(const char *name, oid_t *oid)
 
 	printf("test: lookup of file \"%s\" ", name);
 
-	if ((err = lookup(name, oid)) < 0) {
+	if ((err = lookup(name, NULL, oid)) < 0) {
 		printf(" failed (%s)\n", strerror(err));
 		return err;
 	}
@@ -273,7 +273,7 @@ int main(void)
 	int opened[20], i;
 	char buff[20];
 
-	while (lookup("/", &test_common.meterfs_oid) < 0)
+	while (lookup("/", NULL, &test_common.meterfs_oid) < 0)
 		usleep(100000);
 
 	printf("test: Started\n");

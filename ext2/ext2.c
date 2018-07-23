@@ -40,7 +40,7 @@ static int ext2_link(oid_t *dir, const char *name, oid_t *oid);
 static int ext2_destroy(oid_t *oid);
 
 
-static int ext2_lookup(oid_t *dir, const char *name, oid_t *res)
+static int ext2_lookup(oid_t *dir, const char *name, oid_t *res, oid_t *dev)
 {
 	u32 start = 0, end = 0;
 	u32 ino = dir ? dir->id : ROOTNODE_NO;
@@ -84,6 +84,8 @@ static int ext2_lookup(oid_t *dir, const char *name, oid_t *res)
 		start = end;
 		mutexLock(d->lock);
 	}
+
+	memcpy(dev, res, sizeof(oid_t));
 
 	mutexUnlock(d->lock);
 	object_put(d);
@@ -522,7 +524,7 @@ int main(void)
 				break;
 
 			case mtLookup:
-				msg.o.lookup.err = ext2_lookup(&msg.i.lookup.dir, msg.i.data, &msg.o.lookup.res);
+				msg.o.lookup.err = ext2_lookup(&msg.i.lookup.dir, msg.i.data, &msg.o.lookup.fil, &msg.o.lookup.dev);
 				break;
 
 			case mtLink:

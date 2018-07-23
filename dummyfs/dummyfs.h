@@ -17,15 +17,11 @@
 
 #include <sys/rb.h>
 #include <errno.h>
+#include <sys/file.h>
 
 
 #define DUMMYFS_SIZE_MAX 32 * 1024 * 1024
 
-enum {	otDir = 0,
-		otFile,
-		otDev,
-		otUnknown
-};
 
 typedef struct _dummyfs_dirent_t {
 	char *name;
@@ -76,17 +72,6 @@ typedef struct _dummyfs_object_t {
 	};
 
 } dummyfs_object_t;
-
-
-/* attribute types */
-enum {
-	atMode = 0,
-	atUid,
-	atGid,
-	atSize,
-	atType,
-	atPort
-};
 
 
 struct _dummyfs_common_t{

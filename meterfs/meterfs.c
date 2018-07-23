@@ -680,7 +680,7 @@ int main(void)
 	meterfs_i_devctl_t *idevctl = (meterfs_i_devctl_t *)meterfs_common.msg.i.raw;
 	meterfs_o_devctl_t *odevctl = (meterfs_o_devctl_t *)meterfs_common.msg.o.raw;
 
-	while (lookup("/multi", &multidrv) < 0)
+	while (lookup("/multi", NULL, &multidrv) < 0)
 		usleep(10000);
 
 	printf("meterfs: Started.\n");
@@ -712,7 +712,8 @@ int main(void)
 
 			case mtLookup:
 				meterfs_common.msg.o.lookup.err = meterfs_lookup(meterfs_common.msg.i.data,
-					&meterfs_common.msg.o.lookup.res);
+					&meterfs_common.msg.o.lookup.fil);
+				memcpy(&meterfs_common.msg.o.lookup.dev, &meterfs_common.msg.o.lookup.fil, sizeof(oid_t));
 				break;
 
 			case mtOpen:

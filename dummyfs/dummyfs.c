@@ -47,7 +47,7 @@ static inline dummyfs_object_t *dummyfs_get(oid_t *oid)
 }
 
 
-int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res)
+int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res, oid_t *dev)
 {
 	dummyfs_object_t *o, *d;
 	int len = 0;
@@ -95,7 +95,9 @@ int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res)
 	o = dummyfs_get(res);
 
 	if (o->type == otDev)
-		memcpy(res, &o->dev, sizeof(oid_t));
+		memcpy(dev, &o->dev, sizeof(oid_t));
+	else
+		memcpy(dev, res, sizeof(oid_t));
 
 	o->lock = 1;
 
@@ -609,7 +611,7 @@ int main(int argc,char **argv)
 				break;
 
 			case mtLookup:
-				msg.o.lookup.err = dummyfs_lookup(&msg.i.lookup.dir, msg.i.data, &msg.o.lookup.res);
+				msg.o.lookup.err = dummyfs_lookup(&msg.i.lookup.dir, msg.i.data, &msg.o.lookup.fil, &msg.o.lookup.dev);
 				break;
 
 			case mtLink:
