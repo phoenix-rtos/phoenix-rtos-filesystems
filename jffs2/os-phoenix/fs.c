@@ -117,13 +117,12 @@ void iput(struct inode *inode)
 	inode->i_count--;
 	o->refs--;
 	object_put(o);
-/*
-   if (!inode->i_count) {
+
+	if (!inode->i_nlink) {
 		object_destroy(o);
 		jffs2_common.sb->s_op->evict_inode(inode);
 		jffs2_common.sb->s_op->destroy_inode(inode);
 	}
-*/
 }
 
 /* form linux kernel */

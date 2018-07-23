@@ -502,11 +502,16 @@ static int jffs2_srv_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsig
 
 static void jffs2_srv_open(oid_t *oid)
 {
+	jffs2_iget(jffs2_common.sb, oid->id);
 }
 
 
 static void jffs2_srv_close(oid_t *oid)
 {
+	struct inode *inode = ilookup(jffs2_common.sb, oid->id);
+
+	if (inode != NULL)
+		iput(inode);
 }
 
 

@@ -96,6 +96,7 @@ jffs2_object_t *object_get(unsigned int id)
 	if ((o = lib_treeof(jffs2_object_t, node, lib_rbFind(&jffs2_objects.tree, &t.node))) != NULL)
 		o->refs++;
 	mutexUnlock(jffs2_objects.lock);
+
 	return o;
 }
 
