@@ -504,9 +504,10 @@ void exec_modules(void *arg)
 	oid_t toid = { 0 };
 	oid_t root = { 0 };
 	oid_t init = { 0 };
+	oid_t tmp;
 
 	memcpy(path, "/init/", 6);
-	dummyfs_lookup(NULL, ".", NULL, &root);
+	dummyfs_lookup(NULL, ".", &tmp, &root);
 	dummyfs_create(&root, "init", &init, otDir, 0, NULL);
 
 	while (cnt < dc.mods_cnt) {
