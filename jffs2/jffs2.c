@@ -123,7 +123,7 @@ static int jffs2_srv_lookup(oid_t *dir, const char *name, oid_t *res)
 			return -ENOTDIR;
 		}
 
-		if (dtemp == NULL) {
+		if (dtemp == NULL || PTR_ERR(dtemp) == -ENAMETOOLONG) {
 			free(dentry->d_name.name);
 			free(dentry);
 			iput(inode);
