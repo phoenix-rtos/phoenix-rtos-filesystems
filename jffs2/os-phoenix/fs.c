@@ -59,7 +59,7 @@ void ihold(struct inode * inode)
 {
 	inode->i_count++;
 	if (inode->i_count < 2)
-		printf("jffs2: inode #%llu refs < 2\n", inode->i_ino);
+		printf("jffs2: ihold #%lu refs < 2\n", inode->i_ino);
 }
 
 struct inode *new_inode(struct super_block *sb)
@@ -113,6 +113,11 @@ struct inode * iget_locked(struct super_block *sb, unsigned long ino)
 void iput(struct inode *inode)
 {
 	jffs2_object_t *o = object_get(inode->i_ino);
+
+	if (o == NULL) {
+		printf("jffs2: iput failed badly for inode %d\n", inode->i_ino);
+		return;
+	}
 
 	inode->i_count--;
 	o->refs--;
@@ -299,8 +304,10 @@ struct inode *ilookup(struct super_block *sb, unsigned long ino)
 {
 	jffs2_object_t *o = object_get(ino);
 
-	if (o != NULL)
-		o->inode;
+	if (o != NULL) {
+		object_put(o);
+		return o->inode;
+	}
 
 	return NULL;
 }
@@ -313,7 +320,7 @@ int insert_inode_locked(struct inode *inode)
 	if (o == NULL)
 		o = object_create(0, inode);
 
-	object_put(o);
+	o->refs = inode->i_count;
 	return 0;
 }
 

@@ -107,6 +107,7 @@ static int jffs2_srv_lookup(oid_t *dir, const char *name, oid_t *res)
 			len += 2;
 			free(dentry->d_name.name);
 			dentry->d_name.len = 0;
+			iput(inode);
 			inode = jffs2_iget(jffs2_common.sb, res->id);
 			continue;
 		}
@@ -484,8 +485,10 @@ static int jffs2_srv_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsig
 	if (IS_ERR(inode))
 		return -EINVAL;
 
-	if (!(S_ISDIR(inode->i_mode)))
+	if (!(S_ISDIR(inode->i_mode))) {
+		iput(inode);
 		return -ENOTDIR;
+	}
 
 	file.f_pino = JFFS2_INODE_INFO(inode)->inocache->pino_nlink;
 	file.f_inode = inode;
@@ -527,6 +530,14 @@ static int jffs2_srv_read(oid_t *oid, offs_t offs, void *data, unsigned long len
 
 	inode = jffs2_iget(jffs2_common.sb, oid->id);
 
+	if (IS_ERR(inode))
+		return -EINVAL;
+
+	if(S_ISDIR(inode->i_mode)) {
+		iput(inode);
+		return -EISDIR;
+	}
+
 	if (S_ISCHR(inode->i_mode)) {
 		printf("jffs2: Can't read from device I'm just a filesystem\n");
 		iput(inode);
@@ -536,19 +547,10 @@ static int jffs2_srv_read(oid_t *oid, offs_t offs, void *data, unsigned long len
 	f = JFFS2_INODE_INFO(inode);
 	c = JFFS2_SB_INFO(inode->i_sb);
 
-	if (IS_ERR(inode))
-		return -EINVAL;
-
-	if(S_ISDIR(inode->i_mode)) {
+	if (inode->i_size < offs) {
 		iput(inode);
-		return -EISDIR;
-	}
-
-	f = JFFS2_INODE_INFO(inode);
-	c = JFFS2_SB_INFO(inode->i_sb);
-
-	if (inode->i_size < offs)
 		return 0;
+	}
 
 	mutex_lock(&f->sem);
 	ret = jffs2_read_inode_range(c, f, data, offs, len);
@@ -664,15 +666,6 @@ static int jffs2_srv_write(oid_t *oid, offs_t offs, void *data, unsigned long le
 
 	inode = jffs2_iget(jffs2_common.sb, oid->id);
 
-	if (S_ISCHR(inode->i_mode)) {
-		printf("jffs2: What are you doing? You shouldn't even be here!\n");
-		iput(inode);
-		return -EINVAL;
-	}
-
-	f = JFFS2_INODE_INFO(inode);
-	c = JFFS2_SB_INFO(inode->i_sb);
-
 	if (IS_ERR(inode)) {
 		jffs2_free_raw_inode(ri);
 		return -EINVAL;
@@ -683,6 +676,15 @@ static int jffs2_srv_write(oid_t *oid, offs_t offs, void *data, unsigned long le
 		iput(inode);
 		return -EISDIR;
 	}
+
+	if (S_ISCHR(inode->i_mode)) {
+		printf("jffs2: What are you doing? You shouldn't even be here!\n");
+		iput(inode);
+		return -EINVAL;
+	}
+
+	f = JFFS2_INODE_INFO(inode);
+	c = JFFS2_SB_INFO(inode->i_sb);
 
 	if ((ret = jffs2_srv_prepare_write(inode, offs, len))) {
 		jffs2_free_raw_inode(ri);

@@ -76,7 +76,7 @@ jffs2_object_t *object_create(int type, struct inode *inode)
 	}
 	memset(r, 0, sizeof(jffs2_object_t));
 	r->oid.id = inode->i_ino;
-	r->refs = 0;
+	r->refs = 1;
 	r->inode = inode;
 
 	lib_rbInsert(&jffs2_objects.tree, &r->node);
