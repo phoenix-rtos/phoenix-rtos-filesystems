@@ -107,6 +107,10 @@ enum {
 	EXT2_S_IXOTH	= 0x0001    /* others execute */
 };
 
+#define	EXT2_S_ISDIR(m)	(((m) & 0xF000) == 0x4000)	/* directory */
+#define	EXT2_S_ISCHR(m)	(((m) & 0xF000) == 0x2000)	/* char special */
+#define	EXT2_S_ISREG(m)	(((m) & 0xF000) == 0x8000)	/* regular file */
+
 /* inode flags */
 enum {
 	EXT2_SECRM_FL           = 0x00000001, /* secure deletion */

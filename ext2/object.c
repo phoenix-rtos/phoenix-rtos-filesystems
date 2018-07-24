@@ -201,6 +201,15 @@ ext2_object_t *object_get(unsigned int id)
 
 		mutexUnlock(ext2_objects.ulock);
 		o = object_create(id, &inode, inode->mode);
+		
+		if (EXT2_S_ISDIR(inode->mode))
+			o->type = otDir;
+		else if (EXT2_S_ISREG(inode->mode))
+			o->type = otFile;
+		else if (EXT2_S_ISCHR(inode->mode))
+			o->type = otDev;
+		else
+			o->type = otUnknown;
 
 		return o;
 	}
