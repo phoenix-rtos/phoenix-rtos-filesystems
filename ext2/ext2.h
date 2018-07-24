@@ -194,6 +194,7 @@ typedef struct _ext2_block_t {
 
 typedef struct _ext2_object_t {
 	oid_t oid;
+	oid_t dev;
 	u32 ino;
 
 	u32 refs;

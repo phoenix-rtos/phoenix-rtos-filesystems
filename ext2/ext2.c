@@ -85,7 +85,11 @@ static int ext2_lookup(oid_t *dir, const char *name, oid_t *res, oid_t *dev)
 		mutexLock(d->lock);
 	}
 
-	memcpy(dev, res, sizeof(oid_t));
+	o = object_get(res->id);
+	if (o && o->type == otDev)
+		memcpy(dev, &o->dev, sizeof(oid_t));
+	else
+		memcpy(dev, res, sizeof(oid_t));
 
 	mutexUnlock(d->lock);
 	object_put(d);
@@ -172,12 +176,14 @@ static int ext2_getattr(oid_t *oid, int type, int *attr)
 	return EOK;
 }
 
+static int ext2_unlink(oid_t *dir, const char *name);
 
-static int ext2_create(oid_t *dir, const char *name, oid_t *oid, int type, int mode, u32 port)
+static int ext2_create(oid_t *dir, const char *name, oid_t *oid, int type, int mode, oid_t *dev)
 {
 
 	ext2_object_t *o;
 	ext2_inode_t *inode = NULL;
+	oid_t tdev;
 	int ret;
 
 	switch (type) {
@@ -192,6 +198,20 @@ static int ext2_create(oid_t *dir, const char *name, oid_t *oid, int type, int m
 		break;
 	}
 
+	if (ext2_lookup(dir, name, oid, &tdev) > 0) {
+		o = object_get(oid->id);
+		if (oid->id == tdev.id && oid->port == tdev.port && o->type == otDev) {
+			object_put(o);
+
+			if (ext2_unlink(dir, name) != EOK)
+				return -EEXIST;
+
+		} else {
+			object_put(o);
+			return -EEXIST;
+		}
+	}
+
 	o = object_create(dir->id, &inode, mode);
 
 	if (o == NULL) {
@@ -203,9 +223,10 @@ static int ext2_create(oid_t *dir, const char *name, oid_t *oid, int type, int m
 	}
 
 	o->type = type;
-	if (o->type == 2)
-		o->oid.port = port;
 	*oid = o->oid;
+
+	if (o->type == otDev)
+		memcpy(&o->dev, dev, sizeof(oid_t));
 
 	if ((ret = ext2_link(dir, name, &o->oid)) != EOK) {
 		object_put(o);
@@ -512,7 +533,7 @@ int main(void)
 				break;
 
 			case mtCreate:
-				msg.o.create.err = ext2_create(&msg.i.create.dir, msg.i.data, &msg.o.create.oid, msg.i.create.type, msg.i.create.mode, msg.i.create.dev.port);
+				msg.o.create.err = ext2_create(&msg.i.create.dir, msg.i.data, &msg.o.create.oid, msg.i.create.type, msg.i.create.mode, &msg.i.create.dev);
 				break;
 
 			case mtDestroy:

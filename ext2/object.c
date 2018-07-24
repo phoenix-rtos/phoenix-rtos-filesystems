@@ -155,6 +155,8 @@ ext2_object_t *object_create(id_t id, ext2_inode_t **inode, int mode)
 	o->refs = 1;
 	o->oid.id = id;
 	o->oid.port = ext2->port;
+	o->dev.id = id;
+	o->dev.port = ext2->port;
 	o->inode = *inode;
 	o->ino = id;
 	o->dirty = 1;
@@ -237,7 +239,8 @@ void object_put(ext2_object_t *o)
 
 	if(!o->refs) {
 		mutexUnlock(ext2_objects.ulock);
-		object_remove(o);
+		if (o->type != otDev)
+			object_remove(o);
 		return;
 	}
 	mutexUnlock(ext2_objects.ulock);
