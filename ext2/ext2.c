@@ -246,11 +246,11 @@ static int ext2_destroy(oid_t *oid)
 
 	if (o == NULL)
 		return -EINVAL;
-	object_sync(o);
-	if (o->type == otFile)
-		ext2_truncate(oid, 0);
 
+	object_sync(o);
+	ext2_truncate(oid, 0);
 	object_destroy(o);
+
 	return EOK;
 }
 
@@ -357,17 +357,24 @@ static int ext2_unlink(oid_t *dir, const char *name)
 		return -ENOENT;
 	}
 
-	if (dir_remove(d, name) != EOK) {
-		mutexUnlock(d->lock);
-		return -ENOENT;
-	}
-
 	mutexUnlock(d->lock);
 
 	o = object_get(toid.id);
 
+	if (o == NULL) {
+		object_put(d);
+		return -ENOENT;
+	}
+
+	if (dir_remove(d, name) != EOK) {
+		mutexUnlock(d->lock);
+		object_put(o);
+		return -ENOENT;
+	}
+
 	o->inode->links_count--;
 	if (o->inode->mode & EXT2_S_IFDIR) {
+		d->inode->links_count--;
 		o->inode->links_count--;
 		ext2_destroy(&o->oid);
 		object_put(d);

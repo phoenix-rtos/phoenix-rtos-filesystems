@@ -54,14 +54,6 @@ int object_destroy(ext2_object_t *o)
 {
 	mutexLock(ext2_objects.ulock);
 
-//	if (o->refs > 1) {
-//		mutexUnlock(ext2_objects.ulock);
-//		return -EBUSY;
-//	}
-
-	if (o->type == otDir && dir_is_empty(o) != EOK)
-		return -EBUSY;
-
 	lib_rbRemove(&ext2_objects.used, &o->node);
 
 	mutexLock(ext2_objects.clock);
