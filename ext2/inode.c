@@ -213,7 +213,7 @@ int inode_free(u32 ino, ext2_inode_t *inode)
 	ino = (ino - 1) % ext2->inodes_in_group;
 
 	read_block(ext2->gdt[group].inode_bitmap, inode_bmp);
-	toggle_bit(inode_bmp, ino);
+	toggle_bit(inode_bmp, ino + 1);
 	write_block(ext2->gdt[group].inode_bitmap, inode_bmp);
 	gdt_sync(group);
 	ext2_write_sb();

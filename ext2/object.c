@@ -54,10 +54,10 @@ int object_destroy(ext2_object_t *o)
 {
 	mutexLock(ext2_objects.ulock);
 
-	if (o->refs > 1) {
-		mutexUnlock(ext2_objects.ulock);
-		return -EBUSY;
-	}
+//	if (o->refs > 1) {
+//		mutexUnlock(ext2_objects.ulock);
+//		return -EBUSY;
+//	}
 
 	if (o->type == otDir && dir_is_empty(o) != EOK)
 		return -EBUSY;
@@ -157,6 +157,7 @@ ext2_object_t *object_create(id_t id, ext2_inode_t **inode, int mode)
 	o->oid.port = ext2->port;
 	o->inode = *inode;
 	o->ino = id;
+	o->dirty = 1;
 	mutexCreate(&o->lock);
 
 	lib_rbInsert(&ext2_objects.used, &o->node);

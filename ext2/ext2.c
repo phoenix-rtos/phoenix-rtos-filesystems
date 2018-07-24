@@ -147,22 +147,22 @@ static int ext2_getattr(oid_t *oid, int type, int *attr)
 
 	switch(type) {
 
-	case 0:
+	case atMode:
 		*attr = o->inode->mode;
 		break;
-	case 1:
+	case atUid:
 		*attr = o->inode->uid;
 		break;
-	case 2:
+	case atGid:
 		*attr = o->inode->gid;
 		break;
-	case 3:
+	case atSize:
 		*attr = o->inode->size;
 		break;
-	case 4:
+	case atType:
 		*attr = o->type;
 		break;
-	case 5:
+	case atPort:
 		*attr = o->oid.port;
 		break;
 	}
@@ -181,14 +181,14 @@ static int ext2_create(oid_t *dir, const char *name, oid_t *oid, int type, int m
 	int ret;
 
 	switch (type) {
-	case 0: /* dir */
-		mode = EXT2_S_IFDIR;
+	case otDir: /* dir */
+		mode |= EXT2_S_IFDIR;
 		break;
-	case 1: /* file */
-		mode = EXT2_S_IFREG;
+	case otFile: /* file */
+		mode |= EXT2_S_IFREG;
 		break;
-	case 2: /* dev */
-		mode = EXT2_S_IFCHR;
+	case otDev: /* dev */
+		mode |= EXT2_S_IFCHR;
 		break;
 	}
 
@@ -225,7 +225,7 @@ static int ext2_destroy(oid_t *oid)
 
 	if (o == NULL)
 		return -EINVAL;
-
+	object_sync(o);
 	if (o->type == otFile)
 		ext2_truncate(oid, 0);
 
@@ -336,23 +336,27 @@ static int ext2_unlink(oid_t *dir, const char *name)
 		return -ENOENT;
 	}
 
-	dir_remove(d, name);
+	if (dir_remove(d, name) != EOK) {
+		mutexUnlock(d->lock);
+		return -ENOENT;
+	}
 
 	mutexUnlock(d->lock);
-	object_put(d);
 
 	o = object_get(toid.id);
-	mutexLock(o->lock);
+
 	o->inode->links_count--;
 	if (o->inode->mode & EXT2_S_IFDIR) {
 		o->inode->links_count--;
 		ext2_destroy(&o->oid);
+		object_put(d);
 		return EOK;
 	}
 
 	if (!o->inode->links_count)
 		ext2_destroy(&o->oid);
 
+	object_put(d);
 	return EOK;
 }
 

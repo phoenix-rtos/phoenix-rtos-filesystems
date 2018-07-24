@@ -115,6 +115,7 @@ int dir_remove(ext2_object_t *d, const char *name)
 {
 	u32 offs = 0;
 	u32 block_offs;
+	int found = 0;
 	u32 prev_offs = 0;
 	ext2_dir_entry_t *dentry, *dtemp;
 	void *data = malloc(ext2->block_size);
@@ -127,11 +128,14 @@ int dir_remove(ext2_object_t *d, const char *name)
 
 			if (strlen(name) == dentry->name_len
 				&& !strncmp(name, dentry->name, dentry->name_len)) {
+				found = 1;
 				break;
 			}
 			prev_offs = block_offs;
 			block_offs += dentry->rec_len;
 		}
+		if (found)
+			break;
 		offs += ext2->block_size;
 	}
 
