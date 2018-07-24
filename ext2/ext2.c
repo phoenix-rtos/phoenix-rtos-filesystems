@@ -446,7 +446,7 @@ int main(void)
 
 	progsz = syspageprog(NULL, -1);
 	root.id = 2;
-	if (ext2_lookup(&root, "syspage", &sysoid) < 0) {
+	if (ext2_lookup(&root, "syspage", &sysoid, NULL) < 0) {
 		ext2_create(&root, "syspage", &sysoid, otDir, 0, 0);
 	}
 
@@ -454,7 +454,7 @@ int main(void)
 		syspageprog(&prog, i);
 		prog_addr = (void *)mmap(NULL, (prog.size + 0xfff) & ~0xfff, 0x1 | 0x2, 0, OID_PHYSMEM, prog.addr);
 
-		if (ext2_lookup(&sysoid, prog.name, &toid) < 0)
+		if (ext2_lookup(&sysoid, prog.name, &toid, NULL) < 0)
 			ext2_create(&sysoid, prog.name, &toid, otFile, 0, 0);
 		else
 			ext2_truncate(&toid, prog.size);
