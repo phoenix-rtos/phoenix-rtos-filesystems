@@ -422,7 +422,7 @@ static void ext2_close(oid_t *oid)
 int main(void)
 {
 	u32 port;
-	oid_t toid;
+	oid_t toid, tdev;
 	oid_t root;
 	oid_t sysoid;
 	msg_t msg;
@@ -446,7 +446,7 @@ int main(void)
 
 	progsz = syspageprog(NULL, -1);
 	root.id = 2;
-	if (ext2_lookup(&root, "syspage", &sysoid, NULL) < 0) {
+	if (ext2_lookup(&root, "syspage", &sysoid, &tdev) < 0) {
 		ext2_create(&root, "syspage", &sysoid, otDir, 0, 0);
 	}
 
@@ -454,7 +454,7 @@ int main(void)
 		syspageprog(&prog, i);
 		prog_addr = (void *)mmap(NULL, (prog.size + 0xfff) & ~0xfff, 0x1 | 0x2, 0, OID_PHYSMEM, prog.addr);
 
-		if (ext2_lookup(&sysoid, prog.name, &toid, NULL) < 0)
+		if (ext2_lookup(&sysoid, prog.name, &toid, &tdev) < 0)
 			ext2_create(&sysoid, prog.name, &toid, otFile, 0, 0);
 		else
 			ext2_truncate(&toid, prog.size);
