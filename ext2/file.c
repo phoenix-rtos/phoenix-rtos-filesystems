@@ -18,6 +18,7 @@
 #include <errno.h>
 #include <pc-ata.h>
 #include <string.h>
+#include <sys/file.h>
 
 #include "ext2.h"
 #include "file.h"
@@ -36,8 +37,16 @@ static int _ext2_read(oid_t *oid, offs_t offs, char *data, unsigned int len, int
 	ext2_object_t *o = object_get(oid->id);
 	void *tmp;
 
+	if (o == NULL)
+		return -EINVAL;
+
 	if (len == 0)
 		return 0;
+
+	if (o->type == otDev) {
+		object_put(o);
+		return -EINVAL;
+	}
 
 	if (o->inode->size <= offs)
 		return EOK;
@@ -101,9 +110,17 @@ static int _ext2_write(oid_t *oid, offs_t offs, char *data, u32 len, int lock)
 	ext2_object_t *o = object_get(oid->id);
 	void *tmp;
 
+	if (o == NULL)
+		return -EINVAL;
+
 	if (len == 0) {
 		object_put(o);
 		return EOK;
+	}
+
+	if (o->type == otDev) {
+		object_put(o);
+		return -EINVAL;
 	}
 
 	if (o->locked) {
@@ -187,6 +204,11 @@ int ext2_truncate(oid_t *oid, u32 size)
 
 	if (o == NULL)
 		return -EINVAL;
+
+	if (o->type == otDev) {
+		object_put(o);
+		return -EINVAL;
+	}
 
 	mutexLock(o->lock);
 

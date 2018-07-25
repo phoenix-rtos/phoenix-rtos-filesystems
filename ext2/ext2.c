@@ -37,6 +37,7 @@
 
 
 static int ext2_link(oid_t *dir, const char *name, oid_t *oid);
+static int ext2_unlink(oid_t *dir, const char *name);
 static int ext2_destroy(oid_t *oid);
 
 
@@ -177,7 +178,6 @@ static int ext2_getattr(oid_t *oid, int type, int *attr)
 	return EOK;
 }
 
-static int ext2_unlink(oid_t *dir, const char *name);
 
 static int ext2_create(oid_t *dir, const char *name, oid_t *oid, int type, int mode, oid_t *dev)
 {
