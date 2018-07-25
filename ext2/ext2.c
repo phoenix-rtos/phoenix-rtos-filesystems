@@ -112,26 +112,19 @@ static int ext2_setattr(oid_t *oid, int type, int attr)
 
 	switch(type) {
 
-	case 0:
+	case atMode:
 		o->inode->mode |= (attr & 0x1FF);
 		break;
-	case 1:
+	case atUid:
 		o->inode->uid = attr;
 		break;
-	case 2:
+	case atGid:
 		o->inode->gid = attr;
 		break;
-	case 3:
+	case atSize:
 		mutexUnlock(o->lock);
 		ext2_truncate(oid, attr);
 		mutexLock(o->lock);
-		break;
-	case 4:
-		res = -EINVAL;
-		break;
-	case 5:
-		if (o->type == 2) /* dev */
-			o->oid.port = attr;
 		break;
 	}
 
@@ -170,12 +163,20 @@ static int ext2_getattr(oid_t *oid, int type, int *attr)
 	case atType:
 		*attr = o->type;
 		break;
-	case atPort:
-		*attr = o->oid.port;
+	case atCTime:
+		*attr = o->inode->ctime;
+		break;
+	case atATime:
+		*attr = o->inode->atime;
+		break;
+	case atMTime:
+		*attr = o->inode->mtime;
+		break;
+	case atLinks:
+		*attr = o->inode->links_count;
 		break;
 	}
 
-	o->inode->atime = time(NULL);
 	mutexUnlock(o->lock);
 	object_put(o);
 	return EOK;
