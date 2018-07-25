@@ -101,7 +101,7 @@ static int ext2_lookup(oid_t *dir, const char *name, oid_t *res, oid_t *dev)
 		memcpy(dev, &o->dev, sizeof(oid_t));
 	else
 		memcpy(dev, res, sizeof(oid_t));
-
+	object_put(o);
 	mutexUnlock(d->lock);
 	object_put(d);
 	return end;
@@ -453,6 +453,7 @@ static int ext2_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned i
 		memcpy(&(dent->d_name[0]), dentry->name, dentry->name_len);
 		dent->d_name[dentry->name_len] = '\0';
 
+		free(dentry);
 		object_put(d);
 		return 	EOK;
 	}

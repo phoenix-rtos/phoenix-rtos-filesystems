@@ -27,7 +27,7 @@
 #include "object.h"
 
 #define MAX_FILES 512
-#define CACHE_SIZE 128
+#define CACHE_SIZE 127
 
 
 struct {
@@ -52,9 +52,16 @@ static int object_cmp(rbnode_t *n1, rbnode_t *n2)
 
 int object_destroy(ext2_object_t *o)
 {
+	ext2_object_t t;
+
 	mutexLock(ext2_objects.ulock);
 
-	lib_rbRemove(&ext2_objects.used, &o->node);
+	t.oid.id = o->oid.id;
+
+	if ((o == lib_treeof(ext2_object_t, node, lib_rbFind(&ext2_objects.used, &t.node)))) {
+		ext2_objects.used_cnt--;
+		lib_rbRemove(&ext2_objects.used, &o->node);
+	}
 
 	mutexLock(ext2_objects.clock);
 	if (ext2_objects.cache[o->oid.id % CACHE_SIZE] == o)
@@ -73,6 +80,7 @@ int object_destroy(ext2_object_t *o)
 
 	return EOK;
 }
+int i = 0;
 
 
 int object_remove(ext2_object_t *o)
@@ -86,6 +94,7 @@ int object_remove(ext2_object_t *o)
 	}
 
 	lib_rbRemove(&ext2_objects.used, &o->node);
+	ext2_objects.used_cnt--;
 
 	mutexLock(ext2_objects.clock);
 	r  = ext2_objects.cache[o->oid.id % CACHE_SIZE];
@@ -162,6 +171,7 @@ ext2_object_t *object_create(id_t id, ext2_inode_t **inode, int mode)
 	return o;
 }
 
+
 ext2_object_t *object_get(unsigned int id)
 {
 	ext2_object_t *o, t;
@@ -183,6 +193,7 @@ ext2_object_t *object_get(unsigned int id)
 			ext2_objects.cache[id % CACHE_SIZE] = NULL;
 			o->refs++;
 			lib_rbInsert(&ext2_objects.used, &o->node);
+			ext2_objects.used_cnt++;
 			mutexUnlock(ext2_objects.clock);
 			mutexUnlock(ext2_objects.ulock);
 			return o;
@@ -195,7 +206,7 @@ ext2_object_t *object_get(unsigned int id)
 
 		mutexUnlock(ext2_objects.ulock);
 		o = object_create(id, &inode, inode->mode);
-		
+
 		if (EXT2_S_ISDIR(inode->mode))
 			o->type = otDir;
 		else if (EXT2_S_ISREG(inode->mode))
