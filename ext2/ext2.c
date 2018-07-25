@@ -86,6 +86,7 @@ static int ext2_lookup(oid_t *dir, const char *name, oid_t *res, oid_t *dev)
 	}
 
 	o = object_get(res->id);
+
 	if (o && o->type == otDev)
 		memcpy(dev, &o->dev, sizeof(oid_t));
 	else
@@ -185,6 +186,9 @@ static int ext2_create(oid_t *dir, const char *name, oid_t *oid, int type, int m
 	ext2_inode_t *inode = NULL;
 	oid_t tdev;
 	int ret;
+
+	if (name == NULL || strlen(name) == 0)
+		return -EINVAL;
 
 	switch (type) {
 	case otDir: /* dir */
@@ -321,6 +325,7 @@ static int ext2_link(oid_t *dir, const char *name, oid_t *oid)
 			return res;
 		}
 
+		object_sync(o);
 		mutexUnlock(o->lock);
 		object_put(o);
 		object_put(d);
