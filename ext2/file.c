@@ -19,6 +19,7 @@
 #include <pc-ata.h>
 #include <string.h>
 #include <sys/file.h>
+#include <time.h>
 
 #include "ext2.h"
 #include "file.h"
@@ -83,6 +84,7 @@ static int _ext2_read(oid_t *oid, offs_t offs, char *data, unsigned int len, int
 
 	if (lock) mutexUnlock(o->lock);
 
+	o->inode->atime = time(NULL);
 	object_put(o);
 	free(tmp);
 	return read_len;
@@ -175,6 +177,7 @@ static int _ext2_write(oid_t *oid, offs_t offs, char *data, u32 len, int lock)
 	o->dirty = 1;
 
 	if (lock) mutexUnlock(o->lock);
+	o->inode->mtime = o->inode->atime = time(NULL);
 	object_sync(o);
 	object_put(o);
 	free(tmp);

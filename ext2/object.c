@@ -214,9 +214,9 @@ ext2_object_t *object_get(unsigned int id)
 
 void object_sync(ext2_object_t *o)
 {
-
 	if (o->dirty)
 		inode_set(o->ino, o->inode);
+
 	write_block(o->ind[0].bno, o->ind[0].data);
 	write_block(o->ind[1].bno, o->ind[1].data);
 	write_block(o->ind[2].bno, o->ind[2].data);

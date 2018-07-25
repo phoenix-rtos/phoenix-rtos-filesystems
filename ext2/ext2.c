@@ -20,6 +20,7 @@
 #include <string.h>
 #include <sys/msg.h>
 #include <sys/mman.h>
+#include <time.h>
 #include <sys/file.h>
 #include <dirent.h>
 
@@ -134,6 +135,7 @@ static int ext2_setattr(oid_t *oid, int type, int attr)
 		break;
 	}
 
+	o->inode->mtime = o->inode->atime = time(NULL);
 	o->dirty = 1;
 	object_sync(o);
 	mutexUnlock(o->lock);
@@ -173,6 +175,7 @@ static int ext2_getattr(oid_t *oid, int type, int *attr)
 		break;
 	}
 
+	o->inode->atime = time(NULL);
 	mutexUnlock(o->lock);
 	object_put(o);
 	return EOK;
@@ -232,12 +235,13 @@ static int ext2_create(oid_t *dir, const char *name, oid_t *oid, int type, int m
 	if (o->type == otDev)
 		memcpy(&o->dev, dev, sizeof(oid_t));
 
+	o->inode->ctime = o->inode->mtime = o->inode->atime = time(NULL);
+
 	if ((ret = ext2_link(dir, name, &o->oid)) != EOK) {
 		object_put(o);
 		ext2_destroy(&o->oid);
 		return ret;
 	}
-
 	object_put(o);
 
 	return EOK;
@@ -304,6 +308,7 @@ static int ext2_link(oid_t *dir, const char *name, oid_t *oid)
 		o->inode->links_count++;
 		o->inode->uid = 0;
 		o->inode->gid = 0;
+		o->inode->mtime = o->inode->atime = time(NULL);
 		o->dirty = 1;
 
 		if(o->inode->mode & EXT2_S_IFDIR) {
@@ -388,6 +393,8 @@ static int ext2_unlink(oid_t *dir, const char *name)
 
 	if (!o->inode->links_count)
 		ext2_destroy(&o->oid);
+	else
+		o->inode->mtime = o->inode->atime = time(NULL);
 
 	object_put(d);
 	return EOK;
@@ -432,6 +439,7 @@ static int ext2_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned i
 		object_put(d);
 		return 	EOK;
 	}
+	d->inode->atime = time(NULL);
 	mutexUnlock(d->lock);
 
 	free(dentry);
@@ -441,7 +449,9 @@ static int ext2_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned i
 
 static void ext2_open(oid_t *oid)
 {
-	object_get(oid->id);
+	ext2_object_t *o =object_get(oid->id);
+	if (o != NULL)
+		o->inode->atime = time(NULL);
 }
 
 
