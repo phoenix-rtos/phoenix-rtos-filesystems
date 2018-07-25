@@ -14,6 +14,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h> /* to set mode for / */
 #include <sys/threads.h>
 #include <sys/msg.h>
 #include <sys/list.h>
@@ -559,6 +560,8 @@ int main(int argc,char **argv)
 	memcpy(&root, &o->oid, sizeof(oid_t));
 	dir_add(o, ".", otDir, &root);
 	dir_add(o, "..", otDir, &root);
+
+	dummyfs_setattr(&o->oid, atMode, S_IFDIR | 0777);
 
 	fetch_modules();
 

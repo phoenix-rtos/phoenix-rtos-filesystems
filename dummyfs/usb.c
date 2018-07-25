@@ -14,6 +14,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h> /* to set mode for /init */
 #include <sys/threads.h>
 #include <sys/mman.h>
 #include <sys/msg.h>
@@ -509,6 +510,7 @@ void exec_modules(void *arg)
 	memcpy(path, "/init/", 6);
 	dummyfs_lookup(NULL, ".", &tmp, &root);
 	dummyfs_create(&root, "init", &init, otDir, 0, NULL);
+	dummyfs_setattr(&init, atMode, S_IFDIR | 0777);
 
 	while (cnt < dc.mods_cnt) {
 		argc = 1;
