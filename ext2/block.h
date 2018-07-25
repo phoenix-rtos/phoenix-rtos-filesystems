@@ -27,7 +27,7 @@ extern int read_block(u32 block, void *data);
 extern int read_blocks(u32 block, u32 count, void *data);
 
 
-extern u32 search_block(void *data, const char *name, u8 len);
+extern int search_block(void *data, const char *name, u8 len, oid_t *res);
 
 
 extern void free_blocks(u32 start, u32 count);

@@ -26,6 +26,7 @@ int dir_find(ext2_object_t *d, const char *name, u32 len, oid_t *res)
 {
 	u32 offs = 0;
 	void *data;
+	int err = 0;
 
 	if (!(d->inode->mode & EXT2_S_IFDIR))
 		return -ENOTDIR;
@@ -35,13 +36,13 @@ int dir_find(ext2_object_t *d, const char *name, u32 len, oid_t *res)
 	while (offs < d->inode->size) {
 		ext2_read_locked(&d->oid, offs, data, ext2->block_size);
 		offs += ext2->block_size;
-		res->id = search_block(data, name, len);
-		if (res->id)
+		err = search_block(data, name, len, res);
+		if (err == EOK)
 			break;
 	}
 
 	free(data);
-	return res->id ? EOK : -ENOENT;
+	return err;
 }
 
 

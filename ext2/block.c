@@ -92,7 +92,7 @@ int read_blocks(u32 start_block, u32 count, void *data)
 
 
 /* search block for a given file name */
-u32 search_block(void *data, const char *name, u8 len)
+int search_block(void *data, const char *name, u8 len, oid_t *res)
 {
 	ext2_dir_entry_t *entry;
 	int off = 0;
@@ -101,14 +101,15 @@ u32 search_block(void *data, const char *name, u8 len)
 		entry = data + off;
 
 		if (entry->rec_len == 0)
-			return 0;
+			return -ENOENT;
 		if (len == entry->name_len
 				&& !strncmp(name, entry->name, len)) {
-			return entry->inode;
+			res->id = entry->inode;
+			return EOK;
 		}
 		off += entry->rec_len;
 	}
-	return 0;
+	return -ENOENT;
 }
 
 

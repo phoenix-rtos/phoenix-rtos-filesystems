@@ -47,11 +47,15 @@ static int ext2_lookup(oid_t *dir, const char *name, oid_t *res, oid_t *dev)
 	u32 start = 0, end = 0;
 	u32 ino = dir ? dir->id : ROOTNODE_NO;
 	int err;
+	char *namedup;
 	u32 len = strlen(name);
 	ext2_object_t *d, *o;
 
 	if (ino < 2)
 		return -EINVAL;
+
+	if (len == 0)
+		return -ENOENT;
 
 	d = object_get(ino);
 
@@ -70,14 +74,18 @@ static int ext2_lookup(oid_t *dir, const char *name, oid_t *res, oid_t *dev)
 		mutexUnlock(d->lock);
 		object_put(d);
 
-		if (err < 0)
+		if (err < 0) {
 			return err;
+		}
 
 		o = object_get(res->id);
 
 		if (o == NULL) {
-			object_put(o);
-			return -ENOENT;
+			namedup = malloc(end - start);
+			memcpy(namedup, name + start, end + start);
+			ext2_unlink(&d->oid, namedup);
+			free(namedup);
+			return end;
 		}
 
 		res->port = ext2->port;
@@ -373,6 +381,7 @@ static int ext2_unlink(oid_t *dir, const char *name)
 	o = object_get(toid.id);
 
 	if (o == NULL) {
+		dir_remove(d, name);
 		object_put(d);
 		return -ENOENT;
 	}
@@ -407,6 +416,7 @@ static int ext2_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned i
 {
 	ext2_object_t *d;
 	ext2_dir_entry_t *dentry;
+	int coffs = 0;
 
 	d = object_get(dir->id);
 
@@ -426,13 +436,19 @@ static int ext2_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned i
 	dentry = malloc(size);
 
 	mutexLock(d->lock);
-	if (offs < d->inode->size) {
+	while (offs < d->inode->size) {
 		ext2_read_locked(dir, offs, (void *)dentry, size);
 		mutexUnlock(d->lock);
 
 		dent->d_ino = dentry->inode;
-		dent->d_reclen = dentry->rec_len;
+		dent->d_reclen = dentry->rec_len + coffs;
 		dent->d_namlen = dentry->name_len;
+		if (dentry->name_len == 0) {
+			offs += dent->d_reclen;
+			coffs += dent->d_reclen;
+			continue;
+		}
+
 		dent->d_type = dentry->file_type & EXT2_FT_DIR ? 0 : 1;
 		memcpy(&(dent->d_name[0]), dentry->name, dentry->name_len);
 		dent->d_name[dentry->name_len] = '\0';
