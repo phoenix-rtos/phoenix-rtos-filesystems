@@ -150,15 +150,14 @@ int dir_remove(ext2_object_t *d, const char *name)
 		/* last entry in directory */
 		if (dentry->rec_len == ext2->block_size) {
 			/* free last block and adjust inode size */
-			d->inode->size -= ext2->block_size;
-			ext2_truncate(&d->oid, d->inode->size);
+			ext2_truncate(&d->oid, d->inode->size - ext2->block_size);
 			free(data);
 			return EOK;
 		} else {
 			/* move next dentry to the start of the block */
 			dtemp = data + dentry->rec_len;
 			dentry->name_len = dtemp->name_len;
-			dentry->rec_len = dtemp->rec_len;
+			dentry->rec_len += dtemp->rec_len;
 			dentry->file_type = dtemp->file_type;
 			dentry->inode = dtemp->inode;
 			memcpy(dentry->name, dtemp->name, dtemp->name_len);
