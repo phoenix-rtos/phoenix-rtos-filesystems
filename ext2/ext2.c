@@ -210,7 +210,7 @@ static int ext2_create(oid_t *dir, const char *name, oid_t *oid, int type, int m
 		mode |= EXT2_S_IFREG;
 		break;
 	case otDev: /* dev */
-		mode |= EXT2_S_IFCHR;
+		mode = (mode & 0x1ff) | EXT2_S_IFCHR;
 		break;
 	}
 
@@ -446,7 +446,9 @@ static int ext2_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned i
 		if (dentry->name_len == 0) {
 			offs += dent->d_reclen;
 			coffs += dent->d_reclen;
-			continue;
+			if (dent->d_reclen > 0)
+				continue;
+			else break;
 		}
 
 		dent->d_type = dentry->file_type & EXT2_FT_DIR ? 0 : 1;
