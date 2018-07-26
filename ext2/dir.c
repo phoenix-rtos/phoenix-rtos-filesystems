@@ -57,7 +57,6 @@ int dir_add(ext2_object_t *d, const char *name, int type, oid_t *oid)
 	/* dir entry size is always rounded to block size
 	 * and we need only last block of entries */
 	data = malloc(ext2->block_size);
-
 	ext2_read_locked(&d->oid, d->inode->size ? d->inode->size - ext2->block_size : 0, data, ext2->block_size);
 
 	while (offs < ext2->block_size) {
@@ -66,9 +65,11 @@ int dir_add(ext2_object_t *d, const char *name, int type, oid_t *oid)
 			break;
 
 		if (dentry->rec_len + offs == ext2->block_size) {
-			dentry->rec_len = dentry->name_len + sizeof(ext2_dir_entry_t);
-
-			dentry->rec_len = (dentry->rec_len + 3) & ~3;
+			if (dentry->name_len != 0) {
+				dentry->rec_len = dentry->name_len + sizeof(ext2_dir_entry_t);
+				dentry->rec_len = (dentry->rec_len + 3) & ~3;
+			} else
+				dentry->rec_len = 0;
 
 			offs += dentry->rec_len;
 			rec_len = strlen(name) + sizeof(ext2_dir_entry_t);
@@ -86,11 +87,12 @@ int dir_add(ext2_object_t *d, const char *name, int type, oid_t *oid)
 	}
 
 	/* no space in this block */
-	if (offs >= ext2->block_size) {
+	if (offs >= ext2->block_size || !d->inode->size) {
 		/* block alloc */
 		d->inode->size += ext2->block_size;
 		offs = 0;
 		memset(data, 0, ext2->block_size);
+		rec_len = ext2->block_size;
 	}
 
 	dentry = data + offs;
@@ -102,7 +104,7 @@ int dir_add(ext2_object_t *d, const char *name, int type, oid_t *oid)
 	else
 		dentry->file_type = EXT2_FT_REG_FILE;
 
-	dentry->rec_len = rec_len ? rec_len : ext2->block_size;
+	dentry->rec_len = rec_len;
 	dentry->inode = oid->id;
 
 	ext2_write_locked(&d->oid, d->inode->size ? d->inode->size - ext2->block_size : 0, data, ext2->block_size);
@@ -149,10 +151,15 @@ int dir_remove(ext2_object_t *d, const char *name)
 	if (!block_offs) {
 		/* last entry in directory */
 		if (dentry->rec_len == ext2->block_size) {
-			/* free last block and adjust inode size */
-			ext2_truncate(&d->oid, d->inode->size - ext2->block_size);
-			free(data);
-			return EOK;
+			if (offs + ext2->block_size >= d->inode->size) {
+				/* free last block and adjust inode size */
+				ext2_truncate(&d->oid, d->inode->size - ext2->block_size);
+				free(data);
+				return EOK;
+			}
+			/* we need a hole*/
+			dentry->rec_len = ext2->block_size;
+			dentry->name_len = 0;
 		} else {
 			/* move next dentry to the start of the block */
 			dtemp = data + dentry->rec_len;

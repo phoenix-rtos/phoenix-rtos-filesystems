@@ -216,6 +216,7 @@ static int ext2_create(oid_t *dir, const char *name, oid_t *oid, int type, int m
 
 	if (ext2_lookup(dir, name, oid, &tdev) > 0) {
 		o = object_get(oid->id);
+
 		if (oid->id == tdev.id && oid->port == tdev.port && o->type == otDev) {
 			object_put(o);
 
@@ -321,7 +322,6 @@ static int ext2_link(oid_t *dir, const char *name, oid_t *oid)
 		o->dirty = 1;
 
 		if(o->inode->mode & EXT2_S_IFDIR) {
-
 			dir_add(o, ".", EXT2_S_IFDIR, oid);
 			o->inode->links_count++;
 			dir_add(o, "..", EXT2_S_IFDIR, dir);
@@ -433,6 +433,11 @@ static int ext2_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned i
 		return -ENOENT;
 	}
 
+	if (!d->inode->size) {
+		object_put(d);
+		return -ENOENT;
+	}
+
 	dentry = malloc(size);
 
 	mutexLock(d->lock);
@@ -446,10 +451,11 @@ static int ext2_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned i
 		if (dentry->name_len == 0) {
 			offs += dent->d_reclen;
 			coffs += dent->d_reclen;
-			if (dent->d_reclen > 0)
+			if (dentry->rec_len > 0)
 				continue;
 			else break;
-		}
+		} else if (!dentry->rec_len)
+			break;
 
 		dent->d_type = dentry->file_type & EXT2_FT_DIR ? 0 : 1;
 		memcpy(&(dent->d_name[0]), dentry->name, dentry->name_len);
@@ -549,7 +555,6 @@ int main(void)
 		/* message handling loop */
 		msgRecv(port, &msg, &rid);
 		switch (msg.type) {
-
 			case mtOpen:
 				ext2_open(&msg.i.openclose.oid);
 				break;
