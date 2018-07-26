@@ -257,8 +257,20 @@ static int jffs2_srv_getattr(oid_t *oid, int type, int *attr)
 				*attr = otUnknown;
 			break;
 
-		case (atPort): /* port */
-			*attr = jffs2_common.port;
+		case (atCTime):
+			*attr = inode->i_ctime.tv_sec;
+			break;
+
+		case (atMTime):
+			*attr = inode->i_mtime.tv_sec;
+			break;
+
+		case (atATime):
+			*attr = inode->i_atime.tv_sec;
+			break;
+
+		case (atLinks):
+			*attr = inode->i_nlink;
 			break;
 	}
 

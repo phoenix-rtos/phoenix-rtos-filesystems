@@ -14,12 +14,14 @@
  */
 
 #include "../os-phoenix.h"
+#include <time.h>
 #include "fs.h"
 
 
 struct timespec current_time(struct inode *inode)
 {
 	struct timespec t = {0, 0};
+	t.tv_sec = time(NULL);
 	return t;
 }
 
