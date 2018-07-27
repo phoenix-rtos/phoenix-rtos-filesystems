@@ -19,7 +19,7 @@
 #include <sys/rb.h>
 #include <sys/threads.h>
 
-#include "object.h"
+#include "../os-phoenix.h"
 
 struct {
 	handle_t	lock;

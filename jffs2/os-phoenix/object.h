@@ -16,7 +16,6 @@
 #ifndef _OS_PHOENIX_OBJECT_H_
 #define _OS_PHOENIX_OBJECT_H_ /* object.h */
 
-#include "../os-phoenix.h"
 
 enum {
 	ST_ERROR,

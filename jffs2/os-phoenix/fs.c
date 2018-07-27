@@ -127,8 +127,8 @@ void iput(struct inode *inode)
 
 	if (!inode->i_nlink) {
 		object_destroy(o);
-		jffs2_common.sb->s_op->evict_inode(inode);
-		jffs2_common.sb->s_op->destroy_inode(inode);
+		inode->i_sb->s_op->evict_inode(inode);
+		inode->i_sb->s_op->destroy_inode(inode);
 	}
 }
 
@@ -400,8 +400,7 @@ int register_filesystem(struct file_system_type *fs)
 {
 	system_long_wq = malloc(sizeof(struct workqueue_struct));
 	init_workqueue(system_long_wq);
-	if (fs->mount(fs, 0, "jffs2", NULL) == NULL)
-		return -1;
+	jffs2_common.fs = fs;
 
 	return 0;
 }

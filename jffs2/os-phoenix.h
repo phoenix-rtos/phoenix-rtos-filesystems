@@ -16,7 +16,6 @@
 
 #ifndef _OS_PHOENIX_H_
 #define _OS_PHOENIX_H_
-
 #include <stdlib.h>
 #include <sys/threads.h>
 #include <sys/mman.h>
@@ -27,90 +26,31 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "linux/list.h"
+#include "linux/magic.h"
 
-#ifndef __PHOENIX
-#define __PHOENIX
-#endif
-
-#define __init
-#define __exit
-#define __user
-
-#define likely(x) (x)
-#define unlikely(x) (x)
-
-#define PAGE_SHIFT 	12
-#define PAGE_SIZE	(1 << PAGE_SHIFT)
-
-
-#define cond_resched() do { usleep(10); } while (0)
-
-
-struct delayed_call {
-};
-
-
-struct vm_area_struct {
-};
-
-
-struct pipe_inode_info {
-};
-
-
-struct kiocb {
-};
-
-
-struct iov_iter {
-};
-
-
-struct kstat {
-};
-
-
-struct path {
-};
-
-
-struct kvec {
-	void *iov_base;
-	size_t iov_len;
-};
-
-
-struct seq_file
-{
-};
-
-struct rcu_head
-{
-};
-
-struct jffs2_sb_info;
-struct jffs2_eraseblock;
-struct jffs2_inode_info;
-
-
-#define container_of(ptr, type, member) ({ \
-	int _off = (int) &(((type *) 0)->member); \
-	(type *)(((void *)ptr) - _off); })
-
-#include "os-phoenix/object.h"
+#include "os-phoenix/kernel.h"
 #include "os-phoenix/completion.h"
 #include "os-phoenix/dev.h"
 #include "os-phoenix/rb.h"
-#include "os-phoenix/locks.h"
 #include "os-phoenix/types.h"
+#include "os-phoenix/locks.h"
 #include "os-phoenix/dentry.h"
 #include "os-phoenix/fs.h"
+#include "os-phoenix/object.h"
 #include "os-phoenix/errno.h"
 #include "os-phoenix/crc32.h"
 #include "os-phoenix/slab.h"
 #include "os-phoenix/capability.h"
 #include "os-phoenix/wait.h"
 #include "os-phoenix/mtd.h"
+
+#include "jffs2.h"
+#include "jffs2_fs_i.h"
+
+#ifndef __PHOENIX
+#define __PHOENIX
+#endif
 
 #define SECTOR_ADDR(x) ( (((unsigned long)(x) / c->sector_size) * c->sector_size) )
 
@@ -267,7 +207,6 @@ bool try_to_freeze(void);
 
 #define sigmask(sig)	(1UL << ((sig) - 1))
 
-
 typedef struct {
 	unsigned long sig[_NSIG_WORDS];
 } sigset_t;
@@ -291,9 +230,6 @@ void siginitset(sigset_t *set, unsigned long mask);
 int sigprocmask(int how, sigset_t *set, sigset_t *oldset);
 
 #define set_current_state(state_value) do { } while (0)
-
-#include "linux/list.h"
-#include "linux/magic.h"
 
 void *kmalloc(int len, int flag);
 
@@ -327,7 +263,6 @@ void kunmap(struct page *page);
 #define GFP_KERNEL 0
 #define GFP_USER 1
 
-#include "jffs2.h"
 
 extern const struct inode_operations jffs2_file_inode_operations;
 extern const struct inode_operations jffs2_symlink_inode_operations;
@@ -439,8 +374,6 @@ struct jffs2_inode_info;
 
 extern struct workqueue_struct *system_long_wq;
 
-#include "jffs2_fs_i.h"
-
 static inline void jffs2_init_inode_info(struct jffs2_inode_info *f)
 {
 	f->highest_version = 0;
@@ -533,12 +466,15 @@ int match_int(substring_t *s, int *result);
 
 void rcu_barrier(void);
 
-typedef struct _partition_t {
+typedef struct _jffs2_partition_t {
 	u32 start;
 	u32 size;
 	char *mount;
 	int flags;
-} partition_t;
+	oid_t root;
+	struct super_block *sb;
+	struct workqueue_struct *system_long_wq;
+} jffs2_partition_t;
 
 typedef struct _jffs2_common_t {
 	u32 port;
@@ -547,9 +483,10 @@ typedef struct _jffs2_common_t {
 	u32 size;
 	char *mount_path;
 	struct super_block *sb;
-	struct workqueue_struct *system_long_wq;
 	u32 part_cnt;
-	partition_t *part;
+	jffs2_partition_t *part;
+	struct file_system_type *fs;
+	struct workqueue_struct *system_long_wq;
 } jffs2_common_t;
 
 extern jffs2_common_t jffs2_common;

@@ -778,6 +778,10 @@ int main(int argc, char **argv)
 		printf("jffs2: Can't mount on directory %s\n", jffs2_common.mount_path);
 		return -1;
 	}
+	if (jffs2_common.fs->mount(jffs2_common.fs, 0, "jffs2", NULL) == NULL) {
+		printf("jffs2: Can't mount partition\n");
+		return -1;
+	}
 
 	for (;;) {
 		if (msgRecv(jffs2_common.port, &msg, &rid) < 0) {

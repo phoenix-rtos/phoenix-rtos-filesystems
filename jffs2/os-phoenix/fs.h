@@ -23,9 +23,6 @@
 #include <sys/file.h>
 #include <dirent.h>
 
-#include "../linux/list.h"
-#include "types.h"
-
 #define DT_UNKNOWN		0
 #define DT_FIFO			1
 #define DT_CHR			2
