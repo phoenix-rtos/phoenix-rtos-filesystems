@@ -489,6 +489,7 @@ extern int dummyfs_create(oid_t *dir, const char *name, oid_t *oid, int type, in
 extern int dummyfs_link(oid_t *dir, const char *name, oid_t *oid);
 extern int dummyfs_write(oid_t *oid, offs_t offs, char *buff, unsigned int len);
 extern int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res, oid_t *dev);
+extern int dummyfs_setattr(oid_t *oid, int type, int attr);
 
 
 char __attribute__((aligned(8))) stack[4096];
