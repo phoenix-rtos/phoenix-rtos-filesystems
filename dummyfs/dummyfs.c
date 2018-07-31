@@ -14,11 +14,13 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <sys/stat.h> /* to set mode for / */
 #include <sys/threads.h>
 #include <sys/msg.h>
 #include <sys/list.h>
 #include <sys/mman.h>
+#include <sys/mount.h>
 #include <string.h>
 #include <unistd.h>
 #include <dirent.h>
@@ -444,7 +446,7 @@ int dummyfs_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int s
 	object_unlock(d);
 	object_put(d);
 
-	return 	ret;
+	return ret;
 }
 
 
@@ -512,6 +514,8 @@ int main(int argc,char **argv)
 	msg_t msg;
 	dummyfs_object_t *o;
 	unsigned int rid;
+	char *mountpt = NULL;
+	int err;
 
 #ifndef TARGET_IA32
 	oid_t toid = { 0 };
@@ -520,25 +524,43 @@ int main(int argc,char **argv)
 
 	dummyfs_common.size = 0;
 
+	if (argc > 1 && getopt(argc, argv, "m:") != -1)
+		mountpt = optarg;
+
+	if (mountpt == NULL) {
 #ifdef TARGET_IA32
-	while(write(0, "", 1) < 0)
-		usleep(500000);
+		while(write(0, "", 1) < 0)
+			usleep(500000);
 #else
-	portCreate(&reserved);
-	portRegister(reserved, "/reserved", &toid);
+		portCreate(&reserved);
 #endif
 
-	portCreate(&dummyfs_common.port);
+		portCreate(&dummyfs_common.port);
 
-	/* Try to mount fs as root */
-	if (portRegister(dummyfs_common.port, "/", &root) < 0) {
-		printf("dummyfs: Can't mount on directory %s\n", "/");
-		return -1;
-	}
+		/* Try to mount fs as root */
+		if (portRegister(dummyfs_common.port, "/", &root) < 0) {
+			printf("dummyfs: Can't mount as rootfs\n");
+			return -1;
+		}
 
 #ifndef TARGET_IA32
-	portDestroy(reserved);
+		portDestroy(reserved);
 #endif
+	} else {
+		portCreate(&dummyfs_common.port);
+
+		if (lookup(mountpt, NULL, &toid) < EOK) {
+			printf("dummyfs: %s does not exist\n", mountpt);
+			return -1;
+		}
+
+		toid.id = 0;
+		toid.port = dummyfs_common.port;
+		if ((err = mount(mountpt, &toid))) {
+			printf("dummyfs: Failed to mount at %s - error %d\n", mountpt, err);
+			return -1;
+		}
+	}
 
 	printf("dummyfs: Starting dummyfs server at port %d\n", dummyfs_common.port);
 
@@ -563,7 +585,29 @@ int main(int argc,char **argv)
 
 	dummyfs_setattr(&o->oid, atMode, S_IFDIR | 0777);
 
-	fetch_modules();
+	if (mountpt == NULL) {
+		if (argc > 1 && getopt(argc, argv, "r:") != -1)
+			mountpt = optarg;
+		fetch_modules();
+	}
+
+	if (mountpt != NULL) {
+		if (lookup(mountpt, NULL, &toid) < EOK) {
+			printf("dummyfs: %s does not exist\n", mountpt);
+		}
+
+		while (lookup("/", NULL, &toid)) {
+			if (toid.port == dummyfs_common.port)
+				usleep(1000000);
+			else
+				break;
+		}
+
+		if ((err = mount(mountpt, &toid))) {
+			printf("dummyfs: Failed to mount at %s - error %d\n", mountpt, err);
+			return -1;
+		}
+	}
 
 	for (;;) {
 		if (msgRecv(dummyfs_common.port, &msg, &rid) < 0) {
