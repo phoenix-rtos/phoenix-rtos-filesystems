@@ -113,9 +113,17 @@ static int jffs2_srv_lookup(jffs2_partition_t *p, oid_t *dir, const char *name, 
 
 		dentry->d_name.len = strlen(dentry->d_name.name);
 
-		if (S_ISDIR(inode->i_mode))
-			dtemp = inode->i_op->lookup(inode, dentry, 0);
-		else {
+		if (S_ISDIR(inode->i_mode)) {
+			if (dev_find_ino(p->devs, inode->i_ino) == NULL) {
+				dtemp = inode->i_op->lookup(inode, dentry, 0);
+			} else {
+				res->id = inode->i_ino;
+				res->port = p->port;
+				free(dentry->d_name.name);
+				len--;
+				break;
+			}
+		} else {
 			free(dentry->d_name.name);
 			free(dentry);
 			iput(inode);
