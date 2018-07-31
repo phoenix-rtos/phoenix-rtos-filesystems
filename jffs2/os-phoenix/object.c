@@ -21,11 +21,11 @@
 
 #include "../os-phoenix.h"
 
-struct {
+typedef struct _jffs2_objects_t {
 	handle_t	lock;
 	rbtree_t	tree;
 	u32			cnt;
-} jffs2_objects;
+} jffs2_objects_t;
 
 
 static int object_cmp(rbnode_t *n1, rbnode_t *n2)
@@ -38,40 +38,43 @@ static int object_cmp(rbnode_t *n1, rbnode_t *n2)
 }
 
 
-int object_remove(jffs2_object_t *o)
+int object_remove(void *ptr, jffs2_object_t *o)
 {
-	mutexLock(jffs2_objects.lock);
+	jffs2_objects_t *jffs2_objects = ((jffs2_partition_t *)ptr)->objects;
 
-	lib_rbRemove(&jffs2_objects.tree, &o->node);
+	mutexLock(jffs2_objects->lock);
 
-	mutexUnlock(jffs2_objects.lock);
+	lib_rbRemove(&jffs2_objects->tree, &o->node);
+
+	mutexUnlock(jffs2_objects->lock);
 
 	return EOK;
 }
 
 
-void object_destroy(jffs2_object_t *o)
+void object_destroy(void *ptr, jffs2_object_t *o)
 {
-	object_remove(o);
+	object_remove(ptr, o);
 	free(o);
 }
 
 
-jffs2_object_t *object_create(int type, struct inode *inode)
+jffs2_object_t *object_create(void *ptr, int type, struct inode *inode)
 {
 	jffs2_object_t *r, t;
+	jffs2_objects_t *jffs2_objects = ((jffs2_partition_t *)ptr)->objects;
 
-	mutexLock(jffs2_objects.lock);
+	mutexLock(jffs2_objects->lock);
 	t.oid.id = inode->i_ino;
 
-	r = lib_treeof(jffs2_object_t, node, lib_rbFind(&jffs2_objects.tree, &t.node));
+	r = lib_treeof(jffs2_object_t, node, lib_rbFind(&jffs2_objects->tree, &t.node));
 	if (r != NULL) {
-		mutexUnlock(jffs2_objects.lock);
+		mutexUnlock(jffs2_objects->lock);
 		return NULL;
 	}
 	r = malloc(sizeof(jffs2_object_t));
 	if (r == NULL) {
-		printf("End of memory - this is very bad\n");
+		printf("jffs2: End of memory - this is very bad\n");
 		return NULL;
 	}
 	memset(r, 0, sizeof(jffs2_object_t));
@@ -79,23 +82,24 @@ jffs2_object_t *object_create(int type, struct inode *inode)
 	r->refs = 1;
 	r->inode = inode;
 
-	lib_rbInsert(&jffs2_objects.tree, &r->node);
-	mutexUnlock(jffs2_objects.lock);
+	lib_rbInsert(&jffs2_objects->tree, &r->node);
+	mutexUnlock(jffs2_objects->lock);
 
 	return r;
 }
 
 
-jffs2_object_t *object_get(unsigned int id)
+jffs2_object_t *object_get(void *ptr, unsigned int id)
 {
 	jffs2_object_t *o, t;
+	jffs2_objects_t *jffs2_objects = ((jffs2_partition_t *)ptr)->objects;
 
 	t.oid.id = id;
 
-	mutexLock(jffs2_objects.lock);
-	if ((o = lib_treeof(jffs2_object_t, node, lib_rbFind(&jffs2_objects.tree, &t.node))) != NULL)
+	mutexLock(jffs2_objects->lock);
+	if ((o = lib_treeof(jffs2_object_t, node, lib_rbFind(&jffs2_objects->tree, &t.node))) != NULL)
 		o->refs++;
-	mutexUnlock(jffs2_objects.lock);
+	mutexUnlock(jffs2_objects->lock);
 
 	return o;
 }
@@ -108,8 +112,11 @@ void object_put(jffs2_object_t *o)
 }
 
 
-void object_init(void)
+void object_init(void **ptr)
 {
-	lib_rbInit(&jffs2_objects.tree, object_cmp, NULL);
-	mutexCreate(&jffs2_objects.lock);
+	jffs2_objects_t *jffs2_objects = malloc(sizeof(jffs2_objects_t));
+
+	lib_rbInit(&jffs2_objects->tree, object_cmp, NULL);
+	mutexCreate(&jffs2_objects->lock);
+	*ptr = jffs2_objects;
 }

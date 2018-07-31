@@ -45,11 +45,11 @@ dev_t new_decode_dev(u32 dev)
 	return dev;
 }
 
-struct {
+typedef struct _dev_common_t {
 	rbtree_t dev_oid;
 	rbtree_t dev_ino;
 	handle_t mutex;
-} dev_common;
+} dev_common_t;
 
 
 static int dev_cmp_oid(rbnode_t *n1, rbnode_t *n2)
@@ -77,108 +77,125 @@ static int dev_cmp_ino(rbnode_t *n1, rbnode_t *n2)
 	return 0;
 }
 
-jffs2_dev_t *dev_find_oid(oid_t *oid, unsigned long ino, int create)
+jffs2_dev_t *dev_find_oid(void *ptr, oid_t *oid, unsigned long ino, int create)
 {
 	jffs2_dev_t find, *entry;
+	dev_common_t *dev_common = ptr;
 
 	memcpy(&find.dev, oid, sizeof(oid_t));
 
-	mutexLock(dev_common.mutex);
-	entry = lib_treeof(jffs2_dev_t, linkage_oid, lib_rbFind(&dev_common.dev_oid, &find.linkage_oid));
+	mutexLock(dev_common->mutex);
+	entry = lib_treeof(jffs2_dev_t, linkage_oid, lib_rbFind(&dev_common->dev_oid, &find.linkage_oid));
 
 	if (!create || entry != NULL) {
-		mutexUnlock(dev_common.mutex);
+		mutexUnlock(dev_common->mutex);
 		return entry;
 	}
 
 	if ((entry = malloc(sizeof(jffs2_dev_t))) == NULL) {
-		mutexUnlock(dev_common.mutex);
+		mutexUnlock(dev_common->mutex);
 		return NULL;
 	}
 
 	entry->nlink = 1;
 	entry->ino = ino;
 	memcpy(&entry->dev, oid, sizeof(oid_t));
-	lib_rbInsert(&dev_common.dev_ino, &entry->linkage_ino);
-	lib_rbInsert(&dev_common.dev_oid, &entry->linkage_oid);
-	mutexUnlock(dev_common.mutex);
+	lib_rbInsert(&dev_common->dev_ino, &entry->linkage_ino);
+	lib_rbInsert(&dev_common->dev_oid, &entry->linkage_oid);
+	mutexUnlock(dev_common->mutex);
 	return entry;
 }
 
-jffs2_dev_t *dev_find_ino(unsigned long ino)
+jffs2_dev_t *dev_find_ino(void *ptr, unsigned long ino)
 {
 	jffs2_dev_t find, *entry;
+	dev_common_t *dev_common = ptr;
 
 	find.ino = ino;
 
-	mutexLock(dev_common.mutex);
-	entry = lib_treeof(jffs2_dev_t, linkage_ino, lib_rbFind(&dev_common.dev_ino, &find.linkage_ino));
+	mutexLock(dev_common->mutex);
+	entry = lib_treeof(jffs2_dev_t, linkage_ino, lib_rbFind(&dev_common->dev_ino, &find.linkage_ino));
 
-	mutexUnlock(dev_common.mutex);
+	mutexUnlock(dev_common->mutex);
 	return entry;
 }
 
 
-void dev_inc(oid_t *oid)
+void dev_inc(void *ptr, oid_t *oid)
 {
 	jffs2_dev_t find, *entry;
+	dev_common_t *dev_common = ptr;
 
 	memcpy(&find.dev, oid, sizeof(oid_t));
 
-	mutexLock(dev_common.mutex);
-	entry = lib_treeof(jffs2_dev_t, linkage_oid, lib_rbFind(&dev_common.dev_oid, &find.linkage_oid));
+	mutexLock(dev_common->mutex);
+	entry = lib_treeof(jffs2_dev_t, linkage_oid, lib_rbFind(&dev_common->dev_oid, &find.linkage_oid));
 
 	if (entry != NULL)
 		entry->nlink++;
 
-	mutexUnlock(dev_common.mutex);
+	mutexUnlock(dev_common->mutex);
 }
 
 
-void dev_dec(oid_t *oid)
+void dev_dec(void *ptr, oid_t *oid)
 {
 	jffs2_dev_t find, *entry;
+	dev_common_t *dev_common = ptr;
 
 	memcpy(&find.dev, oid, sizeof(oid_t));
 
-	mutexLock(dev_common.mutex);
-	entry = lib_treeof(jffs2_dev_t, linkage_oid, lib_rbFind(&dev_common.dev_oid, &find.linkage_oid));
+	mutexLock(dev_common->mutex);
+	entry = lib_treeof(jffs2_dev_t, linkage_oid, lib_rbFind(&dev_common->dev_oid, &find.linkage_oid));
 
-	if (entry != NULL)
+	if (entry != NULL) {
 		entry->nlink--;
+	} else {
+		mutexUnlock(dev_common->mutex);
+		return;
+	}
 
-	mutexUnlock(dev_common.mutex);
-	dev_destroy(oid);
+	if (!entry->nlink) {
+		mutexUnlock(dev_common->mutex);
+		dev_destroy(ptr, oid);
+		return;
+	}
+	mutexUnlock(dev_common->mutex);
 }
 
 
-void dev_destroy(oid_t *oid)
+void dev_destroy(void *ptr, oid_t *oid)
 {
 	jffs2_dev_t find, *entry;
+	dev_common_t *dev_common = ptr;
 
 	memcpy(&find.dev, oid, sizeof(oid_t));
 
-	mutexLock(dev_common.mutex);
-	entry = lib_treeof(jffs2_dev_t, linkage_oid, lib_rbFind(&dev_common.dev_oid, &find.linkage_oid));
+	mutexLock(dev_common->mutex);
+	entry = lib_treeof(jffs2_dev_t, linkage_oid, lib_rbFind(&dev_common->dev_oid, &find.linkage_oid));
 
 	if (entry == NULL) {
-		mutexUnlock(dev_common.mutex);
+		mutexUnlock(dev_common->mutex);
 		return;
 	}
 
 	if (entry->nlink <= 0) {
-		lib_rbRemove(&dev_common.dev_ino, &entry->linkage_ino);
-		lib_rbRemove(&dev_common.dev_oid, &entry->linkage_oid);
+		lib_rbRemove(&dev_common->dev_ino, &entry->linkage_ino);
+		lib_rbRemove(&dev_common->dev_oid, &entry->linkage_oid);
 	}
 
 	free(entry);
-	mutexUnlock(dev_common.mutex);
+	mutexUnlock(dev_common->mutex);
 }
 
 
-void dev_init()
+void dev_init(void **ptr)
 {
-	mutexCreate(&dev_common.mutex);
-	lib_rbInit(&dev_common.dev_ino, dev_cmp_ino, NULL);
-	lib_rbInit(&dev_common.dev_oid, dev_cmp_oid, NULL);
+	dev_common_t *dev_common = malloc(sizeof(dev_common_t));
+
+	mutexCreate(&dev_common->mutex);
+	lib_rbInit(&dev_common->dev_ino, dev_cmp_ino, NULL);
+	lib_rbInit(&dev_common->dev_oid, dev_cmp_oid, NULL);
+
+	*ptr = dev_common;
 }

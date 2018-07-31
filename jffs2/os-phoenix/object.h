@@ -36,16 +36,16 @@ typedef struct _jffs2_object_t {
 } jffs2_object_t;
 
 
-void object_init(void);
+void object_init(void **ptr);
 
 
-jffs2_object_t *object_create(int type, struct inode *inode);
+jffs2_object_t *object_create(void *ptr, int type, struct inode *inode);
 
 
-jffs2_object_t *object_get(unsigned int id);
+jffs2_object_t *object_get(void *ptr, unsigned int id);
 
 
-void object_destroy(jffs2_object_t *o);
+void object_destroy(void *ptr, jffs2_object_t *o);
 
 
 void object_put(jffs2_object_t *o);

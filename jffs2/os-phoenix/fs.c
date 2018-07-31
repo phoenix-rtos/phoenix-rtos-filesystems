@@ -89,13 +89,13 @@ void iget_failed(struct inode *inode)
 	make_bad_inode(inode);
 	unlock_new_inode(inode);
 	iput(inode);
-	object_destroy(object_get(inode->i_ino));
+	object_destroy(inode->i_sb->s_part, object_get(inode->i_sb->s_part, inode->i_ino));
 }
 
 struct inode * iget_locked(struct super_block *sb, unsigned long ino)
 {
 	struct inode *inode = NULL;
-	jffs2_object_t *o = object_get(ino);
+	jffs2_object_t *o = object_get(sb->s_part, ino);
 
 	if (o != NULL) {
 		o->inode->i_count++;
@@ -106,7 +106,7 @@ struct inode * iget_locked(struct super_block *sb, unsigned long ino)
 
 	if (inode != NULL) {
 		inode->i_ino = ino;
-		object_create(0, inode);
+		object_create(sb->s_part, 0, inode);
 	}
 	return inode;
 }
@@ -114,7 +114,7 @@ struct inode * iget_locked(struct super_block *sb, unsigned long ino)
 
 void iput(struct inode *inode)
 {
-	jffs2_object_t *o = object_get(inode->i_ino);
+	jffs2_object_t *o = object_get(inode->i_sb->s_part, inode->i_ino);
 
 	if (o == NULL) {
 		printf("jffs2: iput failed badly for inode %d\n", inode->i_ino);
@@ -126,7 +126,7 @@ void iput(struct inode *inode)
 	object_put(o);
 
 	if (!inode->i_nlink) {
-		object_destroy(o);
+		object_destroy(inode->i_sb->s_part, o);
 		inode->i_sb->s_op->evict_inode(inode);
 		inode->i_sb->s_op->destroy_inode(inode);
 	}
@@ -304,7 +304,7 @@ bool is_bad_inode(struct inode *inode)
 
 struct inode *ilookup(struct super_block *sb, unsigned long ino)
 {
-	jffs2_object_t *o = object_get(ino);
+	jffs2_object_t *o = object_get(sb->s_part, ino);
 
 	if (o != NULL) {
 		object_put(o);
@@ -317,10 +317,10 @@ struct inode *ilookup(struct super_block *sb, unsigned long ino)
 
 int insert_inode_locked(struct inode *inode)
 {
-	jffs2_object_t *o = object_get(inode->i_ino);
+	jffs2_object_t *o = object_get(inode->i_sb->s_part, inode->i_ino);
 
 	if (o == NULL)
-		o = object_create(0, inode);
+		o = object_create(inode->i_sb->s_part, 0, inode);
 
 	o->refs = inode->i_count;
 	return 0;
@@ -401,7 +401,6 @@ int register_filesystem(struct file_system_type *fs)
 	system_long_wq = malloc(sizeof(struct workqueue_struct));
 	init_workqueue(system_long_wq);
 	jffs2_common.fs = fs;
-
 	return 0;
 }
 

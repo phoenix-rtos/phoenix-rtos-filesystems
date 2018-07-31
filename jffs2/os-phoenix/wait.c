@@ -64,7 +64,7 @@ void sleep_on_spinunlock(wait_queue_head_t *wq, spinlock_t *s)
 }
 
 
-static void delayed_work_starter(void *arg)
+void delayed_work_starter(void *arg)
 {
 	struct workqueue_struct *wq = (struct workqueue_struct *)arg;
 	struct delayed_work *dwork;
@@ -137,12 +137,12 @@ bool cancel_delayed_work_sync(struct delayed_work *dwork)
 }
 
 
-static char __attribute__((aligned(8))) wq_stack[4096];
+//static char __attribute__((aligned(8))) wq_stack[4096];
 
 void init_workqueue(struct workqueue_struct *wq)
 {
 	wq->dw = NULL;
 	mutexCreate(&wq->lock);
 	condCreate(&wq->cond);
-	beginthread(delayed_work_starter, 4, &wq_stack, 4096, wq);
+//	beginthread(delayed_work_starter, 4, &wq_stack, 4096, wq);
 }

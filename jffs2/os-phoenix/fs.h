@@ -202,7 +202,7 @@ struct super_block {
 	loff_t s_maxbytes;
 	struct dentry *s_root;
 	struct mtd_info *s_mtd;
-	int todo;
+	void *s_part;
 	const struct super_operations *s_op;
 	const struct export_operations *s_export_op;
 	const struct xattr_handler **s_xattr;

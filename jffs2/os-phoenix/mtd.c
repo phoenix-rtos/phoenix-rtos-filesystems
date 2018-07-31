@@ -297,6 +297,7 @@ struct dentry *mount_mtd(struct file_system_type *fs_type, int flags,
 {
 	struct mtd_info *mtd;
 	flashdrv_dma_t *dma;
+	jffs2_partition_t *p = (jffs2_partition_t *)data;
 
 	mtd = malloc(sizeof(struct mtd_info));
 
@@ -322,18 +323,20 @@ struct dentry *mount_mtd(struct file_system_type *fs_type, int flags,
 	mtd->erasesize = MTD_BLOCK_SIZE;
 	mtd->writesize = MTD_PAGE_SIZE;
 	mtd->flags = MTD_WRITEABLE;
-	mtd->size = MTD_BLOCK_SIZE * jffs2_common.size;
+	mtd->size = MTD_BLOCK_SIZE * p->size;
 	mtd->oobsize = 16;
 	mtd->oobavail = 16;
-	mtd->start = jffs2_common.start_block * 64;
+	mtd->start = p->start * 64;
 
 	mutexCreate(&mtd->lock);
 
 	struct super_block *sb = malloc(sizeof(struct super_block));
 	sb->s_mtd = mtd;
+	sb->s_part = p;
+	sb->s_flags = p->flags;
+	p->sb = sb;
 
 	fill_super(sb, NULL, 0);
-	jffs2_common.sb = sb;
 
 	return sb->s_root;
 }

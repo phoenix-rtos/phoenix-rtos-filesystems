@@ -175,11 +175,6 @@ void siginitset(sigset_t *set, unsigned long mask)
 {
 }
 
-int sigprocmask(int how, sigset_t *set, sigset_t *oldset)
-{
-	return 0;
-}
-
 void *kmalloc(int len, int flag)
 {
 	return malloc(len);

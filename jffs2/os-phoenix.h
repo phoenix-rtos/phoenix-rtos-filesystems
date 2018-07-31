@@ -25,6 +25,7 @@
 #include <errno.h>
 #include <time.h>
 #include <unistd.h>
+#include <signal.h>
 
 #include "linux/list.h"
 #include "linux/magic.h"
@@ -165,41 +166,6 @@ bool freezing(struct task_struct *p);
 
 bool try_to_freeze(void);
 
-#define SIGHUP			 1
-#define SIGINT			 2
-#define SIGQUIT			 3
-#define SIGILL			 4
-#define SIGTRAP			 5
-#define SIGABRT			 6
-#define SIGIOT			 6
-#define SIGBUS			 7
-#define SIGFPE			 8
-#define SIGKILL			 9
-#define SIGUSR1			10
-#define SIGSEGV			11
-#define SIGUSR2			12
-#define SIGPIPE			13
-#define SIGALRM			14
-#define SIGTERM			15
-#define SIGSTKFLT		16
-#define SIGCHLD			17
-#define SIGCONT			18
-#define SIGSTOP			19
-#define SIGTSTP			20
-#define SIGTTIN			21
-#define SIGTTOU			22
-#define SIGURG			23
-#define SIGXCPU			24
-#define SIGXFSZ			25
-#define SIGVTALRM		26
-#define SIGPROF			27
-#define SIGWINCH		28
-#define SIGIO			29
-#define SIGPOLL			SIGIO
-
-#define SIG_BLOCK          1	/* for blocking signals */
-#define SIG_UNBLOCK        2	/* for unblocking signals */
-#define SIG_SETMASK        3	/* for setting the signal mask */
 
 #define _NSIG		64
 #define _NSIG_BPW	sizeof(long) * 8
@@ -207,13 +173,6 @@ bool try_to_freeze(void);
 
 #define sigmask(sig)	(1UL << ((sig) - 1))
 
-typedef struct {
-	unsigned long sig[_NSIG_WORDS];
-} sigset_t;
-
-typedef struct {
-	int todo;
-} siginfo_t;
 
 int kernel_dequeue_signal(siginfo_t *info);
 
@@ -227,7 +186,6 @@ void kernel_signal_stop(void);
 
 void siginitset(sigset_t *set, unsigned long mask);
 
-int sigprocmask(int how, sigset_t *set, sigset_t *oldset);
 
 #define set_current_state(state_value) do { } while (0)
 
@@ -249,16 +207,17 @@ void *kmap(struct page *page);
 
 void kunmap(struct page *page);
 
-#define pr_notice(fmt, ...) printf(fmt, ##__VA_ARGS__)
-#define pr_info(fmt, ...) printf(fmt, ##__VA_ARGS__)
-#define pr_debug(fmt, ...) printf(fmt, ##__VA_ARGS__)
-#define pr_warn(fmt, ...) printf(fmt, ##__VA_ARGS__)
-#define pr_cont(fmt, ...) printf(fmt, ##__VA_ARGS__)
-#define pr_err(fmt, ...) printf(fmt, ##__VA_ARGS__)
-#define pr_crit(fmt, ...) printf(fmt, ##__VA_ARGS__)
 
 #define KERN_DEBUG
-#define printk(...) printf(__VA_ARGS__)
+#define printk(...)				printf(__VA_ARGS__)
+#define pr_notice(fmt, ...)		printf(fmt, ##__VA_ARGS__)
+#define pr_info(fmt, ...)		printf(fmt, ##__VA_ARGS__)
+#define pr_debug(fmt, ...)		printf(fmt, ##__VA_ARGS__)
+#define pr_warn(fmt, ...)		printf(fmt, ##__VA_ARGS__)
+#define pr_cont(fmt, ...)		printf(fmt, ##__VA_ARGS__)
+#define pr_err(fmt, ...)		printf(fmt, ##__VA_ARGS__)
+#define pr_crit(fmt, ...)		printf(fmt, ##__VA_ARGS__)
+
 
 #define GFP_KERNEL 0
 #define GFP_USER 1
@@ -271,23 +230,21 @@ extern const struct file_operations jffs2_file_operations;
 extern const struct inode_operations jffs2_dir_inode_operations;
 extern const struct file_operations jffs2_dir_operations;
 
+
 #define jffs2_wbuf_dirty(c) (!!(c)->wbuf_len)
 #define jffs2_can_mark_obsolete(c) (c->mtd->flags & (MTD_BIT_WRITEABLE))
 #define jffs2_is_readonly(c) (OFNI_BS_2SFFJ(c)->s_flags & SB_RDONLY)
 #define jffs2_is_writebuffered(c) (c->wbuf != NULL)
 #define jffs2_cleanmarker_oob(c) (c->mtd->type == MTD_NANDFLASH)
 
-int jffs2_fsync(struct file *, loff_t, loff_t, int);
 
+int jffs2_fsync(struct file *, loff_t, loff_t, int);
 
 long jffs2_ioctl(struct file *, unsigned int, unsigned long);
 
-
 int jffs2_setattr (struct dentry *, struct iattr *);
 
-
 struct inode *jffs2_iget(struct super_block *, unsigned long);
-
 
 struct inode *jffs2_new_inode (struct inode *dir_i, umode_t mode,
 			       struct jffs2_raw_inode *ri);
@@ -309,11 +266,9 @@ void jffs2_gc_release_page(struct jffs2_sb_info *c,
 			   unsigned char *pg,
 			   unsigned long *priv);
 
-
 void jffs2_flash_cleanup(struct jffs2_sb_info *c);
 
 int jffs2_do_readpage_unlock (struct inode *inode, struct page *pg);
-
 
 int jffs2_start_garbage_collect_thread(struct jffs2_sb_info *c);
 
@@ -330,11 +285,13 @@ int jffs2_write_nand_cleanmarker(struct jffs2_sb_info *c, struct jffs2_erasebloc
 
 int jffs2_write_nand_badblock(struct jffs2_sb_info *c, struct jffs2_eraseblock *jeb, uint32_t bad_offset);
 
+
 #define jffs2_ubivol(c) (c->mtd->type == MTD_UBIVOLUME)
 
 int jffs2_ubivol_setup(struct jffs2_sb_info *c);
 
 void jffs2_ubivol_cleanup(struct jffs2_sb_info *c);
+
 
 void jffs2_nor_wbuf_flash_cleanup(struct jffs2_sb_info *c);
 
@@ -369,6 +326,7 @@ int jffs2_do_fill_super(struct super_block *sb, void *data, int silent);
 int init_jffs2_fs(void);
 
 void exit_jffs2_fs(void);
+
 
 struct jffs2_inode_info;
 
@@ -413,7 +371,7 @@ unsigned long get_seconds(void);
 	void *stack = mmap(NULL, 0x1000, PROT_WRITE | PROT_READ, 0, OID_NULL, 0); \
 	struct task_struct *__k = malloc(sizeof(struct task_struct));\
 	beginthread(threadfn, 4, stack, 0x1000, data); \
-	__k->pid = 0x1337; \
+	__k->pid = 0x33; \
 	__k; \
 })
 
@@ -451,42 +409,36 @@ struct match_token {
 
 typedef struct match_token match_table_t[];
 
-
 char *strsep(char **s, const char *ct);
-
 
 int match_token(char *s, const match_table_t table, substring_t args[]);
 
-
 char *match_strdup(const substring_t *s);
-
 
 int match_int(substring_t *s, int *result);
 
 
 void rcu_barrier(void);
 
+
 typedef struct _jffs2_partition_t {
-	u32 start;
-	u32 size;
-	char *mount;
+	u32	port;
+	u32	start;
+	u32	size;
 	int flags;
-	oid_t root;
+	int root;
 	struct super_block *sb;
-	struct workqueue_struct *system_long_wq;
+	void *objects;
+	void *devs;
+	char *mountpt;
+	void *stack;
 } jffs2_partition_t;
 
 typedef struct _jffs2_common_t {
-	u32 port;
-	oid_t root;
-	u32 start_block;
-	u32 size;
-	char *mount_path;
-	struct super_block *sb;
-	u32 part_cnt;
-	jffs2_partition_t *part;
-	struct file_system_type *fs;
-	struct workqueue_struct *system_long_wq;
+	struct file_system_type		*fs;
+	struct workqueue_struct		*system_long_wq;
+	jffs2_partition_t			*partition;
+	u32							partition_cnt;
 } jffs2_common_t;
 
 extern jffs2_common_t jffs2_common;

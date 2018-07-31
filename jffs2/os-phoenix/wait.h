@@ -75,6 +75,7 @@ struct workqueue_struct {
 
 void init_workqueue(struct workqueue_struct *wq);
 
+void delayed_work_starter(void *arg);
 
 static inline void INIT_DELAYED_WORK(struct delayed_work *dwork, work_func_t work_func) 
 {
