@@ -520,7 +520,7 @@ void exec_modules(void *arg)
 		if (dc.mods[cnt].name[0] == 'X')
 			x++;
 
-		if (dummyfs_create(&init, dc.mods[cnt].name + 1, &toid, otFile, 0, NULL) == EOK)
+		if (dummyfs_create(&init, dc.mods[cnt].name + 1, &toid, otFile, S_IFREG, NULL) == EOK)
 			dummyfs_write(&toid, 0, dc.mods[cnt].data, dc.mods[cnt].size);
 
 		if (x) {
