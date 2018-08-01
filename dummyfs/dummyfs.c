@@ -507,6 +507,26 @@ int fetch_modules(void)
 
 #endif
 
+char __attribute__((aligned(8))) mtstack[4096];
+
+void dummyfs_mount(void *arg)
+{
+	oid_t toid;
+	char *mountpt = (char *)arg;
+	int err;
+
+	toid.port = dummyfs_common.port;
+	while (lookup("/", NULL, &toid) < 0 || toid.port == dummyfs_common.port)
+		usleep(100000);
+
+	toid.id = 0;
+	toid.port = dummyfs_common.port;
+	if ((err = mount(mountpt, &toid))) {
+		printf("dummyfs: Failed to mount at %s - error %d\n", mountpt, err);
+		endthread();
+	}
+	endthread();
+}
 
 int main(int argc,char **argv)
 {
@@ -515,10 +535,8 @@ int main(int argc,char **argv)
 	dummyfs_object_t *o;
 	unsigned int rid;
 	char *mountpt = NULL;
-	int err;
 
 #ifndef TARGET_IA32
-	oid_t toid = { 0 };
 	u32 reserved;
 #endif
 
@@ -546,21 +564,8 @@ int main(int argc,char **argv)
 #ifndef TARGET_IA32
 		portDestroy(reserved);
 #endif
-	} else {
+	} else
 		portCreate(&dummyfs_common.port);
-
-		if (lookup(mountpt, NULL, &toid) < EOK) {
-			printf("dummyfs: %s does not exist\n", mountpt);
-			return -1;
-		}
-
-		toid.id = 0;
-		toid.port = dummyfs_common.port;
-		if ((err = mount(mountpt, &toid))) {
-			printf("dummyfs: Failed to mount at %s - error %d\n", mountpt, err);
-			return -1;
-		}
-	}
 
 	printf("dummyfs: Starting dummyfs server at port %d\n", dummyfs_common.port);
 
@@ -586,28 +591,14 @@ int main(int argc,char **argv)
 	dummyfs_setattr(&o->oid, atMode, S_IFDIR | 0777);
 
 	if (mountpt == NULL) {
+		optind = 1;
 		if (argc > 1 && getopt(argc, argv, "r:") != -1)
 			mountpt = optarg;
 		fetch_modules();
 	}
 
-	if (mountpt != NULL) {
-		if (lookup(mountpt, NULL, &toid) < EOK) {
-			printf("dummyfs: %s does not exist\n", mountpt);
-		}
-
-		while (lookup("/", NULL, &toid)) {
-			if (toid.port == dummyfs_common.port)
-				usleep(1000000);
-			else
-				break;
-		}
-
-		if ((err = mount(mountpt, &toid))) {
-			printf("dummyfs: Failed to mount at %s - error %d\n", mountpt, err);
-			return -1;
-		}
-	}
+	if (mountpt != NULL)
+		beginthread(dummyfs_mount, 4, &mtstack, 4096, mountpt);
 
 	for (;;) {
 		if (msgRecv(dummyfs_common.port, &msg, &rid) < 0) {
