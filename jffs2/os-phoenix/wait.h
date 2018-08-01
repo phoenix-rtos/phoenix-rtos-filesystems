@@ -66,10 +66,16 @@ struct delayed_work {
 };
 
 
+struct delayed_work_node {
+	struct delayed_work *dw;
+	struct delayed_work_node *next;
+};
+
 struct workqueue_struct {
 	handle_t lock;
 	handle_t cond;
-	struct delayed_work *dw;
+	struct delayed_work_node *dwh;
+	struct delayed_work_node *dwt;
 };
 
 
