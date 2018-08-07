@@ -25,7 +25,7 @@ typedef struct {
 	rbnode_t linkage;
 	id_t id;
 	oid_t dev;
-} dev_t;
+} dummyfs_dev_t;
 
 
 struct {
@@ -36,8 +36,8 @@ struct {
 
 static int dev_cmp(rbnode_t *n1, rbnode_t *n2)
 {
-	dev_t *d1 = lib_treeof(dev_t, linkage, n1);
-	dev_t *d2 = lib_treeof(dev_t, linkage, n2);
+	dummyfs_dev_t *d1 = lib_treeof(dummyfs_dev_t, linkage, n1);
+	dummyfs_dev_t *d2 = lib_treeof(dummyfs_dev_t, linkage, n2);
 
 	if (d1->dev.port != d2->dev.port)
 		return d1->dev.port > d2->dev.port ? 1 : -1;
@@ -51,13 +51,13 @@ static int dev_cmp(rbnode_t *n1, rbnode_t *n2)
 
 dummyfs_object_t *dev_find(oid_t *oid, int create)
 {
-	dev_t find, *entry;
+	dummyfs_dev_t find, *entry;
 	dummyfs_object_t *o;
 
 	memcpy(&find.dev, oid, sizeof(oid_t));
 
 	mutexLock(dev_common.mutex);
-	entry = lib_treeof(dev_t, linkage, lib_rbFind(&dev_common.dev, &find.linkage));
+	entry = lib_treeof(dummyfs_dev_t, linkage, lib_rbFind(&dev_common.dev, &find.linkage));
 
 	if (!create || entry != NULL) {
 		o = entry != NULL ? object_get(entry->id) : NULL;
@@ -65,7 +65,7 @@ dummyfs_object_t *dev_find(oid_t *oid, int create)
 		return o;
 	}
 
-	if ((entry = malloc(sizeof(dev_t))) == NULL) {
+	if ((entry = malloc(sizeof(dummyfs_dev_t))) == NULL) {
 		mutexUnlock(dev_common.mutex);
 		return NULL;
 	}
@@ -87,13 +87,13 @@ dummyfs_object_t *dev_find(oid_t *oid, int create)
 
 dummyfs_object_t *dev_destroy(oid_t *oid)
 {
-	dev_t find, *entry;
+	dummyfs_dev_t find, *entry;
 	dummyfs_object_t *o;
 
 	memcpy(&find.dev, oid, sizeof(oid_t));
 
 	mutexLock(dev_common.mutex);
-	entry = lib_treeof(dev_t, linkage, lib_rbFind(&dev_common.dev, &find.linkage));
+	entry = lib_treeof(dummyfs_dev_t, linkage, lib_rbFind(&dev_common.dev, &find.linkage));
 
 	if (entry == NULL) {
 		mutexUnlock(dev_common.mutex);
