@@ -1,5 +1,5 @@
 #
-# Makefile for phoenix-rtos-devices
+# Makefile for phoenix-rtos-filesystems
 #
 # Copyright 2018 Phoenix Systems
 #
@@ -14,60 +14,36 @@ TARGET ?= ia32-qemu
 #TARGET ?= arm-imx
 
 VERSION = 0.2
-SRCDIR := $(CURDIR)
+TOPDIR := $(CURDIR)
+BUILD_DIR ?= build/$(TARGET)
+BUILD_DIR := $(abspath $(BUILD_DIR))
 
 # Compliation options for various architectures
 TARGET_FAMILY = $(firstword $(subst -, ,$(TARGET)-))
 include Makefile.$(TARGET_FAMILY)
 
-export SIL TARGET CC CFLAGS MKDEP MKDEPFLAGS AR ARFLAGS LD LDFLAGS LDLIBS OBJDUMP STRIP
+export TOPDIR BUILD_DIR SIL TARGET CC CFLAGS MKDEP MKDEPFLAGS AR ARFLAGS LD LDFLAGS LDLIBS OBJDUMP STRIP
 
+# allow taking subdirs as targets
+ifneq ($(filter $(SUBDIRS),$(MAKECMDGOALS)),)
+SUBDIRS := $(filter $(SUBDIRS),$(MAKECMDGOALS))
+MAKECMDGOALS := $(filter-out $(SUBDIRS),$(MAKECMDGOALS))
+else
+CLEAN_ALL:=yes
+endif
 
-all: fileservers
+all: $(SUBDIRS)
 
+$(SUBDIRS): .FORCE
+	@echo "\033[1;32mCOMPILE $@\033[0m";
+	@$(MAKE) -C "$@" $(MAKECMDGOALS)
 
-fileservers:
-	@for i in $(SUBDIRS); do\
-		d=`pwd`;\
-		echo "\033[1;32mCOMPILE $$i\033[0m";\
-		if ! cd $$i; then\
-			exit 1;\
-		fi;\
-		if ! make; then\
-			exit 1;\
-		fi;\
-		cd $$d;\
-	done;
-
-
-depend:
-	@for i in $(SUBDIRS) test; do\
-		d=`pwd`;\
-		echo "DEPEND $$i";\
-		if ! cd $$i; then\
-			exit 1;\
-		fi;\
-		if ! make -s depend; then\
-			exit 1;\
-		fi;\
-		cd $$d;\
-	done;
-
+.FORCE:
 
 clean:
-	@rm -f core *.o $(LIB)
-	@for i in $(SUBDIRS); do\
-		d=`pwd`;\
-		echo "CLEAN $$i";\
-		if ! cd $$i; then\
-			exit 1;\
-		fi;\
-		if ! make clean; then\
-			exit 1;\
-		fi;\
-		cd $$d;\
-	done;
+ifeq ($(CLEAN_ALL),yes)
+	@rm -rf $(BUILD_DIR)
+endif
 
 
 .PHONY: clean
-# DO NOT DELETE

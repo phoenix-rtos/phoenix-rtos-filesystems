@@ -4,19 +4,8 @@
 #
 
 
-SRCS = test.c
-OBJS = $(SRCS:.c=.o)
-BIN = meterfs-test
+PROGS_SRCS = test.c
+PROGS = meterfs-test
 
-all: meterfs-test
-
-.c.o:
-	$(CC) -c $(CFLAGS) $<
-
-$(OBJS):
-
-meterfs-test: $(OBJS) $(LDLIBS)
-	$(LD) $(LDFLAGS) -o $(BIN) $(OBJS) $(LDLIBS)
-
-clean:
-	rm -f *.o *~ core $(BIN)
+#include after all dependencies are set
+include $(TOPDIR)/Makefile.rules

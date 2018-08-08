@@ -11,3 +11,4 @@
 *.creator*
 *.files
 *.includes
+build/

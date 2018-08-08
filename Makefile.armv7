@@ -1,5 +1,5 @@
 #
-# Makefile for Phoenix-RTOS 3 device drivers
+# Makefile for Phoenix-RTOS 3 filesystems
 #
 # ARMv7 (Cortex-M3/M4) options
 #
@@ -14,9 +14,15 @@ MKDEPFLAGS = $(CFLAGS)
 
 CC = $(CROSS)gcc
 
-CFLAGS += -O2 -Wall -Wstrict-prototypes -g -I$(SRCDIR) -nostartfiles -nostdlib\
-	-mcpu=cortex-m3 -mthumb -fomit-frame-pointer -ffreestanding\
-	-fpic -fpie -msingle-pic-base -mno-pic-data-is-text-relative -mno-unaligned-access\
+ifeq ($(DEBUG), 1)
+	CFLAGS += -O0 -g
+else
+	CFLAGS += -Os -DNDEBUG
+endif
+
+CFLAGS += -Wall -Wstrict-prototypes -g -I$(SRCDIR) -nostartfiles -nostdlib\
+	-mcpu=cortex-m3 -mthumb -fomit-frame-pointer -ffreestanding -mno-unaligned-access\
+	-fpic -fpie -msingle-pic-base -mno-pic-data-is-text-relative\
 	-DVERSION=\"$(VERSION)\" -DARCH=\"arch/armv7/arch.h\" -DNOMMU
 
 CFLAGS += -fdata-sections -ffunction-sections
@@ -33,3 +39,4 @@ LDLIBS := $(PHOENIXLIB) $(GCCLIB)
 
 OBJCOPY = $(CROSS)objcopy
 OBJDUMP = $(CROSS)objdump
+STRIP = $(CROSS)strip

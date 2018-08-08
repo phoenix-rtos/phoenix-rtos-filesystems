@@ -4,19 +4,9 @@
 #
 
 
-SRCS = spi.c flash.c node.c meterfs.c
-OBJS = $(SRCS:.c=.o)
-BIN = meterfs
+PROGS_SRCS := spi.c flash.c node.c meterfs.c
+PROGS := meterfs
 
-all: meterfs
+#include after all dependencies are set
+include $(TOPDIR)/Makefile.rules
 
-.c.o:
-	$(CC) -c $(CFLAGS) $<
-
-$(OBJS):
-
-meterfs: $(OBJS) $(LDLIBS)
-	$(LD) $(LDFLAGS) -o $(BIN) $(OBJS) $(LDLIBS)
-
-clean:
-	rm -f *.o *~ core $(BIN)
