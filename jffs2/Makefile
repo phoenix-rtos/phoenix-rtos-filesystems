@@ -10,7 +10,7 @@
 
 
 CFLAGS += -Wno-pointer-sign -Wno-discarded-qualifiers -Wno-unused-value -Wno-strict-prototypes\
-	-DCONFIG_JFFS2_CMODE_NONE -DCONFIG_JFFS2_FS_WRITEBUFFER
+	-DCONFIG_JFFS2_CMODE_NONE -DCONFIG_JFFS2_FS_WRITEBUFFER -DCONFIG_JFFS2_SUMMARY
 #-DJFFS2_DBG_READINODE_MESSAGES
 
 LDFLAGS += -L../../phoenix-rtos-devices/build/arm-imx/lib
@@ -18,7 +18,7 @@ LDFLAGS += -L../../phoenix-rtos-devices/build/arm-imx/lib
 #linux base jffs2 files + writebuffer for nand support
 PROGS_SRCS := compr.c dir.c file.c ioctl.c nodelist.c malloc.c read.c nodemgmt.c \
 	   readinode.c write.c scan.c gc.c symlink.c build.c erase.c \
-	   background.c fs.c writev.c super.c debug.c wbuf.c
+	   background.c fs.c writev.c super.c debug.c wbuf.c summary.c
 
 #phoenix specific files
 PROGS_SRCS += os-phoenix/fs.c os-phoenix/completion.c os-phoenix/slab.c \
@@ -59,10 +59,6 @@ endif
 
 ifdef $(CONFIG_JFFS2_LZO)
 	PROGS_SRCS += compr_lzo.c
-endif
-
-ifdef $(CONFIG_JFFS2_SUMMARY)
-	PROGS_SRCS += summary.c
 endif
 
 PROGS := jffs2

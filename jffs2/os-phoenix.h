@@ -394,6 +394,7 @@ void seq_printf(struct seq_file *m, const char *fmt, ...);
 #define MODULE_DESCRIPTION(x)
 #define module_init(x)
 #define module_exit(x)
+#define __must_hold(x)
 
 enum {MAX_OPT_ARGS = 3};
 
