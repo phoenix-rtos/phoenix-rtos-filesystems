@@ -58,12 +58,16 @@ struct page *read_cache_page(struct address_space *mapping, pgoff_t index, fille
 {
 	struct inode *inode = (struct inode *)data;
 	struct page *pg = malloc(sizeof(struct page));
+	int ret;
 
 	pg->index = index;
 	pg->virtual = malloc(PAGE_SIZE);
 
-	if (filler(inode, pg))
-		return NULL;
+	if ((ret = filler(inode, pg))) {
+		free(pg->virtual);
+		free(pg);
+		return ERR_PTR(ret);
+	}
 
 	return pg;
 }
