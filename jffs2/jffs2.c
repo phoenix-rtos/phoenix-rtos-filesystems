@@ -55,7 +55,7 @@ struct inode *jffs2_srv_get(jffs2_partition_t *p, oid_t *oid)
 }
 
 
-static int jffs2_srv_lookup(jffs2_partition_t *p, oid_t *dir, const char *name, oid_t *res, oid_t *dev)
+static int jffs2_srv_lookup(jffs2_partition_t *p, oid_t *dir, const char *name, oid_t *res, oid_t *dev, char *lnk, int lnksz)
 {
 	struct dentry *dentry, *dtemp;
 	struct inode *inode = NULL;
@@ -123,6 +123,11 @@ static int jffs2_srv_lookup(jffs2_partition_t *p, oid_t *dir, const char *name, 
 				len--;
 				break;
 			}
+		} else if (S_ISLNK(inode->i_mode)) {
+			res->id = inode->i_ino;
+			res->port = p->port;
+			free(dentry->d_name.name);
+			break;
 		} else {
 			free(dentry->d_name.name);
 			free(dentry);
@@ -150,6 +155,9 @@ static int jffs2_srv_lookup(jffs2_partition_t *p, oid_t *dir, const char *name, 
 		memcpy(dev, &(dev_find_ino(p->devs, res->id)->dev), sizeof(oid_t));
 	else
 		memcpy(dev, res, sizeof(oid_t));
+
+	if (lnk != NULL && S_ISLNK(inode->i_mode))
+		strncpy(lnk, inode->i_link, lnksz);
 
 	free(dentry);
 	iput(inode);
@@ -232,6 +240,9 @@ static int jffs2_srv_getattr(jffs2_partition_t *p, oid_t *oid, int type, int *at
 	struct jffs2_inode_info *f;
 
 	if (!oid->id)
+		return -EINVAL;
+
+	if (attr == NULL)
 		return -EINVAL;
 
 	inode = jffs2_iget(p->sb, oid->id);
@@ -320,7 +331,7 @@ static int jffs2_srv_link(jffs2_partition_t *p, oid_t *dir, const char *name, oi
 	if (IS_ERR(idir))
 		return -ENOENT;
 
-	if (jffs2_srv_lookup(p, dir, name, &t, &toid) > 0) {
+	if (jffs2_srv_lookup(p, dir, name, &t, &toid, NULL, 0) > 0) {
 		iput(idir);
 		return -EEXIST;
 	}
@@ -378,7 +389,7 @@ static int jffs2_srv_unlink(jffs2_partition_t *p, oid_t *dir, const char *name)
 	if (IS_ERR(idir))
 		return -ENOENT;
 
-	if (jffs2_srv_lookup(p, dir, name, &t, &oid) <= 0) {
+	if (jffs2_srv_lookup(p, dir, name, &t, &oid, NULL, 0) <= 0) {
 		iput(idir);
 		return -ENOENT;
 	}
@@ -442,7 +453,7 @@ static int jffs2_srv_create(jffs2_partition_t *p, oid_t *dir, const char *name, 
 		return -ENOTDIR;
 	}
 
-	if (jffs2_srv_lookup(p, dir, name, &toid, &t) > 0) {
+	if (jffs2_srv_lookup(p, dir, name, &toid, &t, NULL, 0) > 0) {
 
 		ret = -EEXIST;
 		if (!jffs2_is_device(p, &toid)) {
@@ -820,7 +831,7 @@ void jffs2_run(void *arg)
 				break;
 
 			case mtLookup:
-				msg.o.lookup.err = jffs2_srv_lookup(p, &msg.i.lookup.dir, msg.i.data, &msg.o.lookup.fil, &msg.o.lookup.dev);
+				msg.o.lookup.err = jffs2_srv_lookup(p, &msg.i.lookup.dir, msg.i.data, &msg.o.lookup.fil, &msg.o.lookup.dev, msg.o.data, msg.o.size);
 				break;
 
 			case mtLink:
@@ -995,8 +1006,6 @@ int main(int argc, char **argv)
 	}
 
 	delayed_work_starter(system_long_wq);
-//	while (1)
-//		usleep(10000000);
 
 	return EOK;
 }
