@@ -169,6 +169,9 @@ static inline int dir_print(struct dir_context *ctx, const char *name, int len, 
 		case DT_BLK:
 			ctx->dent->d_type = otDev;
 			break;
+		case DT_LNK:
+			ctx->dent->d_type = otSymlink;
+			break;
 		default:
 			ctx->dent->d_type = otUnknown;
 	}

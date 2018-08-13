@@ -490,6 +490,10 @@ static int jffs2_srv_create(jffs2_partition_t *p, oid_t *dir, const char *name, 
 			ret = idir->i_op->mknod(idir, dentry, mode, dev->port);
 			dev_find_oid(p->devs, dev, d_inode(dentry)->i_ino, 1);
 			break;
+		case otSymlink:
+			mode = S_IFLNK | S_IRWXU | S_IRWXG | S_IRWXO;
+			ret = idir->i_op->symlink(idir, dentry, name + dentry->d_name.len + 1);
+			break;
 		default:
 			ret = -EINVAL;
 			break;
@@ -499,6 +503,9 @@ static int jffs2_srv_create(jffs2_partition_t *p, oid_t *dir, const char *name, 
 
 	if (!ret)
 		oid->id = d_inode(dentry)->i_ino;
+
+	free(dentry->d_name.name);
+	free(dentry);
 
 	return ret;
 }
@@ -575,12 +582,19 @@ static int jffs2_srv_read(jffs2_partition_t *p, oid_t *oid, offs_t offs, void *d
 	if(S_ISDIR(inode->i_mode)) {
 		iput(inode);
 		return -EISDIR;
-	}
-
-	if (S_ISCHR(inode->i_mode)) {
+	} else if (S_ISCHR(inode->i_mode)) {
 		printf("jffs2: Can't read from device I'm just a filesystem\n");
 		iput(inode);
 		return -EINVAL;
+	} else if (S_ISLNK(inode->i_mode)) {
+		ret = strlen(inode->i_link);
+
+		if (len < ret)
+			ret = len;
+
+		memcpy(data, inode->i_link, ret);
+		iput(inode);
+		return ret;
 	}
 
 	f = JFFS2_INODE_INFO(inode);
@@ -698,28 +712,29 @@ static int jffs2_srv_write(jffs2_partition_t *p, oid_t *oid, offs_t offs, void *
 	if (!oid->id)
 		return -EINVAL;
 
-	ri = jffs2_alloc_raw_inode();
-
-	if (ri == NULL)
-		return -ENOMEM;
-
 	inode = jffs2_iget(p->sb, oid->id);
 
 	if (IS_ERR(inode)) {
-		jffs2_free_raw_inode(ri);
 		return -EINVAL;
 	}
 
 	if(S_ISDIR(inode->i_mode)) {
-		jffs2_free_raw_inode(ri);
 		iput(inode);
 		return -EISDIR;
-	}
-
-	if (S_ISCHR(inode->i_mode)) {
+	} else if (S_ISCHR(inode->i_mode)) {
 		printf("jffs2: What are you doing? You shouldn't even be here!\n");
 		iput(inode);
 		return -EINVAL;
+	} else if (S_ISLNK(inode->i_mode)) {
+		iput(inode);
+		return -EINVAL;
+	}
+
+	ri = jffs2_alloc_raw_inode();
+
+	if (ri == NULL) {
+		iput(inode);
+		return -ENOMEM;
 	}
 
 	f = JFFS2_INODE_INFO(inode);

@@ -255,7 +255,9 @@ unsigned int full_name_hash(void *salt, const char * name, unsigned int len)
 
 void *kmemdup(const void *src, size_t len, unsigned gfp)
 {
-	return NULL;
+	void *dst = malloc(len);
+	memcpy(dst, src, len);
+	return dst;
 }
 
 
