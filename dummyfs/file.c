@@ -164,6 +164,7 @@ int dummyfs_truncate(oid_t *oid, unsigned int size)
 	}
 	o->size = size;
 
+	o->mtime = o->atime = time(NULL);
 	object_unlock(o);
 	object_put(o);
 
@@ -229,6 +230,7 @@ int dummyfs_read(oid_t *oid, offs_t offs, char *buff, unsigned int len)
 
 	} while (len && chunk != o->chunks);
 
+	o->atime = time(NULL);
 	object_unlock(o);
 	object_put(o);
 
@@ -315,6 +317,7 @@ int dummyfs_write(oid_t *oid, offs_t offs, char *buff, unsigned int len)
 
 	} while (len && chunk != o->chunks);
 
+	o->mtime = o->atime = time(NULL);
 	object_unlock(o);
 	object_put(o);
 

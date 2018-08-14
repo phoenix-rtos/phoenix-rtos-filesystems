@@ -144,6 +144,9 @@ int dummyfs_setattr(oid_t *oid, int type, int attr)
 			ret = -EINVAL;
 			break;
 	}
+
+	o->mtime = time(NULL);
+
 	object_unlock(o);
 	object_put(o);
 
@@ -183,6 +186,22 @@ int dummyfs_getattr(oid_t *oid, int type, int *attr)
 
 		case (atPort):
 			*attr = o->oid.port;
+			break;
+
+		case (atCTime):
+			*attr = o->ctime;
+			break;
+
+		case (atMTime):
+			*attr = o->mtime;
+			break;
+
+		case (atATime):
+			*attr = o->atime;
+			break;
+
+		case (atLinks):
+			*attr = o->nlink;
 			break;
 	}
 	object_unlock(o);
@@ -250,6 +269,8 @@ int dummyfs_link(oid_t *dir, const char *name, oid_t *oid)
 		object_unlock(o);
 	}
 
+	d->mtime = d->atime = o->mtime = time(NULL);
+
 	object_unlock(d);
 	object_put(o);
 	object_put(d);
@@ -312,6 +333,8 @@ int dummyfs_unlink(oid_t *dir, const char *name)
 	if (ret == EOK && o->type == otDir)
 		d->nlink--;
 
+	d->mtime = d->atime = o->mtime = time(NULL);
+
 	object_unlock(d);
 	object_put(d);
 
@@ -347,6 +370,7 @@ int dummyfs_create(oid_t *dir, const char *name, oid_t *oid, int type, int mode,
 	o->oid.port = dummyfs_common.port;
 	o->type = type;
 	o->mode = mode;
+	o->atime = o->mtime = o->ctime = time(NULL);
 
 	if (type == otDev)
 		memcpy(oid, dev, sizeof(oid_t));
@@ -443,6 +467,8 @@ int dummyfs_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int s
 		ei = ei->next;
 	} while (ei != d->entries);
 
+	d->atime = time(NULL);
+
 	object_unlock(d);
 	object_put(d);
 
@@ -459,6 +485,7 @@ static int dummyfs_open(oid_t *oid)
 
 	object_lock(o);
 	o->lock = 0;
+	o->atime = time(NULL);
 
 	object_unlock(o);
 	return EOK;
@@ -473,6 +500,7 @@ static int dummyfs_close(oid_t *oid)
 
 	object_lock(o);
 	o->lock = 0;
+	o->atime = time(NULL);
 
 	object_unlock(o);
 	object_put(o);

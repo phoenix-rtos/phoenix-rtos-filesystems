@@ -17,6 +17,7 @@
 
 #include <sys/rb.h>
 #include <errno.h>
+#include <time.h>
 #include <sys/file.h>
 
 
@@ -70,6 +71,10 @@ typedef struct _dummyfs_object_t {
 		};
 		u32 port;
 	};
+
+	time_t atime;
+	time_t mtime;
+	time_t ctime;
 
 } dummyfs_object_t;
 
