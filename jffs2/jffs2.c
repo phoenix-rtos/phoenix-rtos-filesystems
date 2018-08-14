@@ -504,6 +504,7 @@ static int jffs2_srv_create(jffs2_partition_t *p, oid_t *dir, const char *name, 
 	if (!ret)
 		oid->id = d_inode(dentry)->i_ino;
 
+	iput(d_inode(dentry));
 	free(dentry->d_name.name);
 	free(dentry);
 
@@ -559,8 +560,10 @@ static void jffs2_srv_close(jffs2_partition_t *p, oid_t *oid)
 {
 	struct inode *inode = ilookup(p->sb, oid->id);
 
-	if (inode != NULL)
+	if (inode != NULL) {
 		iput(inode);
+		iput(inode);
+	}
 }
 
 
