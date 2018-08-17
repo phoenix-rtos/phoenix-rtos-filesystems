@@ -628,12 +628,6 @@ int main(int argc,char **argv)
 		return 1;
 	}
 
-	if (condCreate(&dummyfs_common.initCond) != EOK)
-		return 2;
-
-	if (mutexCreate(&dummyfs_common.mutex) != EOK)
-		return 2;
-
 	/* Daemonizing first to make all initialization in child process.
 	 * Otherwise the port will be destroyed when parent exits. */
 	if (daemonize) {
@@ -688,6 +682,9 @@ int main(int argc,char **argv)
 		portCreate(&dummyfs_common.port);
 
 	printf("dummyfs: Starting dummyfs server at port %d\n", dummyfs_common.port);
+
+	if (mutexCreate(&dummyfs_common.mutex) != EOK)
+		return 2;
 
 	object_init();
 	dev_init();
