@@ -173,9 +173,6 @@ bool try_to_freeze(void);
 
 #define sigmask(sig)	(1UL << ((sig) - 1))
 
-typedef struct {
-} siginfo_t;
-
 int kernel_dequeue_signal(siginfo_t *info);
 
 void allow_signal(int sig);
