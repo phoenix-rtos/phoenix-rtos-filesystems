@@ -376,7 +376,6 @@ int dummyfs_create(oid_t *dir, const char *name, oid_t *oid, int type, int mode,
 	o->oid.port = dummyfs_common.port;
 	o->type = type;
 	o->mode = mode;
-	o->size = 0;
 	o->atime = o->mtime = o->ctime = time(NULL);
 
 	if (type == otDev)
