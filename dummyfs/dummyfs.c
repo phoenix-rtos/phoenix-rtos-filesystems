@@ -24,6 +24,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <dirent.h>
+#include <signal.h>
+#include <phoenix/sysinfo.h>
 
 #include "dummyfs.h"
 #include "dir.h"
@@ -31,7 +33,6 @@
 #include "object.h"
 #include "dev.h"
 #include "usb.h"
-#include "../../phoenix-rtos-kernel/include/sysinfo.h"
 
 struct _dummyfs_common_t dummyfs_common;
 
@@ -111,7 +112,7 @@ int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res, oid_t *dev)
 	return len;
 }
 
-int dummyfs_setattr(oid_t *oid, int type, int attr)
+int dummyfs_setattr(oid_t *oid, int type, int attr, const void *data, size_t size)
 {
 	dummyfs_object_t *o;
 	int ret = EOK;
@@ -141,6 +142,11 @@ int dummyfs_setattr(oid_t *oid, int type, int attr)
 			break;
 
 		case (atPort):
+			ret = -EINVAL;
+			break;
+
+		case (atDev):
+			/* TODO: add mouting capabilities */
 			ret = -EINVAL;
 			break;
 	}
@@ -535,14 +541,10 @@ int fetch_modules(void)
 
 #endif
 
-char __attribute__((aligned(8))) mtstack[4096];
-
-void dummyfs_mount(void *arg)
+static int dummyfs_mount_sync(const char* mountpt)
 {
 	oid_t toid;
-	char *mountpt = (char *)arg;
 	int err;
-
 	toid.port = dummyfs_common.port;
 	while (lookup("/", NULL, &toid) < 0 || toid.port == dummyfs_common.port)
 		usleep(100000);
@@ -551,9 +553,36 @@ void dummyfs_mount(void *arg)
 	toid.port = dummyfs_common.port;
 	if ((err = mount(mountpt, &toid))) {
 		printf("dummyfs: Failed to mount at %s - error %d\n", mountpt, err);
-		endthread();
+		return -1;
 	}
+
+	return 0;
+}
+
+char __attribute__((aligned(8))) mtstack[4096];
+
+void dummyfs_mount_async(void *arg)
+{
+	char *mountpt = (char *)arg;
+
+	dummyfs_mount_sync(mountpt);
 	endthread();
+}
+
+static void print_usage(const char* progname)
+{
+	printf("usage: %s [OPTIONS]\n\n"
+		"  -m [mountpoint]    Start dummyfs at a given mountopint (the mount will happen asynchronously)\n"
+		"  -r [mountpoint]    Remount to a given path after spawning modules\n"
+		"  -D                 Daemonize after mounting\n"
+		"  -h                 This help message\n",
+		progname);
+}
+
+static void signal_exit(int sig)
+{
+	printf("received signal (%d) - daemonizng\n", sig);
+	exit(EXIT_SUCCESS);
 }
 
 int main(int argc,char **argv)
@@ -562,7 +591,10 @@ int main(int argc,char **argv)
 	msg_t msg;
 	dummyfs_object_t *o;
 	unsigned int rid;
-	char *mountpt = NULL;
+	const char *mountpt = NULL;
+	const char *remount_path = NULL;
+	int daemonize = 0;
+	int c;
 
 #ifndef TARGET_IA32
 	u32 reserved;
@@ -570,8 +602,61 @@ int main(int argc,char **argv)
 
 	dummyfs_common.size = 0;
 
-	if (argc > 1 && getopt(argc, argv, "m:") != -1)
-		mountpt = optarg;
+	while ((c = getopt(argc, argv, "Dhm:r:")) != -1) {
+		switch (c) {
+			case 'm':
+				mountpt = optarg;
+				break;
+			case 'r':
+				remount_path = optarg;
+				break;
+			case 'h':
+				print_usage(argv[0]);
+				return 0;
+			case 'D':
+				daemonize = 1;
+				break;
+			default:
+				print_usage(argv[0]);
+				return 1;
+		}
+	}
+
+	if (daemonize && !mountpt) {
+		printf("FATAL: Can't daemonize without mountpoint! Exiting!\n");
+		return 1;
+	}
+
+	/* Daemonizing first to make all initialization in child process.
+	 * Otherwise the port will be destroyed when parent exits. */
+	if (daemonize) {
+		pid_t pid, sid;
+
+		/* Fork off the parent process */
+		pid = fork();
+		if (pid < 0) {
+			printf("fork failed: [%d] -> %s\n", errno, strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+
+		if (pid > 0) {
+			/* PARENT: wait for initailization to finish and then exit */
+			//FIXME: wait only for SIGUSR1, but currently the signal handling is broken
+			for (int i = 1; i < NSIG; ++i)
+				signal(i, signal_exit);
+			sleep(10);
+
+			printf("failed to communicate with child\n");
+			exit(EXIT_FAILURE);
+		}
+
+		/* Create a new SID for the child process */
+		sid = setsid();
+		if (sid < 0) {
+			printf("setsid failed: [%d] -> %s\n", errno, strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+	}
 
 	if (mountpt == NULL) {
 #ifdef TARGET_IA32
@@ -597,10 +682,11 @@ int main(int argc,char **argv)
 
 	printf("dummyfs: Starting dummyfs server at port %d\n", dummyfs_common.port);
 
+	if (mutexCreate(&dummyfs_common.mutex) != EOK)
+		return 2;
+
 	object_init();
 	dev_init();
-
-	mutexCreate(&dummyfs_common.mutex);
 
 	/* Create root directory */
 	o = object_create();
@@ -616,17 +702,27 @@ int main(int argc,char **argv)
 	dir_add(o, ".", otDir, &root);
 	dir_add(o, "..", otDir, &root);
 
-	dummyfs_setattr(&o->oid, atMode, S_IFDIR | 0777);
+	dummyfs_setattr(&o->oid, atMode, S_IFDIR | 0777, NULL, 0);
 
 	if (mountpt == NULL) {
-		optind = 1;
-		if (argc > 1 && getopt(argc, argv, "r:") != -1)
-			mountpt = optarg;
 		fetch_modules();
+		mountpt = remount_path;
 	}
 
-	if (mountpt != NULL)
-		beginthread(dummyfs_mount, 4, &mtstack, 4096, mountpt);
+	if (daemonize) {
+		/* mount synchronously */
+		if (dummyfs_mount_sync(mountpt)) {
+			printf("Failed to mount, exiting.\n");
+			return 1;
+		}
+
+		/* init completed - wake parent */
+		kill(getppid(), SIGUSR1);
+	} else if (mountpt != NULL) {
+		beginthread(dummyfs_mount_async, 4, &mtstack, sizeof(mtstack), (void*)mountpt);
+	}
+
+	/*** MAIN LOOP ***/
 
 	for (;;) {
 		if (msgRecv(dummyfs_common.port, &msg, &rid) < 0) {
@@ -669,7 +765,7 @@ int main(int argc,char **argv)
 				break;
 
 			case mtSetAttr:
-				dummyfs_setattr(&msg.i.attr.oid, msg.i.attr.type, msg.i.attr.val);
+				dummyfs_setattr(&msg.i.attr.oid, msg.i.attr.type, msg.i.attr.val, msg.i.data, msg.i.size);
 				break;
 
 			case mtGetAttr:
