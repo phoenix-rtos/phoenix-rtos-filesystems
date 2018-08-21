@@ -111,6 +111,7 @@ int dir_add(dummyfs_object_t *dir, const char *name, int type, oid_t *oid)
 	n->name[n->len - 1] = '\0';
 	memcpy(&n->oid, oid, sizeof(oid_t));
 	n->type = type;
+	dir->size += strlen(name);
 
 	return EOK;
 }
@@ -139,6 +140,7 @@ int dir_remove(dummyfs_object_t *dir, const char *name)
 			dummyfs_decsz(e->len + sizeof(dummyfs_dirent_t));
 			free(e->name);
 			free(e);
+			dir->size -= strlen(name);
 			return EOK;
 		}
 		e = e->next;
