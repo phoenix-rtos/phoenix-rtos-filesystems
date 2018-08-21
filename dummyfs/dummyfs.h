@@ -62,13 +62,11 @@ typedef struct _dummyfs_object_t {
 	size_t lmaxgap;
 	size_t rmaxgap;
 	rbnode_t node;
+	size_t size;
 
 	union {
 		dummyfs_dirent_t *entries;
-		struct {
-			size_t size;
-			dummyfs_chunk_t *chunks;
-		};
+		dummyfs_chunk_t *chunks;
 		u32 port;
 	};
 
