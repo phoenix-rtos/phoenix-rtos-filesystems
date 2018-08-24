@@ -153,8 +153,12 @@ static int jffs2_srv_lookup(jffs2_partition_t *p, oid_t *dir, const char *name, 
 
 	if (dev_find_ino(p->devs, res->id) != NULL)
 		memcpy(dev, &(dev_find_ino(p->devs, res->id)->dev), sizeof(oid_t));
-	else
-		memcpy(dev, res, sizeof(oid_t));
+	else {
+		if (S_ISCHR(inode->i_mode))
+			len = -ENOENT;
+		else
+			memcpy(dev, res, sizeof(oid_t));
+	}
 
 	if (lnk != NULL && S_ISLNK(inode->i_mode))
 		strncpy(lnk, inode->i_link, lnksz);
