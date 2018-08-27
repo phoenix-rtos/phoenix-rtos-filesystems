@@ -899,7 +899,7 @@ void jffs2_mount_partition(void *arg)
 
 	portCreate(&p->port);
 
-	object_init(&p->objects);
+	object_init(p);
 	dev_init(&p->devs);
 
 	if (jffs2_common.fs->mount(jffs2_common.fs, 0, "jffs2", arg) == NULL) {

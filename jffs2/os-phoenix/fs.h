@@ -142,6 +142,7 @@ struct inode {
 	kuid_t						i_uid;
 	kgid_t						i_gid;
 	struct rcu_head				i_rcu;
+	handle_t					i_lock;
 };
 
 static inline bool dir_emit_dots(struct file *file, struct dir_context *ctx)

@@ -75,6 +75,7 @@ struct inode *new_inode(struct super_block *sb)
 		inode->i_count = 1;
 		inode->i_mapping = malloc(sizeof(struct address_space));
 		inode->i_state = I_NEW;
+		mutexCreate(&inode->i_lock);
 	}
 	return inode;
 }
@@ -82,6 +83,7 @@ struct inode *new_inode(struct super_block *sb)
 void unlock_new_inode(struct inode *inode)
 {
 	inode->i_state &= ~I_NEW;
+	mutexUnlock(inode->i_lock);
 }
 
 void iget_failed(struct inode *inode)
@@ -99,14 +101,9 @@ struct inode * iget_locked(struct super_block *sb, unsigned long ino)
 
 	if (o != NULL) {
 		o->inode->i_count++;
+		if (o->inode->i_state & I_NEW)
+			mutexLock(o->inode->i_lock);
 		return o->inode;
-	}
-
-	inode = new_inode(sb);
-
-	if (inode != NULL) {
-		inode->i_ino = ino;
-		o = object_create(sb->s_part, 0, inode);
 	}
 
 	return inode;
@@ -128,6 +125,7 @@ void iput(struct inode *inode)
 	if (!inode->i_nlink) {
 		object_destroy(inode->i_sb->s_part, o);
 		free(inode->i_mapping);
+		resourceDestroy(inode->i_lock);
 		inode->i_sb->s_op->evict_inode(inode);
 		inode->i_sb->s_op->destroy_inode(inode);
 		return;
@@ -321,15 +319,11 @@ struct inode *ilookup(struct super_block *sb, unsigned long ino)
 
 int insert_inode_locked(struct inode *inode)
 {
-	jffs2_object_t *o = object_get(inode->i_sb->s_part, inode->i_ino, 0);
+	int ret = object_insert(inode->i_sb->s_part, inode);
 
-	if (o == NULL)
-		o = object_create(inode->i_sb->s_part, 0, inode);
+	if (ret != 0)
+		return ret;
 
-	if (o == NULL)
-		return -ENOMEM;
-
-	o->refs = inode->i_count;
 	return 0;
 }
 

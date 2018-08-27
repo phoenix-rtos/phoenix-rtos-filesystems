@@ -41,9 +41,9 @@ static int object_cmp(rbnode_t *n1, rbnode_t *n2)
 }
 
 
-int object_remove(void *ptr, jffs2_object_t *o)
+int object_remove(void *part, jffs2_object_t *o)
 {
-	jffs2_objects_t *jffs2_objects = ((jffs2_partition_t *)ptr)->objects;
+	jffs2_objects_t *jffs2_objects = ((jffs2_partition_t *)part)->objects;
 
 	mutexLock(jffs2_objects->lock);
 
@@ -56,28 +56,18 @@ int object_remove(void *ptr, jffs2_object_t *o)
 }
 
 
-void object_destroy(void *ptr, jffs2_object_t *o)
+void object_destroy(void *part, jffs2_object_t *o)
 {
-	object_remove(ptr, o);
+	object_remove(part, o);
 	free(o);
 }
 
 
-jffs2_object_t *object_create(void *ptr, int type, struct inode *inode)
+jffs2_object_t *object_create(void *part, int type, struct inode *inode)
 {
-	jffs2_object_t *r, *o, t;
-	jffs2_objects_t *jffs2_objects = ((jffs2_partition_t *)ptr)->objects;
+	jffs2_object_t *r, *o;
+	jffs2_objects_t *jffs2_objects = ((jffs2_partition_t *)part)->objects;
 
-	mutexLock(jffs2_objects->lock);
-	t.oid.id = inode->i_ino;
-
-	r = lib_treeof(jffs2_object_t, node, lib_rbFind(&jffs2_objects->tree, &t.node));
-	if (r != NULL) {
-		r->refs++;
-		list_del_init(&r->list);
-		mutexUnlock(jffs2_objects->lock);
-		return r;
-	}
 	r = malloc(sizeof(jffs2_object_t));
 	if (r == NULL) {
 		printf("jffs2: End of memory - this is very bad\n");
@@ -100,6 +90,7 @@ jffs2_object_t *object_create(void *ptr, int type, struct inode *inode)
 		lib_rbRemove(&jffs2_objects->tree, &o->node);
 
 		free(o->inode->i_mapping);
+		resourceDestroy(inode->i_lock);
 		o->inode->i_sb->s_op->evict_inode(o->inode);
 		o->inode->i_sb->s_op->destroy_inode(o->inode);
 
@@ -109,22 +100,45 @@ jffs2_object_t *object_create(void *ptr, int type, struct inode *inode)
 
 	lib_rbInsert(&jffs2_objects->tree, &r->node);
 	jffs2_objects->cnt++;
-	mutexUnlock(jffs2_objects->lock);
 
 	return r;
 }
 
+int object_insert(void *part, struct inode *inode) {
+	jffs2_object_t *o;
+	jffs2_objects_t *jffs2_objects = ((jffs2_partition_t *)part)->objects;
 
-jffs2_object_t *object_get(void *ptr, unsigned int id, int iref)
+	mutexLock(jffs2_objects->lock);
+	o = object_create((jffs2_partition_t *)part, 0, inode);
+	mutexUnlock(jffs2_objects->lock);
+
+	if (o == NULL)
+		return -ENOMEM;
+
+	o->refs = inode->i_count;
+
+	return 0;
+}
+
+jffs2_object_t *object_get(void *part, unsigned int id, int iref)
 {
 	jffs2_object_t *o, t;
-	jffs2_objects_t *jffs2_objects = ((jffs2_partition_t *)ptr)->objects;
+	jffs2_objects_t *jffs2_objects = ((jffs2_partition_t *)part)->objects;
+	struct inode *inode = NULL;
 
 	t.oid.id = id;
 
 	mutexLock(jffs2_objects->lock);
 	if ((o = lib_treeof(jffs2_object_t, node, lib_rbFind(&jffs2_objects->tree, &t.node))) != NULL && iref)
 		o->refs++;
+
+	if (o == NULL) {
+		inode = new_inode(((jffs2_partition_t *)part)->sb);
+		if (inode != NULL) {
+			inode->i_ino = id;
+			o = object_create((jffs2_partition_t *)part, 0, inode);
+		}
+	}
 
 	if (o != NULL && !list_empty(&o->list))
 		list_del_init(&o->list);
@@ -134,9 +148,9 @@ jffs2_object_t *object_get(void *ptr, unsigned int id, int iref)
 }
 
 
-void object_put(void *ptr, jffs2_object_t *o)
+void object_put(void *part, jffs2_object_t *o)
 {
-	jffs2_objects_t *jffs2_objects = ((jffs2_partition_t *)ptr)->objects;
+	jffs2_objects_t *jffs2_objects = ((jffs2_partition_t *)part)->objects;
 
 	if (o->refs > 0)
 		o->refs--;
@@ -146,7 +160,7 @@ void object_put(void *ptr, jffs2_object_t *o)
 }
 
 
-void object_init(void **ptr)
+void object_init(void *part)
 {
 	jffs2_objects_t *jffs2_objects = malloc(sizeof(jffs2_objects_t));
 
@@ -154,5 +168,5 @@ void object_init(void **ptr)
 	mutexCreate(&jffs2_objects->lock);
 	INIT_LIST_HEAD(&jffs2_objects->lru_list);
 
-	*ptr = jffs2_objects;
+	((jffs2_partition_t *)part)->objects = jffs2_objects;
 }
