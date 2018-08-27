@@ -66,6 +66,7 @@ struct dir_context {
 	loff_t pos;
 	struct dirent *dent;
 	int emit;
+	void *devs;
 };
 
 
@@ -154,10 +155,6 @@ static inline bool dir_emit_dots(struct file *file, struct dir_context *ctx)
 
 static inline int dir_print(struct dir_context *ctx, const char *name, int len, loff_t pos, u64 ino, unsigned type)
 {
-	ctx->pos++;
-	ctx->emit++;
-	ctx->dent->d_namlen = len;
-	ctx->dent->d_ino = ino;
 	switch (type) {
 		case DT_REG:
 			ctx->dent->d_type = otFile;
@@ -168,6 +165,9 @@ static inline int dir_print(struct dir_context *ctx, const char *name, int len, 
 		case DT_CHR:
 		case DT_BLK:
 			ctx->dent->d_type = otDev;
+			/* skip if its dangling device entry */
+			if (dev_find_ino(ctx->devs, ino) == NULL)
+				return 1;
 			break;
 		case DT_LNK:
 			ctx->dent->d_type = otSymlink;
@@ -175,6 +175,11 @@ static inline int dir_print(struct dir_context *ctx, const char *name, int len, 
 		default:
 			ctx->dent->d_type = otUnknown;
 	}
+
+	ctx->pos++;
+	ctx->emit++;
+	ctx->dent->d_namlen = len;
+	ctx->dent->d_ino = ino;
 	memcpy(ctx->dent->d_name, name, len);
 	ctx->dent->d_name[len] = '\0';
 	return 0;

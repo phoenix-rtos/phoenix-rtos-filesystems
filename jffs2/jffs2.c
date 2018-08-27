@@ -432,9 +432,8 @@ static int jffs2_srv_unlink(jffs2_partition_t *p, oid_t *dir, const char *name)
 
 static int jffs2_srv_create(jffs2_partition_t *p, oid_t *dir, const char *name, oid_t *oid, int type, int mode, oid_t *dev)
 {
-	oid_t toid = { 0 }, t;
 	struct inode *idir, *inode;
-	struct dentry *dentry;
+	struct dentry *dentry, *dtemp;
 	int ret = 0;
 	struct jffs2_sb_info *c = JFFS2_SB_INFO(p->sb);
 
@@ -457,26 +456,42 @@ static int jffs2_srv_create(jffs2_partition_t *p, oid_t *dir, const char *name, 
 		return -ENOTDIR;
 	}
 
-	if (jffs2_srv_lookup(p, dir, name, &toid, &t, NULL, 0) > 0) {
-
-		ret = -EEXIST;
-		if (!jffs2_is_device(p, &toid)) {
-
-			inode = jffs2_iget(p->sb, toid.id);
-			if(S_ISCHR(inode->i_mode)) {
-				ret = 0;
-				dev_find_oid(p->devs, dev, inode->i_ino, 1);
-				oid->id = inode->i_ino;
-			}
-			iput(inode);
-		}
-		iput(idir);
-		return ret;
-	}
-
 	dentry = malloc(sizeof(struct dentry));
 	dentry->d_name.name = strdup(name);
 	dentry->d_name.len = strlen(name);
+
+	/* Check if entry already exists */
+	dtemp = idir->i_op->lookup(idir, dentry, 0);
+
+	if (dtemp != NULL && PTR_ERR(dtemp) != -ENAMETOOLONG) {
+
+		ret = -EEXIST;
+		inode = d_inode(dtemp);
+
+		/* Entry exists so we need to check if it is dangling device entry */
+		if(S_ISCHR(inode->i_mode) && dev_find_ino(p->devs, inode->i_ino) == NULL) {
+			/* Now we check if we can reuse this entry. If we want to create device,
+			 * entry can be used again. Otherwise we continue, entry will be obsoleted */
+			if (type == otDev) {
+				ret = EOK;
+				dev_find_oid(p->devs, dev, inode->i_ino, 1);
+				oid->id = inode->i_ino;
+				iput(inode);
+				free(dentry->d_name.name);
+				free(dentry);
+				iput(idir);
+				return ret;
+			}
+			iput(inode);
+
+		} else {
+			iput(inode);
+			free(dentry->d_name.name);
+			free(dentry);
+			iput(idir);
+			return ret;
+		}
+	}
 
 	oid->port = p->port;
 
@@ -526,7 +541,7 @@ static int jffs2_srv_readdir(jffs2_partition_t *p, oid_t *dir, offs_t offs, stru
 {
 	struct inode *inode;
 	struct file file;
-	struct dir_context ctx = {dir_print, offs, dent, -1};
+	struct dir_context ctx = {dir_print, offs, dent, -1, p->devs};
 
 	if (!dir->id)
 		return -EINVAL;
@@ -590,7 +605,7 @@ static int jffs2_srv_read(jffs2_partition_t *p, oid_t *oid, offs_t offs, void *d
 		iput(inode);
 		return -EISDIR;
 	} else if (S_ISCHR(inode->i_mode)) {
-		printf("jffs2: Can't read from device I'm just a filesystem\n");
+		printf("jffs2: Used wrong oid to read from device\n");
 		iput(inode);
 		return -EINVAL;
 	} else if (S_ISLNK(inode->i_mode)) {
@@ -729,7 +744,7 @@ static int jffs2_srv_write(jffs2_partition_t *p, oid_t *oid, offs_t offs, void *
 		iput(inode);
 		return -EISDIR;
 	} else if (S_ISCHR(inode->i_mode)) {
-		printf("jffs2: What are you doing? You shouldn't even be here!\n");
+		printf("jffs2: Used wrong oid to write to device\n");
 		iput(inode);
 		return -EINVAL;
 	} else if (S_ISLNK(inode->i_mode)) {
