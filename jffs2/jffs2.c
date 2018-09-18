@@ -456,6 +456,11 @@ static int jffs2_srv_create(jffs2_partition_t *p, oid_t *dir, const char *name, 
 		return -ENOTDIR;
 	}
 
+	if (!strcmp(".", name) || !strcmp("..", name)) {
+		iput(idir);
+		return -EEXIST;
+	}
+
 	dentry = malloc(sizeof(struct dentry));
 	dentry->d_name.name = strdup(name);
 	dentry->d_name.len = strlen(name);
