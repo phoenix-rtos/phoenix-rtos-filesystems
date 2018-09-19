@@ -182,6 +182,9 @@ static int jffs2_srv_setattr(jffs2_partition_t *p, oid_t *oid, int type, int att
 	int ret;
 	struct jffs2_sb_info *c = JFFS2_SB_INFO(p->sb);
 
+	if (!oid->id)
+		return -EINVAL;
+
 	if (type != atDev && jffs2_is_readonly(c))
 		return -EROFS;
 
@@ -462,6 +465,7 @@ static int jffs2_srv_create(jffs2_partition_t *p, oid_t *dir, const char *name, 
 	}
 
 	dentry = malloc(sizeof(struct dentry));
+	memset(dentry, 0, sizeof(struct dentry));
 	dentry->d_name.name = strdup(name);
 	dentry->d_name.len = strlen(name);
 
@@ -512,7 +516,8 @@ static int jffs2_srv_create(jffs2_partition_t *p, oid_t *dir, const char *name, 
 		case otDev:
 			mode = S_IFCHR | S_IRWXU | S_IRWXG | S_IRWXO;
 			ret = idir->i_op->mknod(idir, dentry, mode, dev->port);
-			dev_find_oid(p->devs, dev, d_inode(dentry)->i_ino, 1);
+			if (!ret)
+				dev_find_oid(p->devs, dev, d_inode(dentry)->i_ino, 1);
 			break;
 		case otSymlink:
 			mode = S_IFLNK | S_IRWXU | S_IRWXG | S_IRWXO;
@@ -525,13 +530,13 @@ static int jffs2_srv_create(jffs2_partition_t *p, oid_t *dir, const char *name, 
 
 	iput(idir);
 
-	if (!ret)
+	if (!ret) {
 		oid->id = d_inode(dentry)->i_ino;
+		iput(d_inode(dentry));
+	}
 
-	iput(d_inode(dentry));
 	free(dentry->d_name.name);
 	free(dentry);
-
 	return ret;
 }
 
@@ -576,12 +581,16 @@ static int jffs2_srv_readdir(jffs2_partition_t *p, oid_t *dir, offs_t offs, stru
 
 static void jffs2_srv_open(jffs2_partition_t *p, oid_t *oid)
 {
-	jffs2_iget(p->sb, oid->id);
+	if (oid->id)
+		jffs2_iget(p->sb, oid->id);
 }
 
 
 static void jffs2_srv_close(jffs2_partition_t *p, oid_t *oid)
 {
+	if(!oid->id)
+		return;
+
 	struct inode *inode = ilookup(p->sb, oid->id);
 
 	if (inode != NULL) {
