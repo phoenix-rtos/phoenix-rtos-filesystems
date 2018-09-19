@@ -413,6 +413,12 @@ static int jffs2_srv_unlink(jffs2_partition_t *p, oid_t *dir, const char *name)
 		return -ENOENT;
 	}
 
+	if (S_ISDIR(inode->i_mode) && dev_find_ino(p->devs, inode->i_ino) != NULL) {
+		iput(inode);
+		iput(idir);
+		return -EBUSY;
+	}
+
 	dentry = malloc(sizeof(struct dentry));
 
 	dentry->d_name.name = strdup(name);
