@@ -338,6 +338,11 @@ static int jffs2_srv_link(jffs2_partition_t *p, oid_t *dir, const char *name, oi
 	if (IS_ERR(idir))
 		return -ENOENT;
 
+	if (!S_ISDIR(idir->i_mode)) {
+		iput(idir);
+		return -EINVAL;
+	}
+
 	if (jffs2_srv_lookup(p, dir, name, &t, &toid, NULL, 0) > 0) {
 		iput(idir);
 		return -EEXIST;
