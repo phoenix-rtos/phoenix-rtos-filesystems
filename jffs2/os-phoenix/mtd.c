@@ -129,19 +129,15 @@ int mtd_writev(struct mtd_info *mtd, const struct kvec *vecs,
 
 	*retlen = 0;
 
-	mutexLock(mtd->lock);
 	for (i = 0; i < count; i++) {
 		ret = mtd_write(mtd, to, vecs[i].iov_len, &writelen, vecs[i].iov_base);
 		*retlen = writelen;
 
-		if (ret || writelen != vecs[i].iov_len) {
-			mutexUnlock(mtd->lock);
+		if (ret || writelen != vecs[i].iov_len)
 			return ret;
-		}
 		to += writelen;
 	}
 
-	mutexUnlock(mtd->lock);
 	return ret;
 }
 
