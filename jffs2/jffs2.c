@@ -139,7 +139,7 @@ static int jffs2_srv_lookup(jffs2_partition_t *p, oid_t *dir, const char *name, 
 			free(dentry->d_name.name);
 			free(dentry);
 			iput(inode);
-			return -EINVAL;
+			return dtemp ? -ENAMETOOLONG : -ENOENT;
 		} else
 			res->id = dtemp->d_inode->i_ino;
 
