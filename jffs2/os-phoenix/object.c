@@ -163,6 +163,7 @@ void object_put(void *part, jffs2_object_t *o)
 void object_init(void *part)
 {
 	jffs2_objects_t *jffs2_objects = malloc(sizeof(jffs2_objects_t));
+	memset(jffs2_objects, 0, sizeof(jffs2_objects_t));
 
 	lib_rbInit(&jffs2_objects->tree, object_cmp, NULL);
 	mutexCreate(&jffs2_objects->lock);
