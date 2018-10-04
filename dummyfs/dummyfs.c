@@ -423,6 +423,14 @@ int dummyfs_create(oid_t *dir, const char *name, oid_t *oid, int type, int mode,
 		return ret;
 	}
 
+	if (type == otSymlink) {
+		const char* path = name + strlen(name) + 1;
+		object_lock(o);
+		// TODO: remove symlink if write failed
+		dummyfs_write_internal(o, 0, path, strlen(path) + 1);
+		object_unlock(o);
+	}
+
 	object_put(o);
 	return EOK;
 }

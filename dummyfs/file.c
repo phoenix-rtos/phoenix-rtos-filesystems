@@ -19,14 +19,13 @@
 #include <string.h>
 
 #include "dummyfs.h"
+#include "file.h"
 #include "object.h"
 
 int dummyfs_truncate(oid_t *oid, unsigned int size)
 {
-	dummyfs_chunk_t *chunk, *trash;
-	char *tmp = NULL;
-	unsigned int chunksz;
 	dummyfs_object_t *o;
+	int ret;
 
 	o = object_get(oid->id);
 
@@ -44,6 +43,21 @@ int dummyfs_truncate(oid_t *oid, unsigned int size)
 	}
 
 	object_lock(o);
+
+	ret = dummyfs_truncate_internal(o, size);
+
+	object_unlock(o);
+	object_put(o);
+
+	return ret;
+}
+
+int dummyfs_truncate_internal(dummyfs_object_t *o, unsigned int size)
+{
+	dummyfs_chunk_t *chunk, *trash;
+	char *tmp = NULL;
+	unsigned int chunksz;
+
 	chunk = o->chunks;
 
 	if (size > o->size) {
@@ -52,8 +66,6 @@ int dummyfs_truncate(oid_t *oid, unsigned int size)
 		if (chunk == NULL) {
 			/* allocate new chunk */
 			if (dummyfs_incsz(sizeof(dummyfs_chunk_t)) != EOK) {
-				object_unlock(o);
-				object_put(o);
 				return -ENOMEM;
 			}
 
@@ -61,8 +73,6 @@ int dummyfs_truncate(oid_t *oid, unsigned int size)
 
 			if (chunk == NULL) {
 				dummyfs_decsz(sizeof(dummyfs_chunk_t));
-				object_unlock(o);
-				object_put(o);
 				return -ENOMEM;
 			}
 
@@ -79,8 +89,6 @@ int dummyfs_truncate(oid_t *oid, unsigned int size)
 			chunk->prev->size += size - o->size;
 			if (chunk->prev->used) {
 				if (dummyfs_incsz(size - o->size) != EOK) {
-					object_unlock(o);
-					object_put(o);
 					return -ENOMEM;
 				}
 
@@ -90,8 +98,6 @@ int dummyfs_truncate(oid_t *oid, unsigned int size)
 					chunk->prev->size -= size - o->size;
 
 					if (dummyfs_incsz(sizeof(dummyfs_chunk_t)) != EOK) {
-						object_unlock(o);
-						object_put(o);
 						return -ENOMEM;
 					}
 
@@ -99,8 +105,6 @@ int dummyfs_truncate(oid_t *oid, unsigned int size)
 
 					if (chunk == NULL) {
 						dummyfs_decsz(sizeof(dummyfs_chunk_t));
-						object_unlock(o);
-						object_put(o);
 						return -ENOMEM;
 					}
 
@@ -134,8 +138,6 @@ int dummyfs_truncate(oid_t *oid, unsigned int size)
 			chunksz = size - chunk->offs;
 			tmp = realloc(chunk->data, chunksz);
 			if (tmp == NULL) {
-				object_unlock(o);
-				object_put(o);
 				return -ENOMEM;
 			}
 
@@ -165,8 +167,6 @@ int dummyfs_truncate(oid_t *oid, unsigned int size)
 	o->size = size;
 
 	o->mtime = o->atime = time(NULL);
-	object_unlock(o);
-	object_put(o);
 
 	return EOK;
 }
@@ -185,7 +185,7 @@ int dummyfs_read(oid_t *oid, offs_t offs, char *buff, unsigned int len)
 	if (o == NULL)
 		return -EINVAL;
 
-	if (o->type != otFile)
+	if (o->type != otFile && o->type != otSymlink)
 		ret = -EINVAL;
 
 	if (buff == NULL)
@@ -238,11 +238,9 @@ int dummyfs_read(oid_t *oid, offs_t offs, char *buff, unsigned int len)
 }
 
 
-int dummyfs_write(oid_t *oid, offs_t offs, char *buff, unsigned int len)
+int dummyfs_write(oid_t *oid, offs_t offs, const char *buff, unsigned int len)
 {
-	dummyfs_chunk_t *chunk;
 	dummyfs_object_t *o;
-	int writesz, writeoffs;
 	int ret = EOK;
 
 	o = object_get(oid->id);
@@ -261,19 +259,31 @@ int dummyfs_write(oid_t *oid, offs_t offs, char *buff, unsigned int len)
 		return ret;
 	}
 
+	object_lock(o);
+
+	ret = dummyfs_write_internal(o, offs, buff, len);
+
+	object_unlock(o);
+	object_put(o);
+
+	return ret;
+}
+
+int dummyfs_write_internal(dummyfs_object_t *o, offs_t offs, const char *buff, unsigned int len)
+{
+
+	int writesz, writeoffs;
+	dummyfs_chunk_t *chunk;
+	int ret = EOK;
+
 	if (len == 0) {
-		object_put(o);
 		return EOK;
 	}
 
-	object_lock(o);
 	if (offs + len > o->size) {
-		object_unlock(o);
-		if ((ret = dummyfs_truncate(oid, offs + len)) != EOK) {
-			object_put(o);
+		if ((ret = dummyfs_truncate_internal(o, offs + len)) != EOK) {
 			return ret;
 		}
-		object_lock(o);
 	}
 
 	for (chunk = o->chunks; chunk->next != o->chunks; chunk = chunk->next)
@@ -287,8 +297,6 @@ int dummyfs_write(oid_t *oid, offs_t offs, char *buff, unsigned int len)
 
 		if (!chunk->used) {
 			if (dummyfs_incsz(chunk->size) != EOK) {
-				object_unlock(o);
-				object_put(o);
 				return -ENOMEM;
 			}
 
@@ -296,8 +304,6 @@ int dummyfs_write(oid_t *oid, offs_t offs, char *buff, unsigned int len)
 
 			if (chunk->data == NULL) {
 				dummyfs_decsz(chunk->size);
-				object_unlock(o);
-				object_put(o);
 				return -ENOMEM;
 			}
 
@@ -318,8 +324,6 @@ int dummyfs_write(oid_t *oid, offs_t offs, char *buff, unsigned int len)
 	} while (len && chunk != o->chunks);
 
 	o->mtime = o->atime = time(NULL);
-	object_unlock(o);
-	object_put(o);
 
 	return ret;
 }
