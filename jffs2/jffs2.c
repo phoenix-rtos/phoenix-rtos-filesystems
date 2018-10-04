@@ -25,6 +25,7 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <stdarg.h>
+#include <poll.h>
 #include <sys/mount.h>
 
 #include "os-phoenix.h"
@@ -303,6 +304,10 @@ static int jffs2_srv_getattr(jffs2_partition_t *p, oid_t *oid, int type, int *at
 
 		case (atLinks):
 			*attr = inode->i_nlink;
+			break;
+		case (atPollStatus):
+			// trivial implementation: assume read/write is always possible
+			*attr = POLLIN|POLLRDNORM|POLLOUT|POLLWRNORM;
 			break;
 	}
 
