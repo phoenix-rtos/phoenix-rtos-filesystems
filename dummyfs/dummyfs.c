@@ -25,6 +25,7 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <signal.h>
+#include <poll.h>
 #include <phoenix/sysinfo.h>
 
 #include "dummyfs.h"
@@ -208,6 +209,10 @@ int dummyfs_getattr(oid_t *oid, int type, int *attr)
 
 		case (atLinks):
 			*attr = o->nlink;
+			break;
+		case (atPollStatus):
+			// trivial implementation: assume read/write is always possible
+			*attr = POLLIN|POLLRDNORM|POLLOUT|POLLWRNORM;
 			break;
 	}
 	object_unlock(o);
