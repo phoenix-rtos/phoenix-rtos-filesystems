@@ -59,7 +59,6 @@ int dir_replace(dummyfs_object_t *dir, const char *name, oid_t *new)
 	dummyfs_dirent_t *e = dir->entries;
 	char *dirname = strdup(name);
 	char *end = strchr(dirname, '/');
-	int len;
 
 	if (dir->type != otDir)
 		return -EINVAL;
@@ -69,8 +68,6 @@ int dir_replace(dummyfs_object_t *dir, const char *name, oid_t *new)
 
 	if (end != NULL)
 		*end = 0;
-
-	len = strlen(dirname);
 
 	/* Iterate over all entries to find the matching one */
 	do {
