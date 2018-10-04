@@ -221,11 +221,14 @@ int dummyfs_getattr(oid_t *oid, int type, int *attr)
 	return EOK;
 }
 
+// allow overriding files by link() to support naive rename() implementation
+#define LINK_ALLOW_OVERRIDE 1
 
 int dummyfs_link(oid_t *dir, const char *name, oid_t *oid)
 {
-	dummyfs_object_t *d, *o;
+	dummyfs_object_t *d, *o, *victim_o = NULL;
 	int ret;
+	oid_t victim_oid;
 
 	if (name == NULL)
 		return -EINVAL;
@@ -266,8 +269,28 @@ int dummyfs_link(oid_t *dir, const char *name, oid_t *oid)
 		object_unlock(d);
 	}
 
+#ifdef LINK_ALLOW_OVERRIDE
+	if (dir_find(d, name, &victim_oid) > 0) {
+		victim_o = object_get(victim_oid.id);
+		if (victim_o->type == otDir // explicitly disallow overwriting directories
+				|| victim_oid.id == oid->id) { // linking to self
+			object_put(victim_o);
+			victim_o = NULL;
+		} else {
+			// object_lock(victim_o); //FIXME: per-object locking
+		}
+	}
+#endif
+
 	object_lock(d);
-	ret = dir_add(d, name, o->type, oid);
+	if (!victim_o) {
+		ret = dir_add(d, name, o->type, oid);
+	} else {
+		ret = dir_replace(d, name, oid);
+		victim_o->nlink--;
+		// object_unlock(victim_o); //FIXME: per-object locking
+		object_put(victim_o);
+	}
 
 	if (ret != EOK) {
 		object_unlock(d);
@@ -285,6 +308,9 @@ int dummyfs_link(oid_t *dir, const char *name, oid_t *oid)
 	object_unlock(d);
 	object_put(o);
 	object_put(d);
+
+	if (victim_o)
+		dummyfs_destroy(&victim_oid);
 
 	return ret;
 }

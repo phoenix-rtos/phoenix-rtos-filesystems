@@ -53,6 +53,40 @@ int dir_find(dummyfs_object_t *dir, const char *name, oid_t *res)
 	return -ENOENT;
 }
 
+int dir_replace(dummyfs_object_t *dir, const char *name, oid_t *new)
+{
+
+	dummyfs_dirent_t *e = dir->entries;
+	char *dirname = strdup(name);
+	char *end = strchr(dirname, '/');
+	int len;
+
+	if (dir->type != otDir)
+		return -EINVAL;
+
+	if (e == NULL)
+		return -ENOENT;
+
+	if (end != NULL)
+		*end = 0;
+
+	len = strlen(dirname);
+
+	/* Iterate over all entries to find the matching one */
+	do {
+		if (!strcmp(e->name, dirname)) {
+			memcpy(&e->oid, new, sizeof(oid_t));
+			free(dirname);
+			return EOK;
+		}
+
+		e = e->next;
+	} while (e != dir->entries);
+
+	free(dirname);
+	return -ENOENT;
+}
+
 int dir_add(dummyfs_object_t *dir, const char *name, int type, oid_t *oid)
 {
 	oid_t res;
