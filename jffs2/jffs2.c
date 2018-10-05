@@ -320,7 +320,8 @@ static int jffs2_srv_getattr(jffs2_partition_t *p, oid_t *oid, int type, int *at
 
 static int jffs2_srv_link(jffs2_partition_t *p, oid_t *dir, const char *name, oid_t *oid)
 {
-	struct inode *idir, *inode;
+	struct inode *idir, *inode, *ivictim = NULL;
+	struct jffs2_inode_info *victim_f = NULL;
 	struct dentry *old, *new;
 	oid_t toid, t;
 	int ret;
@@ -349,8 +350,13 @@ static int jffs2_srv_link(jffs2_partition_t *p, oid_t *dir, const char *name, oi
 	}
 
 	if (jffs2_srv_lookup(p, dir, name, &t, &toid, NULL, 0) > 0) {
-		iput(idir);
-		return -EEXIST;
+		ivictim = jffs2_srv_get(p, &toid);
+
+		if (S_ISDIR(ivictim->i_mode) || (toid.id == oid->id)) {
+			iput(ivictim);
+			iput(idir);
+			return -EEXIST;
+		}
 	}
 
 	inode = jffs2_srv_get(p, oid);
@@ -375,6 +381,16 @@ static int jffs2_srv_link(jffs2_partition_t *p, oid_t *dir, const char *name, oi
 
 	iput(idir);
 	iput(inode);
+
+	if (!ret && ivictim != NULL) {
+		victim_f = JFFS2_INODE_INFO(ivictim);
+		mutex_lock(&victim_f->sem);
+		if (victim_f->inocache->pino_nlink)
+			victim_f->inocache->pino_nlink--;
+		mutex_unlock(&victim_f->sem);
+		drop_nlink(ivictim);
+		iput(ivictim);
+	}
 
 	free(old);
 	free(new->d_name.name);
