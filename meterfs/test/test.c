@@ -304,8 +304,10 @@ int main(void)
 	opened[10] = test_open("/test11", &oids[10]);
 	opened[11] = test_open("/test12", &oids[11]);
 
+	test_fileinfo(&oids[11], NULL);
+
 	for (i = 0; i < 12; ++i) {
-		if (!opened[i])
+		if (opened[i])
 			test_close(&oids[i]);
 	}
 
@@ -343,6 +345,27 @@ int main(void)
 
 	for (i = 0; i < 16; ++i)
 		test_read(&oids[11], i * 20, buff, 5);
+
+	test_fileinfo(&oids[11], NULL);
+
+	test_resize(&oids[11], 200, 10);
+
+	test_fileinfo(&oids[11], NULL);
+
+	for (i = 0; i < 16; ++i)
+		test_read(&oids[11], i * 20, buff, 5);
+
+	test_write(&oids[11], "a0000", 5);
+	test_write(&oids[11], "a0001", 5);
+	test_write(&oids[11], "a0002", 5);
+	test_write(&oids[11], "a0003", 5);
+	test_write(&oids[11], "a0004", 5);
+	test_write(&oids[11], "a0005", 5);
+
+	test_fileinfo(&oids[11], NULL);
+
+	for (i = 0; i < 16; ++i)
+		test_read(&oids[11], i * 10, buff, 5);
 
 	return 0;
 }

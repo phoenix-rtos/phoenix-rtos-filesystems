@@ -116,7 +116,7 @@ void meterfs_checkfs(void)
 
 	/* Select active header and files table */
 	if (valid0 && valid1) {
-		if (id.no == (u.h.id.no + 1) % (1 << 31) || id.no == u.h.id.no)
+		if (id.no + 1 == u.h.id.no)
 			meterfs_common.hcurrAddr = meterfs_common.h1Addr;
 		else
 			meterfs_common.hcurrAddr = 0;
@@ -469,7 +469,7 @@ int meterfs_lookup(const char *name, oid_t *res)
 }
 
 
-int meterfs_allocateFile(const char *name, size_t sectorcnt)
+int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size_t recordsz)
 {
 	header_t h;
 	fileheader_t hdr, t;
@@ -478,9 +478,12 @@ int meterfs_allocateFile(const char *name, size_t sectorcnt)
 	if (meterfs_getFileInfoName(name, &hdr) >= 0)
 		return -EEXIST;
 
+	if (recordsz > filesz)
+		return -EINVAL;
+
 	strncpy(hdr.name, name, sizeof(hdr.name));
-	hdr.filesz = 0;
-	hdr.recordsz = 0;
+	hdr.filesz = filesz;
+	hdr.recordsz = recordsz;
 	hdr.sector = 0;
 	hdr.sectorcnt = sectorcnt;
 
@@ -626,10 +629,8 @@ int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o)
 			if (SECTORS(&h, meterfs_common.sectorsz) > i->allocate.sectors)
 				return -EINVAL;
 
-			if ((err = meterfs_allocateFile(i->allocate.name, i->allocate.sectors)) < 0)
+			if ((err = meterfs_allocateFile(i->allocate.name, i->allocate.sectors, i->allocate.filesz, i->allocate.recordsz)) < 0)
 				return err;
-
-			err = meterfs_resizeFile(i->allocate.name, i->allocate.filesz, i->allocate.recordsz);
 			break;
 
 		case meterfs_resize:
@@ -643,6 +644,9 @@ int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o)
 				p->header.filesz = i->resize.filesz;
 				p->header.recordsz = i->resize.recordsz;
 			}
+
+			meterfs_getFileInfoName(p->header.name, &p->header);
+			meterfs_getFilePos(p);
 
 			node_put(i->resize.oid.id);
 			break;
