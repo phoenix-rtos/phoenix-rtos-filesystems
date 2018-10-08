@@ -26,7 +26,7 @@ void (*flash_write)(unsigned int, void *, size_t);
 static const unsigned char chips[3][3] = { { 0xbf, 0x25, 0x41 }, { 0x1f, 0x47, 0x01 }, { 0xc2, 0x20, 0x16 } };
 
 
-static void _flash_waitBusy(void)
+void _flash_waitBusy(void)
 {
 	unsigned char status;
 	unsigned int sleep = 1000;
@@ -130,9 +130,9 @@ void flash_writeAAI(unsigned int addr, void *buff, size_t bufflen)
 	if (i < bufflen) {
 		spi_write(cmd_wren, 0, 0, NULL, 0);
 		spi_write(cmd_write, addr + i, spi_address, buff + i, 1);
-		_flash_waitBusy();
 	}
 
+	_flash_waitBusy();
 	spi_powerCtrl(0);
 	keepidle(0);
 }
@@ -156,6 +156,7 @@ void flash_writePage(unsigned int addr, void *buff, size_t bufflen)
 		buff += chunk;
 	}
 
+	_flash_waitBusy();
 	spi_powerCtrl(0);
 	keepidle(0);
 }
@@ -206,19 +207,6 @@ void flash_detect(size_t *flashsz, size_t *sectorsz)
 
 void flash_init(size_t *flashsz, size_t *sectorsz)
 {
-	unsigned char t = 0;
-
 	/* Detect flash chip, write method, size and sector size */
 	flash_detect(flashsz, sectorsz);
-
-	/* Remove write protection */
-	keepidle(1);
-	spi_powerCtrl(1);
-	spi_write(cmd_wrdi, 0, 0, NULL, 0);
-	spi_write(cmd_wren, 0, 0, NULL, 0);
-	spi_write(cmd_ewsr, 0, 0, NULL, 0);
-	spi_write(cmd_wrsr, 0, 0, &t, 1);
-	spi_write(cmd_wrdi, 0, 0, NULL, 0);
-	spi_powerCtrl(0);
-	keepidle(0);
 }

@@ -40,15 +40,15 @@ void test_hexdump(char *buff, size_t bufflen)
 
 int test_allocate(const char *name, size_t sectors, size_t filesz, size_t recordsz)
 {
-	meterfs_i_devctl_t *i = (meterfs_i_devctl_t *)&test_common.msg.i.raw;
-	meterfs_o_devctl_t *o = (meterfs_o_devctl_t *)&test_common.msg.o.raw;
+	meterfs_i_devctl_t *i = (meterfs_i_devctl_t *)test_common.msg.i.raw;
+	meterfs_o_devctl_t *o = (meterfs_o_devctl_t *)test_common.msg.o.raw;
 	int err;
 
 	test_common.msg.type = mtDevCtl;
 	test_common.msg.i.data = NULL;
 	test_common.msg.i.size = 0;
 	test_common.msg.o.data = NULL;
-	test_common.msg.i.size = 0;
+	test_common.msg.o.size = 0;
 	i->type = meterfs_allocate;
 	strncpy(i->allocate.name, name, sizeof(i->allocate.name));
 	i->allocate.sectors = sectors;
@@ -69,15 +69,15 @@ int test_allocate(const char *name, size_t sectors, size_t filesz, size_t record
 
 int test_resize(oid_t *oid, size_t filesz, size_t recordsz)
 {
-	meterfs_i_devctl_t *i = (meterfs_i_devctl_t *)&test_common.msg.i.raw;
-	meterfs_o_devctl_t *o = (meterfs_o_devctl_t *)&test_common.msg.o.raw;
+	meterfs_i_devctl_t *i = (meterfs_i_devctl_t *)test_common.msg.i.raw;
+	meterfs_o_devctl_t *o = (meterfs_o_devctl_t *)test_common.msg.o.raw;
 	int err;
 
 	test_common.msg.type = mtDevCtl;
 	test_common.msg.i.data = NULL;
 	test_common.msg.i.size = 0;
 	test_common.msg.o.data = NULL;
-	test_common.msg.i.size = 0;
+	test_common.msg.o.size = 0;
 	i->type = meterfs_resize;
 	i->resize.oid = *oid;
 	i->resize.filesz = filesz;
@@ -97,15 +97,15 @@ int test_resize(oid_t *oid, size_t filesz, size_t recordsz)
 
 int test_chiperase(void)
 {
-	meterfs_i_devctl_t *i = (meterfs_i_devctl_t *)&test_common.msg.i.raw;
-	meterfs_o_devctl_t *o = (meterfs_o_devctl_t *)&test_common.msg.o.raw;
+	meterfs_i_devctl_t *i = (meterfs_i_devctl_t *)test_common.msg.i.raw;
+	meterfs_o_devctl_t *o = (meterfs_o_devctl_t *)test_common.msg.o.raw;
 	int err;
 
 	test_common.msg.type = mtDevCtl;
 	test_common.msg.i.data = NULL;
 	test_common.msg.i.size = 0;
 	test_common.msg.o.data = NULL;
-	test_common.msg.i.size = 0;
+	test_common.msg.o.size = 0;
 	i->type = meterfs_chiperase;
 
 	printf("test: Performing chip erase\n");
@@ -122,15 +122,15 @@ int test_chiperase(void)
 
 int test_fileinfo(oid_t *oid, struct _info *info)
 {
-	meterfs_i_devctl_t *i = (meterfs_i_devctl_t *)&test_common.msg.i.raw;
-	meterfs_o_devctl_t *o = (meterfs_o_devctl_t *)&test_common.msg.o.raw;
+	meterfs_i_devctl_t *i = (meterfs_i_devctl_t *)test_common.msg.i.raw;
+	meterfs_o_devctl_t *o = (meterfs_o_devctl_t *)test_common.msg.o.raw;
 	int err;
 
 	test_common.msg.type = mtDevCtl;
 	test_common.msg.i.data = NULL;
 	test_common.msg.i.size = 0;
 	test_common.msg.o.data = NULL;
-	test_common.msg.i.size = 0;
+	test_common.msg.o.size = 0;
 	i->type = meterfs_info;
 	i->oid = *oid;
 
@@ -229,7 +229,7 @@ int test_open(const char *name, oid_t *oid)
 	test_common.msg.i.data = NULL;
 	test_common.msg.i.size = 0;
 	test_common.msg.o.data = NULL;
-	test_common.msg.i.size = 0;
+	test_common.msg.o.size = 0;
 
 	printf("test: Open\n");
 
@@ -253,7 +253,7 @@ int test_close(oid_t *oid)
 	test_common.msg.i.data = NULL;
 	test_common.msg.i.size = 0;
 	test_common.msg.o.data = NULL;
-	test_common.msg.i.size = 0;
+	test_common.msg.o.size = 0;
 
 	printf("test: Close id %u\n", oid->id);
 

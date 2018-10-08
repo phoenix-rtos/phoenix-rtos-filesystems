@@ -76,10 +76,17 @@ void spi_csControl(int state)
 
 void spi_powerCtrl(int state)
 {
+	unsigned char t = 0;
+
 	gpio_pinSet(gpioa, 4, state);
 
-	if (state)
+	if (state) {
 		usleep(10000);
+
+		spi_write(cmd_wren, 0, 0, NULL, 0);
+		spi_write(cmd_ewsr, 0, 0, NULL, 0);
+		spi_write(cmd_wrsr, 0, 0, &t, 1);
+	}
 }
 
 

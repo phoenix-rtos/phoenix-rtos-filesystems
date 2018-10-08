@@ -18,6 +18,9 @@
 extern void (*flash_write)(unsigned int, void *, size_t);
 
 
+extern void _flash_waitBusy(void);
+
+
 extern void flash_chipErase(void);
 
 
