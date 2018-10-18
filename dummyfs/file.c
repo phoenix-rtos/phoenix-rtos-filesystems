@@ -22,7 +22,7 @@
 #include "file.h"
 #include "object.h"
 
-int dummyfs_truncate(oid_t *oid, unsigned int size)
+int dummyfs_truncate(oid_t *oid, size_t size)
 {
 	dummyfs_object_t *o;
 	int ret;
@@ -52,7 +52,7 @@ int dummyfs_truncate(oid_t *oid, unsigned int size)
 	return ret;
 }
 
-int dummyfs_truncate_internal(dummyfs_object_t *o, unsigned int size)
+int dummyfs_truncate_internal(dummyfs_object_t *o, size_t size)
 {
 	dummyfs_chunk_t *chunk, *trash;
 	char *tmp = NULL;
@@ -172,7 +172,7 @@ int dummyfs_truncate_internal(dummyfs_object_t *o, unsigned int size)
 }
 
 
-int dummyfs_read(oid_t *oid, offs_t offs, char *buff, unsigned int len)
+int dummyfs_read(oid_t *oid, offs_t offs, char *buff, size_t len)
 {
 	int ret = EOK;
 	int readsz;
@@ -238,7 +238,7 @@ int dummyfs_read(oid_t *oid, offs_t offs, char *buff, unsigned int len)
 }
 
 
-int dummyfs_write(oid_t *oid, offs_t offs, const char *buff, unsigned int len)
+int dummyfs_write(oid_t *oid, offs_t offs, const char *buff, size_t len)
 {
 	dummyfs_object_t *o;
 	int ret = EOK;
@@ -269,7 +269,7 @@ int dummyfs_write(oid_t *oid, offs_t offs, const char *buff, unsigned int len)
 	return ret;
 }
 
-int dummyfs_write_internal(dummyfs_object_t *o, offs_t offs, const char *buff, unsigned int len)
+int dummyfs_write_internal(dummyfs_object_t *o, offs_t offs, const char *buff, size_t len)
 {
 
 	int writesz, writeoffs;
