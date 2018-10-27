@@ -21,7 +21,7 @@ Data can only be added to the file, the data already saved cannot be modified or
 
 During the reading, free access to the data is possible, the file is treated as a continuous data buffer (as in a typical file system). To read the nth x size record from the whole file, ask for data from the n * x offset with the length x. The record is numbered from the oldest, i.e. the oldest record starts under offset 0.
 
-##Interprocess message interface
+## Interprocess message interface
 First, get the port number of the meterfs server process. To do this, execute the system call:
 >
     lookup("/", &port);
