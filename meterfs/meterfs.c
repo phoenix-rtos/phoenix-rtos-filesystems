@@ -412,15 +412,11 @@ int meterfs_readRecord(file_t *f, void *buff, size_t bufflen, unsigned int idx, 
 	pos = pos % ((f->header.sectorcnt * meterfs_common.sectorsz) / (f->header.recordsz + sizeof(entry_t)));
 	addr = pos * (f->header.recordsz + sizeof(entry_t)) + f->header.sector * meterfs_common.sectorsz;
 
-	spi_powerCtrl(1);
-
 	/* Check if entry's valid */
 	flash_read(addr + offsetof(entry_t, id), &id, sizeof(id));
 
-	if (id.nvalid || id.no != f->firstidx.no + idx) {
-		spi_powerCtrl(0);
+	if (id.nvalid || id.no != f->firstidx.no + idx)
 		return -ENOENT;
-	}
 
 	if (bufflen > f->header.recordsz - offset)
 		bufflen = f->header.recordsz - offset;
@@ -428,7 +424,6 @@ int meterfs_readRecord(file_t *f, void *buff, size_t bufflen, unsigned int idx, 
 	/* Read data */
 	flash_read(addr + sizeof(entry_t) + offset, buff, bufflen);
 
-	spi_powerCtrl(0);
 	return bufflen;
 }
 
@@ -612,6 +607,8 @@ int meterfs_readFile(oid_t *oid, offs_t offs, char *buff, size_t bufflen)
 	idx = pos / f->header.recordsz;
 	pos %= f->header.recordsz;
 
+	spi_powerCtrl(1);
+
 	while (i < bufflen) {
 		chunk = (bufflen - i <= f->header.recordsz) ? bufflen - i : f->header.recordsz;
 		if (meterfs_readRecord(f, buff + i, chunk, idx, pos) <= 0)
@@ -621,6 +618,8 @@ int meterfs_readFile(oid_t *oid, offs_t offs, char *buff, size_t bufflen)
 		i += chunk;
 		++idx;
 	}
+
+	spi_powerCtrl(0);
 
 	node_put(oid->id);
 
