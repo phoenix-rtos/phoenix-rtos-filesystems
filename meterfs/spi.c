@@ -78,6 +78,8 @@ void spi_powerCtrl(int state)
 {
 	unsigned char t = 0;
 
+	keepidle(state);
+
 	gpio_pinSet(gpioa, 4, state);
 
 	if (state) {
@@ -147,5 +149,6 @@ void spi_init(void)
 	gpio_pinConfig(gpioe, 15, 2, 5, 1, 0, 0); /* SPI MOSI */
 
 	spi_csControl(0);
+	keepidle(1); /* spi_powerCtrl will do keepidle(0) */
 	spi_powerCtrl(0);
 }

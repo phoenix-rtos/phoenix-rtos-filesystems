@@ -45,41 +45,26 @@ void _flash_waitBusy(void)
 
 void flash_chipErase(void)
 {
-	keepidle(1);
-	spi_powerCtrl(1);
 	spi_write(cmd_wren, 0, 0, NULL, 0);
 	spi_write(cmd_chip_erase, 0, 0, NULL, 0);
 	_flash_waitBusy();
 	spi_write(cmd_wrdi, 0, 0, NULL, 0);
-	spi_powerCtrl(0);
-	keepidle(0);
 }
 
 
 void flash_eraseSector(unsigned int addr)
 {
-	keepidle(1);
-	spi_powerCtrl(1);
 	spi_write(cmd_wren, 0, 0, NULL, 0);
 	spi_write(cmd_sector_erase, addr, spi_address, NULL, 0);
 	_flash_waitBusy();
 	spi_write(cmd_wrdi, 0, 0, NULL, 0);
-	spi_powerCtrl(0);
-	keepidle(0);
 }
 
 
 void flash_read(unsigned int addr, void *buff, size_t bufflen)
 {
-	keepidle(1);
-	spi_powerCtrl(1);
-
 	_flash_waitBusy();
-
 	spi_read(cmd_read, addr, spi_address, buff, bufflen);
-
-	spi_powerCtrl(0);
-	keepidle(0);
 }
 
 
@@ -87,26 +72,17 @@ void flash_writeSafe(unsigned int addr, void *buff, size_t bufflen)
 {
 	size_t i;
 
-	keepidle(1);
-	spi_powerCtrl(1);
-
 	for (i = 0; i < bufflen; ++i) {
 		spi_write(cmd_wren, 0, 0, NULL, 0);
 		spi_write(cmd_write, addr + i, spi_address, buff + i, 1);
 		_flash_waitBusy();
 	}
-
-	spi_powerCtrl(0);
-	keepidle(0);
 }
 
 
 void flash_writeAAI(unsigned int addr, void *buff, size_t bufflen)
 {
 	size_t i = 0;
-
-	keepidle(1);
-	spi_powerCtrl(1);
 
 	if (addr & 1) {
 		spi_write(cmd_wren, 0, 0, NULL, 0);
@@ -133,17 +109,12 @@ void flash_writeAAI(unsigned int addr, void *buff, size_t bufflen)
 	}
 
 	_flash_waitBusy();
-	spi_powerCtrl(0);
-	keepidle(0);
 }
 
 
 void flash_writePage(unsigned int addr, void *buff, size_t bufflen)
 {
 	unsigned int chunk;
-
-	keepidle(1);
-	spi_powerCtrl(1);
 
 	while (bufflen) {
 		if ((chunk = 0x100 - (addr & 0xff)) > bufflen)
@@ -157,8 +128,6 @@ void flash_writePage(unsigned int addr, void *buff, size_t bufflen)
 	}
 
 	_flash_waitBusy();
-	spi_powerCtrl(0);
-	keepidle(0);
 }
 
 
@@ -166,13 +135,9 @@ void flash_detect(size_t *flashsz, size_t *sectorsz)
 {
 	unsigned char jedec[3];
 
-	keepidle(1);
 	spi_powerCtrl(1);
-
 	spi_read(cmd_jedecid, 0, 0, jedec, 3);
-
 	spi_powerCtrl(0);
-	keepidle(0);
 
 	printf("meterfs: JEDEC ID 0x%02x 0x%02x 0x%02x\n", jedec[0], jedec[1], jedec[2]);
 
