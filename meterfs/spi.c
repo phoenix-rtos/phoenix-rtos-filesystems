@@ -85,9 +85,9 @@ void spi_powerCtrl(int state)
 	if (state) {
 		usleep(10000);
 
-		spi_write(cmd_wren, 0, 0, NULL, 0);
-		spi_write(cmd_ewsr, 0, 0, NULL, 0);
-		spi_write(cmd_wrsr, 0, 0, &t, 1);
+		spi_write(cmd_wren, 0, spi_cmd, NULL, 0);
+		spi_write(cmd_ewsr, 0, spi_cmd, NULL, 0);
+		spi_write(cmd_wrsr, 0, spi_cmd, &t, 1);
 	}
 }
 
