@@ -82,12 +82,22 @@ static int dc_setup(setup_packet_t *setup)
 
 		case REQ_CLR_FEAT:
 		case REQ_GET_STS:
-		case REQ_GET_CONFIG:
 		case REQ_GET_INTF:
 		case REQ_SET_INTF:
 		case REQ_SET_FEAT:
 		case REQ_SET_DESC:
 		case REQ_SYNCH_FRAME:
+			break;
+
+		case REQ_GET_CONFIG:
+			if (setup->val != 0 || setup->idx != 0 || setup->len != 1)
+				return res;
+			if (dc.status != DC_CONFIGURED)
+				OUT[0] = 0;
+			else
+				OUT[1] = 1;
+
+			dtd_exec(0, pOUT, setup->len, DIR_OUT);
 			break;
 
 		default:
