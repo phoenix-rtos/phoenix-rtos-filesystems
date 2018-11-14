@@ -63,7 +63,6 @@ void flash_eraseSector(unsigned int addr)
 
 void flash_read(unsigned int addr, void *buff, size_t bufflen)
 {
-	_flash_waitBusy();
 	spi_read(cmd_read, addr, spi_cmd | spi_address, buff, bufflen);
 }
 
