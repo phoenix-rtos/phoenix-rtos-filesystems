@@ -401,8 +401,10 @@ int meterfs_writeRecord(file_t *f, const void *buff, size_t bufflen)
 int meterfs_readRecord(file_t *f, void *buff, size_t bufflen, unsigned int idx, size_t offset)
 {
 	/* This function assumes that f contains valid firstidx and firstoff */
-	index_t id;
 	unsigned int addr, pos;
+	unsigned char fbuff[32];
+	index_t id;
+	entry_t *eptr = (entry_t *)fbuff;
 
 	if (f->firstidx.nvalid || idx > f->recordcnt)
 		return -ENOENT;
@@ -412,17 +414,26 @@ int meterfs_readRecord(file_t *f, void *buff, size_t bufflen, unsigned int idx, 
 	pos = pos % ((f->header.sectorcnt * meterfs_common.sectorsz) / (f->header.recordsz + sizeof(entry_t)));
 	addr = pos * (f->header.recordsz + sizeof(entry_t)) + f->header.sector * meterfs_common.sectorsz;
 
-	/* Check if entry's valid */
-	flash_read(addr + offsetof(entry_t, id), &id, sizeof(id));
-
-	if (id.nvalid || id.no != f->firstidx.no + idx)
-		return -ENOENT;
-
 	if (bufflen > f->header.recordsz - offset)
 		bufflen = f->header.recordsz - offset;
 
-	/* Read data */
-	flash_read(addr + sizeof(entry_t) + offset, buff, bufflen);
+	if (f->header.recordsz + sizeof(entry_t) <= sizeof(fbuff)) {
+		flash_read(addr, fbuff, f->header.recordsz + sizeof(entry_t));
+
+		if (eptr->id.nvalid || eptr->id.no != f->firstidx.no + idx)
+			return -ENOENT;
+
+		memcpy(buff, fbuff + sizeof(entry_t) + offset, bufflen);
+	}
+	else {
+		flash_read(addr + offsetof(entry_t, id), &id, sizeof(id));
+
+		if (id.nvalid || id.no != f->firstidx.no + idx)
+			return -ENOENT;
+
+		/* Read data */
+		flash_read(addr + sizeof(entry_t) + offset, buff, bufflen);
+	}
 
 	return bufflen;
 }
