@@ -161,8 +161,11 @@ static int jffs2_srv_lookup(jffs2_partition_t *p, oid_t *dir, const char *name, 
 			memcpy(dev, res, sizeof(oid_t));
 	}
 
-	if (lnk != NULL && S_ISLNK(inode->i_mode))
+	if (lnk != NULL && S_ISLNK(inode->i_mode)) {
+		if (strlen(inode->i_link) < lnksz)
+			lnksz = strlen(inode->i_link);
 		strncpy(lnk, inode->i_link, lnksz);
+	}
 
 	free(dentry);
 	iput(inode);
@@ -465,7 +468,7 @@ static int jffs2_srv_unlink(jffs2_partition_t *p, oid_t *dir, const char *name)
 }
 
 
-static int jffs2_srv_create(jffs2_partition_t *p, oid_t *dir, const char *name, oid_t *oid, int type, int mode, oid_t *dev)
+static int jffs2_srv_create(jffs2_partition_t *p, oid_t *dir, const char *name, size_t namelen, oid_t *oid, int type, int mode, oid_t *dev)
 {
 	struct inode *idir, *inode;
 	struct dentry *dentry, *dtemp;
@@ -552,6 +555,11 @@ static int jffs2_srv_create(jffs2_partition_t *p, oid_t *dir, const char *name, 
 				dev_find_oid(p->devs, dev, d_inode(dentry)->i_ino, 1);
 			break;
 		case otSymlink:
+			/* empty target check */
+			if (dentry->d_name.len >= (namelen - 1) || !strlen(name + dentry->d_name.len + 1)) {
+				ret = -ENOENT;
+				break;
+			}
 			mode = S_IFLNK | S_IRWXU | S_IRWXG | S_IRWXO;
 			ret = idir->i_op->symlink(idir, dentry, name + dentry->d_name.len + 1);
 			break;
@@ -898,7 +906,7 @@ void jffs2_run(void *arg)
 				break;
 
 			case mtCreate:
-				msg.o.create.err = jffs2_srv_create(p, &msg.i.create.dir, msg.i.data, &msg.o.create.oid, msg.i.create.type, msg.i.create.mode, &msg.i.create.dev);
+				msg.o.create.err = jffs2_srv_create(p, &msg.i.create.dir, msg.i.data, msg.i.size, &msg.o.create.oid, msg.i.create.type, msg.i.create.mode, &msg.i.create.dev);
 				break;
 
 			case mtDestroy:
