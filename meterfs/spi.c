@@ -18,6 +18,7 @@
 #include <unistd.h>
 
 #include "spi.h"
+#include "config.h"
 
 
 extern oid_t multidrv;
@@ -70,17 +71,22 @@ static void gpio_pinConfig(int port, char pin, char mode, char af, char ospeed, 
 
 void spi_csControl(int state)
 {
-	gpio_pinSet(gpioe, 12, !state);
+	gpio_pinSet(CS_PORT, CS_PIN, !state);
 }
 
 
+#if PWEN_POL >= 0
 void spi_powerCtrl(int state)
 {
 	unsigned char t = 0;
 
+#if PWEN_POL == 0
+	state = !state;
+#endif
+
 	keepidle(state);
 
-	gpio_pinSet(gpioa, 4, state);
+	gpio_pinSet(PWEN_PORT, PWEN_PIN, state);
 
 	if (state) {
 		usleep(10000);
@@ -90,6 +96,12 @@ void spi_powerCtrl(int state)
 		spi_write(cmd_wrsr, 0, spi_cmd, &t, 1);
 	}
 }
+#else
+void spi_powerCtrl(int state)
+{
+	keepidle(state);
+}
+#endif
 
 
 void spi_read(unsigned char cmd, unsigned int addr, unsigned char flags, void *buff, size_t bufflen)
@@ -142,11 +154,16 @@ void spi_write(unsigned char cmd, unsigned int addr, unsigned char flags, const 
 
 void spi_init(void)
 {
-	gpio_pinConfig(gpioa, 4, 1, 0, 1, 0, 0);  /* SPI PWEN */
-	gpio_pinConfig(gpioe, 12, 1, 0, 1, 0, 0); /* SPI /CS */
-	gpio_pinConfig(gpioe, 13, 2, 5, 1, 0, 0); /* SPI SCK */
-	gpio_pinConfig(gpioe, 14, 2, 5, 1, 0, 0); /* SPI MISO */
-	gpio_pinConfig(gpioe, 15, 2, 5, 1, 0, 0); /* SPI MOSI */
+	gpio_pinConfig(PWEN_PORT, PWEN_PIN, 1, 0, 1, 0, 0);
+	gpio_pinConfig(CS_PORT, CS_PIN, 1, 0, 1, 0, 0);
+	gpio_pinConfig(SCK_PORT, SCK_PIN, 2, 5, 1, 0, 0);
+	gpio_pinConfig(MISO_PORT, MISO_PIN, 2, 5, 1, 0, 0);
+	gpio_pinConfig(MOSI_PORT, MOSI_PIN, 2, 5, 1, 0, 0);
+
+#ifdef WP_PORT
+	gpio_pinConfig(WP_PORT, WP_PIN, 1, 0, 0, 0, 0);
+	gpio_pinSet(WP_PORT, WP_PIN, 1);
+#endif
 
 	spi_csControl(0);
 	keepidle(1); /* spi_powerCtrl will do keepidle(0) */
