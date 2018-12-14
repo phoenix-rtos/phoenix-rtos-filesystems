@@ -122,7 +122,7 @@ void iput(struct inode *inode)
 	if (inode->i_count > 0)
 		inode->i_count--;
 
-	if (!inode->i_nlink) {
+	if (!inode->i_nlink && !inode->i_count) {
 		object_destroy(inode->i_sb->s_part, o);
 		free(inode->i_mapping);
 		resourceDestroy(inode->i_lock);
