@@ -79,15 +79,13 @@ void spi_csControl(int state)
 #if PWEN_POL >= 0
 void spi_powerCtrl(int state)
 {
-	unsigned char t = 0;
-
-#if PWEN_POL == 0
-	state = !state;
-#endif
-
 	keepidle(state);
 
+#if PWEN_POL == 0
+	gpio_pinSet(PWEN_PORT, PWEN_PIN, !state);
+#else
 	gpio_pinSet(PWEN_PORT, PWEN_PIN, state);
+#endif
 
 	if (state) {
 		usleep(10000);
