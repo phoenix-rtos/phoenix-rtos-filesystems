@@ -18,6 +18,9 @@
 extern void (*flash_write)(unsigned int, void *, size_t);
 
 
+extern void flash_removeWP(void);
+
+
 extern void _flash_waitBusy(void);
 
 

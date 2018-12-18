@@ -23,7 +23,8 @@
 void (*flash_write)(unsigned int, void *, size_t);
 
 
-static const unsigned char chips[3][3] = { { 0xbf, 0x25, 0x41 }, { 0x1f, 0x47, 0x01 }, { 0xc2, 0x20, 0x16 } };
+static const unsigned char chips[][3] = { { 0xbf, 0x25, 0x41 }, { 0x1f, 0x47, 0x01 },
+	{ 0xc2, 0x20, 0x16 }, { 0xef, 0x40, 0x15 } };
 
 
 void _flash_waitBusy(void)
@@ -43,12 +44,22 @@ void _flash_waitBusy(void)
 }
 
 
+void flash_removeWP(void)
+{
+	unsigned char t = 0;
+
+	spi_write(cmd_wren, 0, spi_cmd, NULL, 0);
+	spi_write(cmd_ewsr, 0, spi_cmd, NULL, 0);
+	spi_write(cmd_wrsr, 0, spi_cmd, &t, 1);
+	_flash_waitBusy();
+}
+
+
 void flash_chipErase(void)
 {
 	spi_write(cmd_wren, 0, spi_cmd, NULL, 0);
 	spi_write(cmd_chip_erase, 0, spi_cmd, NULL, 0);
 	_flash_waitBusy();
-	spi_write(cmd_wrdi, 0, spi_cmd, NULL, 0);
 }
 
 
@@ -57,7 +68,6 @@ void flash_eraseSector(unsigned int addr)
 	spi_write(cmd_wren, 0, spi_cmd, NULL, 0);
 	spi_write(cmd_sector_erase, addr, spi_cmd | spi_address, NULL, 0);
 	_flash_waitBusy();
-	spi_write(cmd_wrdi, 0, spi_cmd, NULL, 0);
 }
 
 
@@ -118,15 +128,15 @@ void flash_writePage(unsigned int addr, void *buff, size_t bufflen)
 	while (bufflen) {
 		if ((chunk = 0x100 - (addr & 0xff)) > bufflen)
 			chunk = bufflen;
+
 		spi_write(cmd_wren, 0, spi_cmd, NULL, 0);
 		spi_write(cmd_write, addr, spi_cmd | spi_address, buff, chunk);
+		_flash_waitBusy();
 
-		bufflen -= chunk;
 		addr += chunk;
-		buff += chunk;
+		bufflen -= chunk;
+		buff = (char *)buff + chunk;
 	}
-
-	_flash_waitBusy();
 }
 
 
@@ -156,6 +166,12 @@ void flash_detect(size_t *flashsz, size_t *sectorsz)
 		printf("meterfs: Detected MX25L3206E\n");
 		flash_write = flash_writePage;
 		(*flashsz) = 4 * 1024 * 1024;
+		(*sectorsz) = 4 * 1024;
+	}
+	else if (memcmp(jedec, chips[3], 3) == 0) {
+		printf("meterfs: Detected W25Q16JV\n");
+		flash_write = flash_writePage;
+		(*flashsz) = 2 * 1024 * 1024;
 		(*sectorsz) = 4 * 1024;
 	}
 	else {

@@ -18,6 +18,7 @@
 #include <unistd.h>
 
 #include "spi.h"
+#include "flash.h"
 #include "config.h"
 
 
@@ -90,10 +91,7 @@ void spi_powerCtrl(int state)
 
 	if (state) {
 		usleep(10000);
-
-		spi_write(cmd_wren, 0, spi_cmd, NULL, 0);
-		spi_write(cmd_ewsr, 0, spi_cmd, NULL, 0);
-		spi_write(cmd_wrsr, 0, spi_cmd, &t, 1);
+		flash_removeWP();
 	}
 }
 #else
