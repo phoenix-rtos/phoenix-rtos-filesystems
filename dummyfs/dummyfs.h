@@ -15,11 +15,10 @@
 #ifndef _DUMMYFS_H_
 #define _DUMMYFS_H_
 
-#include <sys/rb.h>
 #include <errno.h>
 #include <time.h>
 #include <sys/file.h>
-
+#include <posix/idtree.h>
 
 #define DUMMYFS_SIZE_MAX 32 * 1024 * 1024
 
@@ -59,9 +58,7 @@ typedef struct _dummyfs_object_t {
 	int lock;
 	int nlink;
 
-	size_t lmaxgap;
-	size_t rmaxgap;
-	rbnode_t node;
+	idnode_t node;
 	size_t size;
 
 	union {
