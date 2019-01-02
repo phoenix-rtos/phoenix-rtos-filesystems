@@ -110,7 +110,6 @@ int object_remove(dummyfs_object_t *o)
 dummyfs_object_t *object_get(unsigned int id)
 {
 	dummyfs_object_t *o;
-	char buf[128];
 
 	mutexLock(olock);
 	if ((o = dummy_node2obj(idtree_find(&dummytree, id))) != NULL)
