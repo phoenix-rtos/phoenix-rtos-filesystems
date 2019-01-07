@@ -62,7 +62,7 @@ struct work_struct {
 
 struct delayed_work {
 	struct work_struct work;
-	unsigned long delay;
+	time_t due;
 };
 
 
