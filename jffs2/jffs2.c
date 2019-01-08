@@ -33,8 +33,100 @@
 #include "os-phoenix/dev.h"
 #include "nodelist.h"
 
+#include "../../phoenix-rtos-devices/storage/imx6ull-flash/flash.h"
 
 jffs2_common_t jffs2_common;
+
+
+
+static int nandctl_erase(unsigned start, unsigned end)
+{
+	flashdrv_dma_t *dma;
+	int i, err;
+
+	if (end < start)
+		return -EINVAL;
+
+	dma = flashdrv_dmanew();
+
+	for (i = start; i < end; i++) {
+		err = flashdrv_erase(dma, i * PAGES_PER_BLOCK);
+
+		if (err)
+			break;
+	}
+
+	flashdrv_dmadestroy(dma);
+	return err;
+}
+
+
+static int nandctl_flash(unsigned start, unsigned end, char *data, size_t size)
+{
+	flashdrv_dma_t *dma;
+	int i, err;
+	char *databuf, *metabuf;
+
+	if (size & (FLASH_PAGE_SIZE - 1))
+		return -EINVAL;
+
+	dma = flashdrv_dmanew();
+
+	databuf = mmap(NULL, FLASH_PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_UNCACHED, NULL, -1);
+	if (databuf == MAP_FAILED)
+		return -ENOMEM;
+
+	metabuf = mmap(NULL, FLASH_PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_UNCACHED, NULL, -1);
+	if (metabuf == MAP_FAILED) {
+		munmap(databuf, FLASH_PAGE_SIZE);
+		return -ENOMEM;
+	}
+
+	memset(metabuf, 0xff, sizeof(flashdrv_meta_t));
+
+	for (i = 0; size; i++) {
+		memcpy(databuf, data + FLASH_PAGE_SIZE * i, FLASH_PAGE_SIZE);
+		err = flashdrv_write(dma, start + i, databuf, metabuf);
+
+		if (err)
+			break;
+
+		size -= FLASH_PAGE_SIZE;
+	}
+
+	if (start + i < end) {
+		memset(databuf, 0xff, FLASH_PAGE_SIZE);
+
+		while (start + i < end) {
+			flashdrv_write(dma, start + i, databuf, metabuf);
+			i++;
+		}
+	}
+
+	munmap(metabuf, FLASH_PAGE_SIZE);
+	munmap(databuf, FLASH_PAGE_SIZE);
+	flashdrv_dmadestroy(dma);
+
+	return err;
+}
+
+
+static void jffs2_srv_devctl(msg_t *msg)
+{
+	nand_devctl_t *devctl = (void *)msg->i.raw;
+
+	switch (devctl->type) {
+		case nand_erase:
+			msg->o.io.err = nandctl_erase(devctl->erase.start, devctl->erase.end);
+			break;
+		case nand_flash:
+			msg->o.io.err = nandctl_flash(devctl->flash.offset, devctl->flash.end, msg->i.data, msg->i.size);
+			break;
+		default:
+			msg->o.io.err = -EINVAL;
+			break;
+	}
+}
 
 
 inline int jffs2_is_device(jffs2_partition_t *p, oid_t *oid)
@@ -899,7 +991,7 @@ void jffs2_run(void *arg)
 				break;
 
 			case mtDevCtl:
-				msg.o.io.err = -EINVAL;
+				jffs2_srv_devctl(&msg);
 				break;
 
 			case mtCreate:
@@ -1074,7 +1166,7 @@ int main(int argc, char **argv)
 			return -1;
 		}
 
-		beginthread(jffs2_run, 3, jffs2_common.partition[i].stack, 0x1000, &jffs2_common.partition[i]); 
+		beginthread(jffs2_run, 3, jffs2_common.partition[i].stack, 0x1000, &jffs2_common.partition[i]);
 		i++;
 	}
 
@@ -1090,7 +1182,7 @@ int main(int argc, char **argv)
 			continue;
 		}
 
-		beginthread(jffs2_mount_partition, 3, jffs2_common.partition[i].stack, 0x1000, &jffs2_common.partition[i]); 
+		beginthread(jffs2_mount_partition, 3, jffs2_common.partition[i].stack, 0x1000, &jffs2_common.partition[i]);
 	}
 
 	delayed_work_starter(system_long_wq);
