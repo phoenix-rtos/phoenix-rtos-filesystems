@@ -687,8 +687,6 @@ static int jffs2_srv_read(jffs2_partition_t *p, oid_t *oid, offs_t offs, void *d
 
 	if (!ret)
 		ret = len > inode->i_size - offs ? inode->i_size - offs : len;
-	else
-		printf("jffs2: Read error %d\n", ret);
 
 	iput(inode);
 	return ret;
@@ -840,8 +838,7 @@ static int jffs2_srv_write(jffs2_partition_t *p, oid_t *oid, offs_t offs, void *
 			inode->i_blocks = (inode->i_size + 511) >> 9;
 			inode->i_ctime = inode->i_mtime = ITIME(je32_to_cpu(ri->ctime));
 		}
-	} else
-		printf("jffs2: Write error %d\n", ret);
+	}
 
 	jffs2_free_raw_inode(ri);
 	iput(inode);

@@ -45,12 +45,10 @@ int object_remove(void *part, jffs2_object_t *o)
 {
 	jffs2_objects_t *jffs2_objects = ((jffs2_partition_t *)part)->objects;
 
-	mutexLock(jffs2_objects->lock);
 
 	lib_rbRemove(&jffs2_objects->tree, &o->node);
 	jffs2_objects->cnt--;
 
-	mutexUnlock(jffs2_objects->lock);
 
 	return EOK;
 }
@@ -110,17 +108,21 @@ int object_insert(void *part, struct inode *inode) {
 
 	mutexLock(jffs2_objects->lock);
 	o = object_create((jffs2_partition_t *)part, 0, inode);
-	mutexUnlock(jffs2_objects->lock);
 
-	if (o == NULL)
+	if (o == NULL) {
+		mutexUnlock(jffs2_objects->lock);
 		return -ENOMEM;
+	}
 
 	o->refs = inode->i_count;
+
+	mutexUnlock(jffs2_objects->lock);
 
 	return 0;
 }
 
-jffs2_object_t *object_get(void *part, unsigned int id, int iref)
+
+jffs2_object_t *object_get(void *part, unsigned int id, int create)
 {
 	jffs2_object_t *o, t;
 	jffs2_objects_t *jffs2_objects = ((jffs2_partition_t *)part)->objects;
@@ -129,14 +131,19 @@ jffs2_object_t *object_get(void *part, unsigned int id, int iref)
 	t.oid.id = id;
 
 	mutexLock(jffs2_objects->lock);
-	if ((o = lib_treeof(jffs2_object_t, node, lib_rbFind(&jffs2_objects->tree, &t.node))) != NULL && iref)
+	if ((o = lib_treeof(jffs2_object_t, node, lib_rbFind(&jffs2_objects->tree, &t.node))) != NULL) {
 		o->refs++;
+		mutexLock(o->inode->i_lock);
+		o->inode->i_count++;
+		mutexUnlock(o->inode->i_lock);
+	}
 
-	if (o == NULL) {
+	if (o == NULL && create) {
 		inode = new_inode(((jffs2_partition_t *)part)->sb);
 		if (inode != NULL) {
 			inode->i_ino = id;
 			o = object_create((jffs2_partition_t *)part, 0, inode);
+			mutexLock(o->inode->i_lock);
 		}
 	}
 
@@ -148,15 +155,43 @@ jffs2_object_t *object_get(void *part, unsigned int id, int iref)
 }
 
 
-void object_put(void *part, jffs2_object_t *o)
+void object_put(void *part, unsigned int id)
 {
 	jffs2_objects_t *jffs2_objects = ((jffs2_partition_t *)part)->objects;
+	jffs2_object_t *o, t;
+	struct inode *inode;
 
-	if (o->refs > 0)
-		o->refs--;
+	t.oid.id = id;
+	mutexLock(jffs2_objects->lock);
+	if ((o = lib_treeof(jffs2_object_t, node, lib_rbFind(&jffs2_objects->tree, &t.node))) != NULL) {
 
-	if (o->refs == 0)
-		list_add(&o->list, &jffs2_objects->lru_list);
+		if (o->refs > 0)
+			o->refs--;
+
+		inode = o->inode;
+		mutexLock(inode->i_lock);
+		if (inode->i_count > 0)
+			inode->i_count--;
+
+		if (!inode->i_nlink && !inode->i_count) {
+			object_destroy(inode->i_sb->s_part, o);
+			/* at this point inode should be no longer accessible */
+			free(inode->i_mapping);
+			mutexUnlock(inode->i_lock);
+			resourceDestroy(inode->i_lock);
+			inode->i_sb->s_op->evict_inode(inode);
+			inode->i_sb->s_op->destroy_inode(inode);
+			mutexUnlock(jffs2_objects->lock);
+			return;
+		}
+
+		mutexUnlock(inode->i_lock);
+
+		if (o->refs == 0)
+			list_add(&o->list, &jffs2_objects->lru_list);
+	}
+
+	mutexUnlock(jffs2_objects->lock);
 }
 
 

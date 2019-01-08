@@ -90,8 +90,8 @@ void iget_failed(struct inode *inode)
 {
 	make_bad_inode(inode);
 	unlock_new_inode(inode);
+	/* TODO: check if it is right. maybe refs need clearing */
 	iput(inode);
-	object_destroy(inode->i_sb->s_part, object_get(inode->i_sb->s_part, inode->i_ino, 0));
 }
 
 struct inode * iget_locked(struct super_block *sb, unsigned long ino)
@@ -99,12 +99,8 @@ struct inode * iget_locked(struct super_block *sb, unsigned long ino)
 	struct inode *inode = NULL;
 	jffs2_object_t *o = object_get(sb->s_part, ino, 1);
 
-	if (o != NULL) {
-		o->inode->i_count++;
-		if (o->inode->i_state & I_NEW)
-			mutexLock(o->inode->i_lock);
+	if (o != NULL)
 		return o->inode;
-	}
 
 	return inode;
 }
@@ -112,26 +108,7 @@ struct inode * iget_locked(struct super_block *sb, unsigned long ino)
 
 void iput(struct inode *inode)
 {
-	jffs2_object_t *o = object_get(inode->i_sb->s_part, inode->i_ino, 0);
-
-	if (o == NULL) {
-		printf("jffs2: iput failed badly for inode %d\n", inode->i_ino);
-		return;
-	}
-
-	if (inode->i_count > 0)
-		inode->i_count--;
-
-	if (!inode->i_nlink && !inode->i_count) {
-		object_destroy(inode->i_sb->s_part, o);
-		free(inode->i_mapping);
-		resourceDestroy(inode->i_lock);
-		inode->i_sb->s_op->evict_inode(inode);
-		inode->i_sb->s_op->destroy_inode(inode);
-		return;
-	}
-
-	object_put(inode->i_sb->s_part, o);
+	object_put(inode->i_sb->s_part, inode->i_ino);
 }
 
 /* form linux kernel */
@@ -306,12 +283,10 @@ bool is_bad_inode(struct inode *inode)
 
 struct inode *ilookup(struct super_block *sb, unsigned long ino)
 {
-	jffs2_object_t *o = object_get(sb->s_part, ino, 1);
+	jffs2_object_t *o = object_get(sb->s_part, ino, 0);
 
-	if (o != NULL) {
-		o->inode->i_count++;
+	if (o != NULL)
 		return o->inode;
-	}
 
 	return NULL;
 }
