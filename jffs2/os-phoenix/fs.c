@@ -316,7 +316,7 @@ void make_bad_inode(struct inode *inode)
 
 
 ssize_t generic_file_splice_read(struct file *filp, loff_t *off,
-		struct pipe_inode_info *piinfo, size_t sz, unsigned int ui) 
+		struct pipe_inode_info *piinfo, size_t sz, unsigned int ui)
 {
 	return 0;
 }

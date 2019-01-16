@@ -287,7 +287,7 @@ int mtd_block_isbad(struct mtd_info *mtd, loff_t ofs)
 }
 
 
-struct dentry *mount_mtd(struct file_system_type *fs_type, int flags, 
+struct dentry *mount_mtd(struct file_system_type *fs_type, int flags,
 		const char *dev_name, void *data,
 		int (*fill_super)(struct super_block *, void *, int))
 {
@@ -305,8 +305,6 @@ struct dentry *mount_mtd(struct file_system_type *fs_type, int flags,
 		printf("jffs2: Failed to map flash read/write buffers\n");
 		return NULL;
 	}
-
-	flashdrv_init();
 
 	dma = flashdrv_dmanew();
 

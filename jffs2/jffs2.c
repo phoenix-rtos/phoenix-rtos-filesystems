@@ -19,8 +19,8 @@
 #include <errno.h>
 #include <sys/msg.h>
 #include <sys/list.h>
-#include <sys/mman.h>
 #include <sys/file.h>
+#include <sys/mman.h>
 #include <string.h>
 #include <unistd.h>
 #include <dirent.h>
@@ -33,100 +33,9 @@
 #include "os-phoenix/dev.h"
 #include "nodelist.h"
 
-#include "../../phoenix-rtos-devices/storage/imx6ull-flash/flash.h"
+#define TRACE(x, ...) // printf("jffs trace: " x "\n", ##__VA_ARGS__)
 
 jffs2_common_t jffs2_common;
-
-
-
-static int nandctl_erase(unsigned start, unsigned end)
-{
-	flashdrv_dma_t *dma;
-	int i, err;
-
-	if (end < start)
-		return -EINVAL;
-
-	dma = flashdrv_dmanew();
-
-	for (i = start; i < end; i++) {
-		err = flashdrv_erase(dma, i * PAGES_PER_BLOCK);
-
-		if (err)
-			break;
-	}
-
-	flashdrv_dmadestroy(dma);
-	return err;
-}
-
-
-static int nandctl_flash(unsigned start, unsigned end, char *data, size_t size)
-{
-	flashdrv_dma_t *dma;
-	int i, err;
-	char *databuf, *metabuf;
-
-	if (size & (FLASH_PAGE_SIZE - 1))
-		return -EINVAL;
-
-	dma = flashdrv_dmanew();
-
-	databuf = mmap(NULL, FLASH_PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_UNCACHED, NULL, -1);
-	if (databuf == MAP_FAILED)
-		return -ENOMEM;
-
-	metabuf = mmap(NULL, FLASH_PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_UNCACHED, NULL, -1);
-	if (metabuf == MAP_FAILED) {
-		munmap(databuf, FLASH_PAGE_SIZE);
-		return -ENOMEM;
-	}
-
-	memset(metabuf, 0xff, sizeof(flashdrv_meta_t));
-
-	for (i = 0; size; i++) {
-		memcpy(databuf, data + FLASH_PAGE_SIZE * i, FLASH_PAGE_SIZE);
-		err = flashdrv_write(dma, start + i, databuf, metabuf);
-
-		if (err)
-			break;
-
-		size -= FLASH_PAGE_SIZE;
-	}
-
-	if (start + i < end) {
-		memset(databuf, 0xff, FLASH_PAGE_SIZE);
-
-		while (start + i < end) {
-			flashdrv_write(dma, start + i, databuf, metabuf);
-			i++;
-		}
-	}
-
-	munmap(metabuf, FLASH_PAGE_SIZE);
-	munmap(databuf, FLASH_PAGE_SIZE);
-	flashdrv_dmadestroy(dma);
-
-	return err;
-}
-
-
-static void jffs2_srv_devctl(msg_t *msg)
-{
-	nand_devctl_t *devctl = (void *)msg->i.raw;
-
-	switch (devctl->type) {
-		case nand_erase:
-			msg->o.io.err = nandctl_erase(devctl->erase.start, devctl->erase.end);
-			break;
-		case nand_flash:
-			msg->o.io.err = nandctl_flash(devctl->flash.offset, devctl->flash.end, msg->i.data, msg->i.size);
-			break;
-		default:
-			msg->o.io.err = -EINVAL;
-			break;
-	}
-}
 
 
 inline int jffs2_is_device(jffs2_partition_t *p, oid_t *oid)
@@ -158,18 +67,23 @@ static int jffs2_srv_lookup(jffs2_partition_t *p, oid_t *dir, const char *name, 
 	if (dir->id == 0)
 		dir->id = 1;
 
-	if (jffs2_is_device(p, dir))
+	if (jffs2_is_device(p, dir)) {
+		TRACE("is device");
 		return -EINVAL;
+	}
 
 	res->id = 0;
 
 	inode = jffs2_iget(p->sb, dir->id);
 
-	if (IS_ERR(inode))
+	if (IS_ERR(inode)) {
+		TRACE("inode is_err");
 		return -EINVAL;
+	}
 
 	if (!S_ISDIR(inode->i_mode)) {
 		iput(inode);
+		TRACE("notdir");
 		return -ENOTDIR;
 	}
 
@@ -630,6 +544,7 @@ static int jffs2_srv_create(jffs2_partition_t *p, oid_t *dir, const char *name, 
 	}
 
 	oid->port = p->port;
+	//mutexLock(idir->i_lock);
 
 	switch (type) {
 		case otFile:
@@ -660,6 +575,7 @@ static int jffs2_srv_create(jffs2_partition_t *p, oid_t *dir, const char *name, 
 			break;
 	}
 
+	//mutexUnlock(idir->i_lock);
 	iput(idir);
 
 	if (!ret) {
@@ -711,17 +627,19 @@ static int jffs2_srv_readdir(jffs2_partition_t *p, oid_t *dir, offs_t offs, stru
 }
 
 
-static void jffs2_srv_open(jffs2_partition_t *p, oid_t *oid)
+static int jffs2_srv_open(jffs2_partition_t *p, oid_t *oid)
 {
 	if (oid->id)
 		jffs2_iget(p->sb, oid->id);
+
+	return EOK;
 }
 
 
-static void jffs2_srv_close(jffs2_partition_t *p, oid_t *oid)
+static int jffs2_srv_close(jffs2_partition_t *p, oid_t *oid)
 {
 	if(!oid->id)
-		return;
+		return -EINVAL;
 
 	struct inode *inode = ilookup(p->sb, oid->id);
 
@@ -729,6 +647,8 @@ static void jffs2_srv_close(jffs2_partition_t *p, oid_t *oid)
 		iput(inode);
 		iput(inode);
 	}
+
+	return EOK;
 }
 
 
@@ -948,130 +868,113 @@ static int jffs2_srv_truncate(jffs2_partition_t *p, oid_t *oid, unsigned long le
 }
 
 
-void jffs2_help(void) {
-	printf("Usage - jffs2 [option] <start block> <size> <flags> <mount point>\n" \
-			"Options:\n" \
-			"\t-r - mount as root partition\n" \
-			"\t-p - mount partition\n" \
-			"\t-h - print this message\n");
-}
-
-
-void jffs2_run(void *arg)
+int jffs2lib_message_handler(void *partition, msg_t *msg)
 {
-	msg_t msg;
-	int rid;
-	jffs2_partition_t *p = arg;
+	jffs2_partition_t *p = partition;
 
-	for (;;) {
-		if (msgRecv(p->port, &msg, &rid) < 0) {
-			msgRespond(p->port, &msg, rid);
-			continue;
-		}
+	switch (msg->type) {
+	case mtOpen:
+		msg->o.io.err = jffs2_srv_open(p, &msg->i.openclose.oid);
+		break;
 
-		switch (msg.type) {
-			case mtOpen:
-				jffs2_srv_open(p, &msg.i.openclose.oid);
-				break;
+	case mtClose:
+		msg->o.io.err = jffs2_srv_close(p, &msg->i.openclose.oid);
+		break;
 
-			case mtClose:
-				jffs2_srv_close(p, &msg.i.openclose.oid);
-				break;
+	case mtRead:
+		msg->o.io.err = jffs2_srv_read(p, &msg->i.io.oid, msg->i.io.offs, msg->o.data, msg->o.size);
+		break;
 
-			case mtRead:
-				msg.o.io.err = jffs2_srv_read(p, &msg.i.io.oid, msg.i.io.offs, msg.o.data, msg.o.size);
-				break;
+	case mtWrite:
+		msg->o.io.err = jffs2_srv_write(p, &msg->i.io.oid, msg->i.io.offs, msg->i.data, msg->i.size);
+		break;
 
-			case mtWrite:
-				msg.o.io.err = jffs2_srv_write(p, &msg.i.io.oid, msg.i.io.offs, msg.i.data, msg.i.size);
-				break;
+	case mtTruncate:
+		msg->o.io.err = jffs2_srv_truncate(p, &msg->i.io.oid, msg->i.io.len);
+		break;
 
-			case mtTruncate:
-				msg.o.io.err = jffs2_srv_truncate(p, &msg.i.io.oid, msg.i.io.len);
-				break;
+	case mtDevCtl:
+		msg->o.io.err = -EINVAL;
+		break;
 
-			case mtDevCtl:
-				jffs2_srv_devctl(&msg);
-				break;
+	case mtCreate:
+		msg->o.create.err = jffs2_srv_create(p, &msg->i.create.dir, msg->i.data, msg->i.size, &msg->o.create.oid, msg->i.create.type, msg->i.create.mode, &msg->i.create.dev);
+		break;
 
-			case mtCreate:
-				msg.o.create.err = jffs2_srv_create(p, &msg.i.create.dir, msg.i.data, msg.i.size, &msg.o.create.oid, msg.i.create.type, msg.i.create.mode, &msg.i.create.dev);
-				break;
+	case mtDestroy:
+		msg->o.io.err = jffs2_srv_destroy(&msg->i.destroy.oid);
+		break;
 
-			case mtDestroy:
-				msg.o.io.err = jffs2_srv_destroy(&msg.i.destroy.oid);
-				break;
+	case mtSetAttr:
+		msg->o.attr.val = jffs2_srv_setattr(p, &msg->i.attr.oid, msg->i.attr.type, msg->i.attr.val, msg->i.data, msg->i.size);
+		break;
 
-			case mtSetAttr:
-				jffs2_srv_setattr(p, &msg.i.attr.oid, msg.i.attr.type, msg.i.attr.val, msg.i.data, msg.i.size);
-				break;
+	case mtGetAttr:
+		jffs2_srv_getattr(p, &msg->i.attr.oid, msg->i.attr.type, &msg->o.attr.val);
+		break;
 
-			case mtGetAttr:
-				jffs2_srv_getattr(p, &msg.i.attr.oid, msg.i.attr.type, &msg.o.attr.val);
-				break;
+	case mtLookup:
+		msg->o.lookup.err = jffs2_srv_lookup(p, &msg->i.lookup.dir, msg->i.data, &msg->o.lookup.fil, &msg->o.lookup.dev, msg->o.data, msg->o.size);
+		break;
 
-			case mtLookup:
-				msg.o.lookup.err = jffs2_srv_lookup(p, &msg.i.lookup.dir, msg.i.data, &msg.o.lookup.fil, &msg.o.lookup.dev, msg.o.data, msg.o.size);
-				break;
+	case mtLink:
+		msg->o.io.err = jffs2_srv_link(p, &msg->i.ln.dir, msg->i.data, &msg->i.ln.oid);
+		break;
 
-			case mtLink:
-				msg.o.io.err = jffs2_srv_link(p, &msg.i.ln.dir, msg.i.data, &msg.i.ln.oid);
-				break;
+	case mtUnlink:
+		msg->o.io.err = jffs2_srv_unlink(p, &msg->i.ln.dir, msg->i.data);
+		break;
 
-			case mtUnlink:
-				msg.o.io.err = jffs2_srv_unlink(p, &msg.i.ln.dir, msg.i.data);
-				break;
-
-			case mtReaddir:
-				msg.o.io.err = jffs2_srv_readdir(p, &msg.i.readdir.dir, msg.i.readdir.offs,
-						msg.o.data, msg.o.size);
-				break;
-		}
-
-		msgRespond(p->port, &msg, rid);
+	case mtReaddir:
+		msg->o.io.err = jffs2_srv_readdir(p, &msg->i.readdir.dir, msg->i.readdir.offs,
+				msg->o.data, msg->o.size);
+		break;
 	}
 
+	return EOK;
 }
 
 
-void jffs2_mount_partition(void *arg)
+void *jffs2lib_create_partition(size_t start, size_t end, unsigned mode, unsigned port, long *rootid)
 {
-	oid_t toid;
-	int err;
-	jffs2_partition_t *p = (jffs2_partition_t *)arg;
+	jffs2_partition_t *p;
 
-	portCreate(&p->port);
+	if (jffs2_common.fs == NULL) {
+		init_jffs2_fs();
+		beginthread(delayed_work_starter, 4, malloc(0x2000), 0x2000, system_long_wq);
+	}
+
+	if ((p = malloc(sizeof(jffs2_partition_t))) != NULL) {
+		p->start = start;
+		p->size = end - start;
+		p->flags = mode;
+		*rootid = 1;
+		p->port = port;
+	}
+
+	return p;
+}
+
+
+int jffs2lib_mount_partition(void *partition)
+{
+	jffs2_partition_t *p = (jffs2_partition_t *)partition;
 
 	object_init(p);
 	dev_init(&p->devs);
 
-	if (jffs2_common.fs->mount(jffs2_common.fs, 0, "jffs2", arg) == NULL) {
-		printf("jffs2: Can't mount partition at %s\n", p->mountpt);
-		endthread();
-	}
+	if (jffs2_common.fs->mount(jffs2_common.fs, 0, "jffs2", p) == NULL)
+		return -EIO;
 
-	toid.id = 1;
-	if (p->root) {
-		if (portRegister(p->port, "/", &toid) < 0) {
-			printf("jffs2: Can't register as rootfs\n");
-			endthread();
-		}
-	} else {
-		/* mount at path - todo*/
-		toid.id = 1;
-		toid.port = p->port;
-		if ((err = mount(p->mountpt, &toid))) {
-			printf("jffs2: Failed to mount at %s - error %d\n", p->mountpt, err);
-			endthread();
-		}
-	}
-
-	if (!p->root)
-		jffs2_run(p);
-
+	return EOK;
 }
 
 
+
+
+
+
+#if 0
 int main(int argc, char **argv)
 {
 	oid_t toid = { 0 };
@@ -1189,3 +1092,4 @@ int main(int argc, char **argv)
 
 	return EOK;
 }
+#endif

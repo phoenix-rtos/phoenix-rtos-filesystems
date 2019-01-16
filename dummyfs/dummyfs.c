@@ -580,6 +580,36 @@ int fetch_modules(void)
 
 #endif
 
+
+int dummyfs_do_mount(const char *path, oid_t *oid)
+{
+	struct stat buf;
+	oid_t toid;
+	msg_t msg = {0};
+	int err;
+
+	if (lookup(path, NULL, &toid) < EOK)
+		return -ENOENT;
+
+	if ((err = stat(path, &buf)))
+		return err;
+
+	if (!S_ISDIR(buf.st_mode))
+		return -ENOTDIR;
+
+	msg.type = mtSetAttr;
+	msg.i.attr.oid = toid;
+	msg.i.attr.type = atDev;
+	msg.i.data = oid;
+	msg.i.size = sizeof(oid_t);
+
+	if ((err = msgSend(toid.port, &msg)) < 0)
+		return err;
+
+	return 0;
+}
+
+
 static int dummyfs_mount_sync(const char* mountpt)
 {
 	oid_t toid;
@@ -590,7 +620,7 @@ static int dummyfs_mount_sync(const char* mountpt)
 
 	toid.id = 0;
 	toid.port = dummyfs_common.port;
-	if ((err = mount(mountpt, &toid))) {
+	if ((err = dummyfs_do_mount(mountpt, &toid))) {
 		printf("dummyfs: Failed to mount at %s - error %d\n", mountpt, err);
 		return -1;
 	}
