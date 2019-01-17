@@ -90,15 +90,6 @@ int object_remove(dummyfs_object_t *o)
 		return -EBUSY;
 	}
 
-	/* object lock */
-	object_lock(o);
-	if (o->lock != 0) {
-		mutexUnlock(dummyfs_common.mutex);
-		mutexUnlock(olock);
-		return -EBUSY;
-	}
-	object_unlock(o);
-
 	idtree_remove(&dummytree, &o->node);
 
 	mutexUnlock(olock);

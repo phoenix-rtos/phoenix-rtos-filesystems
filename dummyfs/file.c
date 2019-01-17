@@ -122,7 +122,7 @@ int dummyfs_truncate_internal(dummyfs_object_t *o, size_t size)
 			}
 		}
 	}
-	else {
+	else if (o->chunks != NULL) {
 		/* shrink */
 		chunk = chunk->prev;
 

@@ -55,7 +55,6 @@ typedef struct _dummyfs_object_t {
 	u32 mode;
 
 	int refs;
-	int lock;
 	int nlink;
 
 	idnode_t node;

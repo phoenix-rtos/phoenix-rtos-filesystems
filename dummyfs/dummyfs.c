@@ -104,8 +104,6 @@ int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res, oid_t *dev)
 	else
 		memcpy(dev, res, sizeof(oid_t));
 
-	o->lock = 1;
-
 	object_put(o);
 	object_unlock(d);
 	object_put(d);
@@ -447,8 +445,11 @@ int dummyfs_destroy(oid_t *oid)
 		return -ENOENT;
 
 	if ((ret = object_remove(o)) == EOK) {
-		if (o->type == otFile)
-			dummyfs_truncate(oid, 0);
+		if (o->type == otFile) {
+			object_lock(o);
+			dummyfs_truncate_internal(o, 0);
+			object_unlock(o);
+		}
 		else if (o->type == otDir)
 			dir_destroy(o);
 		else if (o->type == otDev)
@@ -529,7 +530,6 @@ static int dummyfs_open(oid_t *oid)
 		return -ENOENT;
 
 	object_lock(o);
-	o->lock = 0;
 	o->atime = time(NULL);
 
 	object_unlock(o);
@@ -544,7 +544,6 @@ static int dummyfs_close(oid_t *oid)
 		return -ENOENT;
 
 	object_lock(o);
-	o->lock = 0;
 	o->atime = time(NULL);
 
 	object_unlock(o);
