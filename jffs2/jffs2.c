@@ -929,6 +929,10 @@ int jffs2lib_message_handler(void *partition, msg_t *msg)
 		msg->o.io.err = jffs2_srv_readdir(p, &msg->i.readdir.dir, msg->i.readdir.offs,
 				msg->o.data, msg->o.size);
 		break;
+
+	case mtSync:
+		p->sb->s_op->sync_fs(p->sb, 0);
+		break;
 	}
 
 	return EOK;
