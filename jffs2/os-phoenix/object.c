@@ -107,6 +107,7 @@ int object_insert(void *part, struct inode *inode) {
 	jffs2_objects_t *jffs2_objects = ((jffs2_partition_t *)part)->objects;
 
 	mutexLock(jffs2_objects->lock);
+	mutexLock(inode->i_lock);
 	o = object_create((jffs2_partition_t *)part, 0, inode);
 
 	if (o == NULL) {
@@ -142,8 +143,8 @@ jffs2_object_t *object_get(void *part, unsigned int id, int create)
 		inode = new_inode(((jffs2_partition_t *)part)->sb);
 		if (inode != NULL) {
 			inode->i_ino = id;
+			mutexLock(inode->i_lock);
 			o = object_create((jffs2_partition_t *)part, 0, inode);
-			mutexLock(o->inode->i_lock);
 		}
 	}
 
