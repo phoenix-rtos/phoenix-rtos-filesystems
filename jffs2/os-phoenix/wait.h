@@ -47,10 +47,12 @@ struct work_struct;
 typedef void (*work_func_t)(struct work_struct *work);
 
 enum {
-	WORK_DEFAULT,
-	WORK_PENDING,
-	WORK_CANCEL,
-	WORK_EXIT
+	WORK_DEFAULT		= 1,
+	WORK_QUEUED			= 2,
+	WORK_PENDING		= 4,
+	WORK_CANCEL			= 8,
+	WORK_WAIT_SYNC		= 16,
+	WORK_EXIT			= 32
 };
 
 struct work_struct {
@@ -58,6 +60,7 @@ struct work_struct {
 	u8 state;
 	handle_t lock;
 	handle_t cond;
+	handle_t wait_cond;
 };
 
 struct delayed_work {
@@ -89,6 +92,7 @@ static inline void INIT_DELAYED_WORK(struct delayed_work *dwork, work_func_t wor
 	dwork->work.state = WORK_DEFAULT;
 	mutexCreate(&dwork->work.lock);
 	condCreate(&dwork->work.cond);
+	condCreate(&dwork->work.wait_cond);
 }
 
 
