@@ -95,6 +95,9 @@ static int jffs2_srv_lookup(jffs2_partition_t *p, oid_t *dir, const char *name, 
 			len++;
 			continue;
 		}
+		/* check again for path ending */
+		if (name[len] == '\0')
+			break;
 
 		dentry->d_name.name = strdup(name + len);
 
