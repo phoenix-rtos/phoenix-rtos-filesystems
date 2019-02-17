@@ -1,12 +1,12 @@
 #
-# Meterfs
-# Copyright 2012 Pawel Pisarczyk
+# Makefile for Phoenix-RTOS meterfs filesystem
+#
+# Copyright 2018 Phoenix Systems
 #
 
+METERFS_OBJS := spi.o flash.o node.o meterfs.o
 
-PROGS_SRCS := spi.c flash.c node.c meterfs.c
-PROGS := meterfs
+$(PREFIX_PROG)meterfs: $(addprefix $(PREFIX_O)meterfs/, $(METERFS_OBJS))
+	$(LINK)
 
-#include after all dependencies are set
-include $(TOPDIR)/Makefile.rules
-
+all: $(PREFIX_PROG_STRIPPED)meterfs
