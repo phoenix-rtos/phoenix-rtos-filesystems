@@ -13,7 +13,7 @@
  * %LICENSE%
  */
 
-#include "../os-phoenix.h"
+#include "../phoenix-rtos.h"
 #include "locks.h"
 
 void up_read(struct rw_semaphore *sem)

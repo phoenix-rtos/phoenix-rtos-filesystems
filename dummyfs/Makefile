@@ -4,14 +4,13 @@
 # Copyright 2017, 2018 Phoenix Systems
 #
 
-PROGS_SRCS := dummyfs.c file.c dir.c object.c dev.c
+DUMMYFS_OBJS := dummyfs.o file.o dir.o object.o dev.o
 
 ifneq (, $(findstring arm-imx, $(TARGET)))
-	PROGS_SRCS += usb.c
+	DUMMYFS_OBJS += usb.o
 endif
 
-PROGS := dummyfs
+$(PREFIX_PROG)dummyfs: $(addprefix $(PREFIX_O)dummyfs/, $(DUMMYFS_OBJS))
+	$(LINK)
 
-#include after all dependencies are set
-include $(TOPDIR)/Makefile.rules
-
+all: $(PREFIX_PROG_STRIPPED)dummyfs

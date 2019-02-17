@@ -10,7 +10,7 @@
  */
 
 
-#include "os-phoenix.h"
+#include "phoenix-rtos.h"
 #include "nodelist.h"
 
 /* These are initialised to NULL in the kernel startup code.

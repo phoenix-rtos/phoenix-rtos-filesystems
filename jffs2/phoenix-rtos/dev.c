@@ -17,7 +17,7 @@
 #include <sys/threads.h>
 #include <string.h>
 
-#include "../os-phoenix.h"
+#include "../phoenix-rtos.h"
 #include "dev.h"
 
 int old_valid_dev(dev_t dev)

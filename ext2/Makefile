@@ -1,11 +1,12 @@
 #
-# Makefile for Phoenix-RTOS ext2
+# Makefile for Phoenix-RTOS ext2 filesystem
 #
-# Copyright 2017, 2018 Phoenix Systems
+# Copyright 2018 Phoenix Systems
 #
 
-PROGS_SRCS = ext2.c mbr.c inode.c block.c file.c pc-ata.c dir.c object.c sb.c
-PROGS = ext2
+EXT2_OBJS := ext2.o mbr.o inode.o block.o file.o pc-ata.o dir.o object.o sb.o
 
-# include after all dependencies are set
-include $(TOPDIR)/Makefile.rules
+$(PREFIX_PROG)ext2: $(addprefix $(PREFIX_O)ext2/, $(EXT2_OBJS))
+	$(LINK)
+
+all: $(PREFIX_PROG_STRIPPED)ext2

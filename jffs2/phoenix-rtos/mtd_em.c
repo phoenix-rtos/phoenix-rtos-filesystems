@@ -13,7 +13,7 @@
  * %LICENSE%
  */
 
-#include "../os-phoenix.h"
+#include "../phoenix-rtos.h"
 
 #include <fcntl.h>
 #include <sys/mman.h>

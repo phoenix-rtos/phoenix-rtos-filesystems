@@ -12,7 +12,7 @@
  */
 
 
-#include "os-phoenix.h"
+#include "phoenix-rtos.h"
 
 #include "nodelist.h"
 

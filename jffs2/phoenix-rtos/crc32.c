@@ -13,7 +13,7 @@
  * %LICENSE%
  */
 
-#include "../os-phoenix.h"
+#include "../phoenix-rtos.h"
 #include "crc32.h"
 
 /* taken from Linux kernel */

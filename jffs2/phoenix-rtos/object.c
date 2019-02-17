@@ -19,7 +19,7 @@
 #include <sys/rb.h>
 #include <sys/threads.h>
 
-#include "../os-phoenix.h"
+#include "../phoenix-rtos.h"
 
 #define JFFS2_MAX_CNT 4096
 

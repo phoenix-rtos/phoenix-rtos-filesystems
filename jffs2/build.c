@@ -11,7 +11,7 @@
  */
 
 
-#include "os-phoenix.h"
+#include "phoenix-rtos.h"
 #include "nodelist.h"
 
 static void jffs2_build_remove_unlinked_inode(struct jffs2_sb_info *,

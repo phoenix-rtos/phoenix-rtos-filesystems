@@ -10,7 +10,7 @@
  */
 
 
-#include "os-phoenix.h"
+#include "phoenix-rtos.h"
 #include "compr.h"
 #include "nodelist.h"
 

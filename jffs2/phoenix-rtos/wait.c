@@ -16,7 +16,7 @@
 #include <sys/time.h>
 #include <sys/threads.h>
 
-#include "../os-phoenix.h"
+#include "../phoenix-rtos.h"
 #include "wait.h"
 
 

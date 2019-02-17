@@ -13,7 +13,7 @@
  * %LICENSE%
  */
 
-#include "../os-phoenix.h"
+#include "../phoenix-rtos.h"
 #include "rb.h"
 
 

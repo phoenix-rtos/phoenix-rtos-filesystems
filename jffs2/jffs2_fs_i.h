@@ -14,7 +14,7 @@
 #define _JFFS2_FS_I
 
 
-#include "os-phoenix.h"
+#include "phoenix-rtos.h"
 
 struct jffs2_inode_info {
 	/* We need an internal mutex similar to inode->i_mutex.

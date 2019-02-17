@@ -13,7 +13,7 @@
  * %LICENSE%
  */
 
-#include "../os-phoenix.h"
+#include "../phoenix-rtos.h"
 
 unsigned int dirty_writeback_interval = 5 * 100000; /* centiseconds */
 

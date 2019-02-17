@@ -11,7 +11,7 @@
  */
 
 
-#include "os-phoenix.h"
+#include "phoenix-rtos.h"
 #include "nodelist.h"
 
 static int jffs2_flash_setup(struct jffs2_sb_info *c);

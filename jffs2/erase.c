@@ -11,7 +11,7 @@
  */
 
 
-#include "os-phoenix.h"
+#include "phoenix-rtos.h"
 #include "nodelist.h"
 
 struct erase_priv_struct {

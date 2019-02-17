@@ -11,7 +11,7 @@
  */
 
 
-#include "os-phoenix.h"
+#include "phoenix-rtos.h"
 #include "jffs2_fs_i.h"
 #include "jffs2_fs_sb.h"
 #include "nodelist.h"

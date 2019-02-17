@@ -28,9 +28,9 @@
 #include <poll.h>
 #include <sys/mount.h>
 
-#include "os-phoenix.h"
-#include "os-phoenix/object.h"
-#include "os-phoenix/dev.h"
+#include "phoenix-rtos.h"
+#include "phoenix-rtos/object.h"
+#include "phoenix-rtos/dev.h"
 #include "nodelist.h"
 
 #define TRACE(x, ...) // printf("jffs trace: " x "\n", ##__VA_ARGS__)

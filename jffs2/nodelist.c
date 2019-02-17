@@ -10,7 +10,7 @@
  */
 
 
-#include "os-phoenix.h"
+#include "phoenix-rtos.h"
 #include "nodelist.h"
 
 static void jffs2_obsolete_node_frag(struct jffs2_sb_info *c,
