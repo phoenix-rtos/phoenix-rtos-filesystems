@@ -1,0 +1,10 @@
+#
+# Makefile for Phoenix-RTOS 3 device drivers
+#
+# i.MX6ULL filesystems
+#
+# Copyright 2019 Phoenix Systems
+#
+
+include dummyfs/Makefile
+include jffs2/Makefile
