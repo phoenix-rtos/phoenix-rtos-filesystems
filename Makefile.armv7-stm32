@@ -7,3 +7,4 @@
 #
 
 include meterfs/Makefile
+include meterfs/test/Makefile
