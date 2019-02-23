@@ -1,0 +1,10 @@
+#
+# Makefile for Phoenix-RTOS 3 device drivers
+#
+# STM32 filesystems
+#
+# Copyright 2019 Phoenix Systems
+#
+
+include meterfs/Makefile
+include meterfs/test/Makefile

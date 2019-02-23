@@ -83,7 +83,5 @@ ifneq ($(T1),)
 $(T1):
 	@echo >/dev/null
 else
-	include dummyfs/Makefile
-	include jffs2/Makefile
-	include meterfs/Makefile	
+	include Makefile.$(TARGET)
 endif

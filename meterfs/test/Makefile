@@ -1,11 +1,12 @@
 #
-# Meterfs
-# Copyright 2012 Pawel Pisarczyk
+# Makefile for Phoenix-RTOS meterfs test
+#
+# Copyright 2018 Phoenix Systems
 #
 
+METERFS_OBJS := test.o
 
-PROGS_SRCS = test.c
-PROGS = meterfs-test
+$(PREFIX_PROG)meterfs-test: $(addprefix $(PREFIX_O)meterfs/test/, $(METERFS_OBJS))
+	$(LINK)
 
-#include after all dependencies are set
-include $(TOPDIR)/Makefile.rules
+all: $(PREFIX_PROG_STRIPPED)meterfs-test
