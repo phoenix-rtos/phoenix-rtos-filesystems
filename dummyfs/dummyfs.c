@@ -728,7 +728,7 @@ int main(int argc,char **argv)
 
 	if (mountpt == NULL) {
 #ifdef TARGET_IA32
-		while(write(0, "", 1) < 0)
+		while(write(1, "", 0) < 0)
 			usleep(500000);
 #else
 		portCreate(&reserved);
