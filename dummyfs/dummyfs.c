@@ -773,7 +773,6 @@ int main(int argc,char **argv)
 	dummyfs_setattr(&o->oid, atMode, S_IFDIR | 0777, NULL, 0);
 
 	if (mountpt == NULL) {
-		fetch_modules();
 		mountpt = remount_path;
 	}
 
