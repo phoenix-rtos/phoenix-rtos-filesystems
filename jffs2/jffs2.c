@@ -863,10 +863,6 @@ static int jffs2_srv_write(jffs2_partition_t *p, oid_t *oid, offs_t offs, void *
 
 static int jffs2_srv_truncate(jffs2_partition_t *p, oid_t *oid, unsigned long len)
 {
-	struct jffs2_sb_info *c = JFFS2_SB_INFO(p->sb);
-	if (jffs2_is_readonly(c))
-		return -EROFS;
-
 	return jffs2_srv_setattr(p, oid, atSize, len, NULL, 0);
 }
 

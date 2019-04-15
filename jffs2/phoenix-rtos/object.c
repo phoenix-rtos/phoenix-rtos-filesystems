@@ -45,7 +45,6 @@ int object_remove(void *part, jffs2_object_t *o)
 {
 	jffs2_objects_t *jffs2_objects = ((jffs2_partition_t *)part)->objects;
 
-
 	lib_rbRemove(&jffs2_objects->tree, &o->node);
 	jffs2_objects->cnt--;
 
@@ -73,7 +72,6 @@ jffs2_object_t *object_create(void *part, int type, struct inode *inode)
 	}
 	memset(r, 0, sizeof(jffs2_object_t));
 	r->oid.id = inode->i_ino;
-	r->refs = 1;
 	r->inode = inode;
 	INIT_LIST_HEAD(&r->list);
 
@@ -115,8 +113,6 @@ int object_insert(void *part, struct inode *inode) {
 		return -ENOMEM;
 	}
 
-	o->refs = inode->i_count;
-
 	mutexUnlock(jffs2_objects->lock);
 
 	return 0;
@@ -133,7 +129,6 @@ jffs2_object_t *object_get(void *part, unsigned int id, int create)
 
 	mutexLock(jffs2_objects->lock);
 	if ((o = lib_treeof(jffs2_object_t, node, lib_rbFind(&jffs2_objects->tree, &t.node))) != NULL) {
-		o->refs++;
 		mutexLock(o->inode->i_lock);
 		o->inode->i_count++;
 		mutexUnlock(o->inode->i_lock);
@@ -166,9 +161,6 @@ void object_put(void *part, unsigned int id)
 	mutexLock(jffs2_objects->lock);
 	if ((o = lib_treeof(jffs2_object_t, node, lib_rbFind(&jffs2_objects->tree, &t.node))) != NULL) {
 
-		if (o->refs > 0)
-			o->refs--;
-
 		inode = o->inode;
 		mutexLock(inode->i_lock);
 		if (inode->i_count > 0)
@@ -186,10 +178,10 @@ void object_put(void *part, unsigned int id)
 			return;
 		}
 
-		mutexUnlock(inode->i_lock);
-
-		if (o->refs == 0)
+		if (inode->i_count == 0)
 			list_add(&o->list, &jffs2_objects->lru_list);
+
+		mutexUnlock(inode->i_lock);
 	}
 
 	mutexUnlock(jffs2_objects->lock);

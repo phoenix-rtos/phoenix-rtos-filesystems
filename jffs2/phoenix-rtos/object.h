@@ -21,11 +21,8 @@ typedef struct _jffs2_object_t {
 	oid_t oid;
 	struct inode *inode;
 
-	u32 refs;
-
 	struct list_head list;
 	rbnode_t node;
-	handle_t lock;
 } jffs2_object_t;
 
 
