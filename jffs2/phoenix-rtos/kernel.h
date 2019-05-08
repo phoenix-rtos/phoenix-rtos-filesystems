@@ -30,7 +30,7 @@
 #define PAGE_SIZE	(1 << PAGE_SHIFT)
 
 
-#define cond_resched() do { usleep(10); } while (0)
+#define cond_resched()
 
 
 struct delayed_call {

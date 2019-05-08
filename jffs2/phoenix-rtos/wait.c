@@ -49,10 +49,8 @@ void add_wait_queue(struct wait_queue_head *wq_head, struct wait_queue_entry *wq
 void remove_wait_queue(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry)
 {
 	mutexLock(wq_head->lock);
-	if (wq_head->cnt) {
+	if (wq_head->cnt)
 		condWait(wq_head->cond, wq_head->lock, 0);
-		wq_head->cnt--;
-	}
 	mutexUnlock(wq_head->lock);
 }
 

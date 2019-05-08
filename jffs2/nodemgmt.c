@@ -173,9 +173,7 @@ int jffs2_reserve_space(struct jffs2_sb_info *c, uint32_t minsize,
 					jffs2_dbg(1, "%s waiting for erase to complete\n",
 						  __func__);
 					spin_unlock(&c->erase_completion_lock);
-#ifndef __PHOENIX
 					schedule();
-#endif
 					remove_wait_queue(&c->erase_wait, &wait);
 				} else
 					spin_unlock(&c->erase_completion_lock);
