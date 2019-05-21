@@ -552,7 +552,7 @@ static int dummyfs_close(oid_t *oid)
 	return EOK;
 }
 
-#ifdef TARGET_IA32
+#ifndef TARGET_IMX6ULL
 
 int fetch_modules(void)
 {
@@ -664,7 +664,7 @@ int main(int argc,char **argv)
 	int daemonize = 0;
 	int c;
 
-#ifndef TARGET_IA32
+#ifdef TARGET_IMX6ULL
 	u32 reserved;
 #endif
 
@@ -727,7 +727,7 @@ int main(int argc,char **argv)
 	}
 
 	if (mountpt == NULL) {
-#ifdef TARGET_IA32
+#ifndef TARGET_IMX6ULL
 		while(write(1, "", 0) < 0)
 			usleep(500000);
 #else
@@ -742,7 +742,7 @@ int main(int argc,char **argv)
 			return -1;
 		}
 
-#ifndef TARGET_IA32
+#ifdef TARGET_IMX6ULL
 		portDestroy(reserved);
 #endif
 	} else
@@ -772,9 +772,8 @@ int main(int argc,char **argv)
 
 	dummyfs_setattr(&o->oid, atMode, S_IFDIR | 0777, NULL, 0);
 
-	if (mountpt == NULL) {
+	if (mountpt == NULL)
 		mountpt = remount_path;
-	}
 
 	if (daemonize) {
 		/* mount synchronously */
