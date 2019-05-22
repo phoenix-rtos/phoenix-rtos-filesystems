@@ -801,10 +801,8 @@ int main(int argc,char **argv)
 	/*** MAIN LOOP ***/
 
 	for (;;) {
-		if (msgRecv(dummyfs_common.port, &msg, &rid) < 0) {
-			msgRespond(dummyfs_common.port, &msg, rid);
+		if (msgRecv(dummyfs_common.port, &msg, &rid) < 0)
 			continue;
-		}
 
 		switch (msg.type) {
 
