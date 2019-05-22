@@ -121,6 +121,7 @@ void object_put(dummyfs_object_t *o)
 	return;
 }
 
+
 void object_init(void)
 {
 	idtree_init(&dummytree);

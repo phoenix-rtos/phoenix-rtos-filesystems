@@ -53,6 +53,7 @@ int dir_find(dummyfs_object_t *dir, const char *name, oid_t *res)
 	return -ENOENT;
 }
 
+
 int dir_replace(dummyfs_object_t *dir, const char *name, oid_t *new)
 {
 
@@ -83,6 +84,7 @@ int dir_replace(dummyfs_object_t *dir, const char *name, oid_t *new)
 	free(dirname);
 	return -ENOENT;
 }
+
 
 int dir_add(dummyfs_object_t *dir, const char *name, int type, oid_t *oid)
 {
@@ -147,6 +149,7 @@ int dir_add(dummyfs_object_t *dir, const char *name, int type, oid_t *oid)
 	return EOK;
 }
 
+
 int dir_remove(dummyfs_object_t *dir, const char *name)
 {
 	dummyfs_dirent_t *e = dir->entries;
@@ -180,6 +183,7 @@ int dir_remove(dummyfs_object_t *dir, const char *name)
 	return -ENOENT;
 }
 
+
 int dir_empty(dummyfs_object_t *dir)
 {
 	if (dir->entries == NULL)
@@ -190,6 +194,7 @@ int dir_empty(dummyfs_object_t *dir)
 
 	return EOK;
 }
+
 
 void dir_destroy(dummyfs_object_t *dir)
 {

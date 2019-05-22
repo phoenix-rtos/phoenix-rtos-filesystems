@@ -52,6 +52,7 @@ int dummyfs_truncate(oid_t *oid, size_t size)
 	return ret;
 }
 
+
 int dummyfs_truncate_internal(dummyfs_object_t *o, size_t size)
 {
 	dummyfs_chunk_t *chunk, *trash;
@@ -61,7 +62,6 @@ int dummyfs_truncate_internal(dummyfs_object_t *o, size_t size)
 	chunk = o->chunks;
 
 	if (size > o->size) {
-
 		/* expansion */
 		if (chunk == NULL) {
 			/* allocate new chunk */
@@ -116,7 +116,8 @@ int dummyfs_truncate_internal(dummyfs_object_t *o, size_t size)
 					chunk->prev = o->chunks->prev;
 					o->chunks->prev->next = chunk;
 					o->chunks->prev = chunk;
-				} else {
+				}
+				else {
 					chunk->prev->data = tmp;
 				}
 			}
@@ -137,15 +138,15 @@ int dummyfs_truncate_internal(dummyfs_object_t *o, size_t size)
 		{
 			chunksz = size - chunk->offs;
 			tmp = realloc(chunk->data, chunksz);
-			if (tmp == NULL) {
+			if (tmp == NULL)
 				return -ENOMEM;
-			}
 
 			dummyfs_decsz(chunk->size - chunksz);
 			chunk->used = chunk->used > chunksz ? chunksz : chunk->used;
 			chunk->size = chunksz;
 			chunk->data = tmp;
 		}
+
 		/* chunk now points to last area that shuold be preserved - everything after it will be freed. */
 		trash = chunk->next;
 		chunk->next = o->chunks;
@@ -157,6 +158,7 @@ int dummyfs_truncate_internal(dummyfs_object_t *o, size_t size)
 			free(trash);
 			trash = chunk;
 		}
+
 		if (size == 0) {
 			dummyfs_decsz(sizeof(dummyfs_chunk_t) + trash->size);
 			o->chunks = NULL;
@@ -164,8 +166,8 @@ int dummyfs_truncate_internal(dummyfs_object_t *o, size_t size)
 			free(trash);
 		}
 	}
-	o->size = size;
 
+	o->size = size;
 	o->mtime = o->atime = time(NULL);
 
 	return EOK;
@@ -207,7 +209,7 @@ int dummyfs_read(oid_t *oid, offs_t offs, char *buff, size_t len)
 	}
 
 	object_lock(o);
-	for(chunk = o->chunks; chunk->next != o->chunks; chunk = chunk->next) {
+	for (chunk = o->chunks; chunk->next != o->chunks; chunk = chunk->next) {
 		if (chunk->offs + chunk->size > offs) {
 			break;
 		}
@@ -281,14 +283,14 @@ int dummyfs_write_internal(dummyfs_object_t *o, offs_t offs, const char *buff, s
 	}
 
 	if (offs + len > o->size) {
-		if ((ret = dummyfs_truncate_internal(o, offs + len)) != EOK) {
+		if ((ret = dummyfs_truncate_internal(o, offs + len)) != EOK)
 			return ret;
-		}
 	}
 
-	for (chunk = o->chunks; chunk->next != o->chunks; chunk = chunk->next)
+	for (chunk = o->chunks; chunk->next != o->chunks; chunk = chunk->next) {
 		if ((chunk->offs + chunk->size) > offs)
 			break; /* found appropriate chunk */
+	}
 
 	ret = 0;
 	do {
@@ -310,8 +312,11 @@ int dummyfs_write_internal(dummyfs_object_t *o, offs_t offs, const char *buff, s
 			memset(chunk->data, 0, writeoffs);
 			memset(chunk->data + writeoffs +  writesz, 0, chunk->size - writesz - writeoffs);
 			chunk->used = writesz;
-		} else
+		}
+		else {
 			chunk->used += writesz;
+		}
+
 		memcpy(chunk->data + writeoffs, buff, writesz);
 
 		len  -= writesz;

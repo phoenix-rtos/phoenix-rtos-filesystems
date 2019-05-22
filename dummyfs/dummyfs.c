@@ -111,11 +111,11 @@ int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res, oid_t *dev)
 	return len;
 }
 
+
 int dummyfs_setattr(oid_t *oid, int type, int attr, const void *data, size_t size)
 {
 	dummyfs_object_t *o;
 	int ret = EOK;
-
 
 	if ((o = dummyfs_get(oid)) == NULL)
 		return -ENOENT;
@@ -208,11 +208,13 @@ int dummyfs_getattr(oid_t *oid, int type, int *attr)
 		case (atLinks):
 			*attr = o->nlink;
 			break;
+
 		case (atPollStatus):
 			// trivial implementation: assume read/write is always possible
 			*attr = POLLIN|POLLRDNORM|POLLOUT|POLLWRNORM;
 			break;
 	}
+
 	object_unlock(o);
 	object_put(o);
 
@@ -274,7 +276,8 @@ int dummyfs_link(oid_t *dir, const char *name, oid_t *oid)
 				|| victim_oid.id == oid->id) { // linking to self
 			object_put(victim_o);
 			victim_o = NULL;
-		} else {
+		}
+		else {
 			// object_lock(victim_o); //FIXME: per-object locking
 		}
 	}
@@ -283,7 +286,8 @@ int dummyfs_link(oid_t *dir, const char *name, oid_t *oid)
 	object_lock(d);
 	if (!victim_o) {
 		ret = dir_add(d, name, o->type, oid);
-	} else {
+	}
+	else {
 		ret = dir_replace(d, name, oid);
 		victim_o->nlink--;
 		// object_unlock(victim_o); //FIXME: per-object locking
@@ -414,7 +418,7 @@ int dummyfs_create(oid_t *dir, const char *name, oid_t *oid, int type, int mode,
 
 	object_unlock(o);
 
-	if((ret = dummyfs_link(dir, name, &o->oid)) != EOK) {
+	if ((ret = dummyfs_link(dir, name, &o->oid)) != EOK) {
 		object_put(o);
 		object_remove(o);
 		free(o);
@@ -536,6 +540,7 @@ static int dummyfs_open(oid_t *oid)
 	return EOK;
 }
 
+
 static int dummyfs_close(oid_t *oid)
 {
 	dummyfs_object_t *o;
@@ -578,7 +583,6 @@ int fetch_modules(void)
 }
 
 #endif
-
 
 int dummyfs_do_mount(const char *path, oid_t *oid)
 {
@@ -637,6 +641,7 @@ void dummyfs_mount_async(void *arg)
 	endthread();
 }
 
+
 static void print_usage(const char* progname)
 {
 	printf("usage: %s [OPTIONS]\n\n"
@@ -647,11 +652,13 @@ static void print_usage(const char* progname)
 		progname);
 }
 
+
 static void signal_exit(int sig)
 {
 	printf("received signal (%d) - daemonizng\n", sig);
 	exit(EXIT_SUCCESS);
 }
+
 
 int main(int argc,char **argv)
 {
@@ -728,7 +735,7 @@ int main(int argc,char **argv)
 
 	if (mountpt == NULL) {
 #ifndef TARGET_IMX6ULL
-		while(write(1, "", 0) < 0)
+		while (write(1, "", 0) < 0)
 			usleep(500000);
 #else
 		portCreate(&reserved);
@@ -745,8 +752,10 @@ int main(int argc,char **argv)
 #ifdef TARGET_IMX6ULL
 		portDestroy(reserved);
 #endif
-	} else
+	}
+	else {
 		portCreate(&dummyfs_common.port);
+	}
 
 	printf("dummyfs: Starting dummyfs server at port %d\n", dummyfs_common.port);
 
@@ -784,7 +793,8 @@ int main(int argc,char **argv)
 
 		/* init completed - wake parent */
 		kill(getppid(), SIGUSR1);
-	} else if (mountpt != NULL) {
+	}
+	else if (mountpt != NULL) {
 		beginthread(dummyfs_mount_async, 4, &mtstack, sizeof(mtstack), (void*)mountpt);
 	}
 
