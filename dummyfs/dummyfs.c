@@ -33,7 +33,6 @@
 #include "file.h"
 #include "object.h"
 #include "dev.h"
-#include "usb.h"
 
 struct _dummyfs_common_t dummyfs_common;
 
@@ -557,7 +556,6 @@ static int dummyfs_close(oid_t *oid)
 	return EOK;
 }
 
-#ifndef TARGET_IMX6ULL
 
 int fetch_modules(void)
 {
@@ -582,7 +580,6 @@ int fetch_modules(void)
 	return EOK;
 }
 
-#endif
 
 int dummyfs_do_mount(const char *path, oid_t *oid)
 {
@@ -660,7 +657,7 @@ static void signal_exit(int sig)
 }
 
 
-int main(int argc,char **argv)
+int main(int argc, char **argv)
 {
 	oid_t root = { 0 };
 	msg_t msg;
@@ -781,8 +778,10 @@ int main(int argc,char **argv)
 
 	dummyfs_setattr(&o->oid, atMode, S_IFDIR | 0777, NULL, 0);
 
-	if (mountpt == NULL)
+	if (mountpt == NULL) {
+		fetch_modules();
 		mountpt = remount_path;
+	}
 
 	if (daemonize) {
 		/* mount synchronously */
