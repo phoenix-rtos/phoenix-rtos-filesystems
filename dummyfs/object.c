@@ -35,12 +35,13 @@ dummyfs_object_t *object_create(void)
 
 	mutexLock(dummyfs_common.mutex);
 	r = (dummyfs_object_t *)malloc(sizeof(dummyfs_object_t));
-	memset(r, 0, sizeof(dummyfs_object_t));
 	if (r == NULL) {
 		mutexUnlock(dummyfs_common.mutex);
 		mutexUnlock(olock);
 		return NULL;
 	}
+
+	memset(r, 0, sizeof(dummyfs_object_t));
 
 	id = idtree_alloc(&dummytree, &r->node);
 
