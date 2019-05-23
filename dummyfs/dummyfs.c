@@ -571,7 +571,11 @@ int fetch_modules(void)
 
 	for (i = 0; i < progsz; i++) {
 		syspageprog(&prog, i);
+#ifdef NOMMU
+		prog_addr = (void *)prog.addr;
+#else
 		prog_addr = (void *)mmap(NULL, (prog.size + 0xfff) & ~0xfff, 0x1 | 0x2, 0, OID_PHYSMEM, prog.addr);
+#endif
 		dummyfs_create(&sysoid, prog.name, &toid, otFile, 0, NULL);
 		dummyfs_write(&toid, 0, prog_addr, prog.size);
 
