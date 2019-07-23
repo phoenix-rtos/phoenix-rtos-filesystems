@@ -228,7 +228,7 @@ int meterfs_updateFileInfo(fileheader_t *f)
 
 	for (i = 0; i < meterfs_common.filecnt; ++i) {
 		flash_read(meterfs_common.hcurrAddr + HGRAIN + (i * HGRAIN), &u.t, sizeof(fileheader_t));
-		if (strcmp(f->name, u.t.name) == 0)
+		if (strncmp(f->name, u.t.name, sizeof(f->name)) == 0)
 			flash_write(headerNew + HGRAIN + (i * HGRAIN), f, sizeof(fileheader_t));
 		else
 			flash_write(headerNew + HGRAIN + (i * HGRAIN), &u.t, sizeof(fileheader_t));
