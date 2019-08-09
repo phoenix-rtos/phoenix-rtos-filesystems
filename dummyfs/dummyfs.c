@@ -34,6 +34,8 @@
 #include "object.h"
 #include "dev.h"
 
+#define LOG(msg, ...) printf("dummyfs: " msg, ##__VA_ARGS__)
+
 struct _dummyfs_common_t dummyfs_common;
 
 int dummyfs_destroy(oid_t *oid);
@@ -625,7 +627,7 @@ static int dummyfs_mount_sync(const char* mountpt)
 	toid.id = 0;
 	toid.port = dummyfs_common.port;
 	if ((err = dummyfs_do_mount(mountpt, &toid))) {
-		printf("dummyfs: Failed to mount at %s - error %d\n", mountpt, err);
+		LOG("failed to mount at %s - error %d\n", mountpt, err);
 		return -1;
 	}
 
@@ -656,7 +658,6 @@ static void print_usage(const char* progname)
 
 static void signal_exit(int sig)
 {
-	printf("received signal (%d) - daemonizng\n", sig);
 	exit(EXIT_SUCCESS);
 }
 
@@ -699,7 +700,7 @@ int main(int argc, char **argv)
 	}
 
 	if (daemonize && !mountpt) {
-		printf("FATAL: Can't daemonize without mountpoint! Exiting!\n");
+		LOG("can't daemonize without mountpoint, exiting!\n");
 		return 1;
 	}
 
@@ -711,7 +712,7 @@ int main(int argc, char **argv)
 		/* Fork off the parent process */
 		pid = fork();
 		if (pid < 0) {
-			printf("fork failed: [%d] -> %s\n", errno, strerror(errno));
+			LOG("fork failed: [%d] -> %s\n", errno, strerror(errno));
 			exit(EXIT_FAILURE);
 		}
 
@@ -722,14 +723,14 @@ int main(int argc, char **argv)
 				signal(i, signal_exit);
 			sleep(10);
 
-			printf("failed to communicate with child\n");
+			LOG("failed to communicate with child\n");
 			exit(EXIT_FAILURE);
 		}
 
 		/* Create a new SID for the child process */
 		sid = setsid();
 		if (sid < 0) {
-			printf("setsid failed: [%d] -> %s\n", errno, strerror(errno));
+			LOG("setsid failed: [%d] -> %s\n", errno, strerror(errno));
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -746,7 +747,7 @@ int main(int argc, char **argv)
 
 		/* Try to mount fs as root */
 		if (portRegister(dummyfs_common.port, "/", &root) < 0) {
-			printf("dummyfs: Can't mount as rootfs\n");
+			LOG("can't mount as rootfs\n");
 			return -1;
 		}
 
@@ -758,10 +759,10 @@ int main(int argc, char **argv)
 		portCreate(&dummyfs_common.port);
 	}
 
-	printf("dummyfs: Starting dummyfs server at port %d\n", dummyfs_common.port);
-
-	if (mutexCreate(&dummyfs_common.mutex) != EOK)
+	if (mutexCreate(&dummyfs_common.mutex) != EOK) {
+		LOG("could not create mutex\n");
 		return 2;
+	}
 
 	object_init();
 	dev_init();
@@ -790,7 +791,7 @@ int main(int argc, char **argv)
 	if (daemonize) {
 		/* mount synchronously */
 		if (dummyfs_mount_sync(mountpt)) {
-			printf("Failed to mount, exiting.\n");
+			LOG("failed to mount, exiting\n");
 			return 1;
 		}
 
@@ -802,6 +803,8 @@ int main(int argc, char **argv)
 	}
 
 	/*** MAIN LOOP ***/
+
+	LOG("initialized\n");
 
 	for (;;) {
 		if (msgRecv(dummyfs_common.port, &msg, &rid) < 0)
