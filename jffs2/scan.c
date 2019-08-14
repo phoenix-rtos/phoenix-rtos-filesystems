@@ -661,7 +661,7 @@ scan_more:
 			inbuf_ofs = ofs - buf_ofs;
 			while (inbuf_ofs < scan_end) {
 				if (unlikely(*(uint32_t *)(&buf[inbuf_ofs]) != 0xffffffff)) {
-					pr_warn("Empty flash at 0x%08x ends at 0x%08x\n",
+					jffs2_dbg(1, "Empty flash at 0x%08x ends at 0x%08x\n",
 						empty_start, ofs);
 					if ((err = jffs2_scan_dirty_space(c, jeb, ofs-empty_start)))
 						return err;
@@ -995,7 +995,7 @@ static int jffs2_scan_inode_node(struct jffs2_sb_info *c, struct jffs2_erasebloc
 	/* Check the node CRC in any case. */
 	crc = crc32(0, ri, sizeof(*ri)-8);
 	if (crc != je32_to_cpu(ri->node_crc)) {
-		pr_notice("%s(): CRC failed on node at 0x%08x: Read 0x%08x, calculated 0x%08x\n",
+		jffs2_dbg(1, "%s(): CRC failed on node at 0x%08x: Read 0x%08x, calculated 0x%08x\n",
 			  __func__, ofs, je32_to_cpu(ri->node_crc), crc);
 		/*
 		 * We believe totlen because the CRC on the node

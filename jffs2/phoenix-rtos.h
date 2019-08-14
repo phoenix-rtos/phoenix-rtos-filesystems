@@ -12,10 +12,9 @@
  *
  * %LICENSE%
  */
-
-
 #ifndef _OS_PHOENIX_H_
 #define _OS_PHOENIX_H_
+
 #include <stdlib.h>
 #include <sys/threads.h>
 #include <sys/mman.h>
@@ -26,6 +25,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <signal.h>
+#include <syslog.h>
 
 #include "linux/list.h"
 #include "linux/magic.h"
@@ -208,12 +208,12 @@ void kunmap(struct page *page);
 
 
 #define KERN_DEBUG
-#define printk(...)				printf(__VA_ARGS__)
-#define pr_notice(fmt, ...)		printf(fmt, ##__VA_ARGS__)
-#define pr_info(fmt, ...)		printf(fmt, ##__VA_ARGS__)
-#define pr_debug(fmt, ...)		printf(fmt, ##__VA_ARGS__)
-#define pr_warn(fmt, ...)		printf(fmt, ##__VA_ARGS__)
-#define pr_cont(fmt, ...)		printf(fmt, ##__VA_ARGS__)
+#define printk(...)				syslog(LOG_DEBUG, ##__VA_ARGS__)
+#define pr_notice(fmt, ...)		syslog(LOG_NOTICE, fmt, ##__VA_ARGS__)
+#define pr_info(fmt, ...)		syslog(LOG_INFO, fmt, ##__VA_ARGS__)
+#define pr_debug(fmt, ...)		syslog(LOG_DEBUG, fmt, ##__VA_ARGS__)
+#define pr_warn(fmt, ...)		syslog(LOG_WARNING, fmt, ##__VA_ARGS__)
+#define pr_cont(fmt, ...)		syslog(LOG_DEBUG, fmt, ##__VA_ARGS__)
 #define pr_err(fmt, ...)		printf(fmt, ##__VA_ARGS__)
 #define pr_crit(fmt, ...)		printf(fmt, ##__VA_ARGS__)
 

@@ -129,7 +129,10 @@ long schedule_timeout_interruptible(long timeout)
 
 inline pid_t task_pid_nr(struct task_struct *tsk)
 {
-	return 333;
+	static pid_t pid = -1;
+	if (pid == -1)
+		pid = getpid();
+	return pid;
 }
 
 void set_user_nice(struct task_struct *p, long nice)
