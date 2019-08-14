@@ -97,7 +97,7 @@ static int check_node_data(struct jffs2_sb_info *c, struct jffs2_tmp_dnode_info 
 #endif
 
 	if (crc != tn->data_crc) {
-		JFFS2_NOTICE("wrong data CRC in data node at 0x%08x: read %#08x, calculated %#08x.\n",
+		jffs2_dbg(1, "wrong data CRC in data node at 0x%08x: read %#08x, calculated %#08x.\n",
 			     ref_offset(ref), tn->data_crc, crc);
 		return 1;
 	}
@@ -776,7 +776,7 @@ static inline int read_dnode(struct jffs2_sb_info *c, struct jffs2_raw_node_ref 
 			/* If we actually calculated the whole data CRC
 			 * and it is wrong, drop the node. */
 			if (len >= csize && unlikely(tn->partial_crc != je32_to_cpu(rd->data_crc))) {
-				JFFS2_NOTICE("wrong data CRC in data node at 0x%08x: read %#08x, calculated %#08x.\n",
+				jffs2_dbg(1, "wrong data CRC in data node at 0x%08x: read %#08x, calculated %#08x.\n",
 					ref_offset(ref), tn->partial_crc, je32_to_cpu(rd->data_crc));
 				jffs2_mark_node_obsolete(c, ref);
 				goto free_out;
