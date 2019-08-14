@@ -40,7 +40,7 @@ int dir_find(dummyfs_object_t *dir, const char *name, oid_t *res)
 
 	/* Iterate over all entries to find the matching one */
 	do {
-		if (!strcmp(e->name, dirname)) {
+		if (!strcmp(e->name, dirname) && !e->deleted) {
 			memcpy(res, &e->oid, sizeof(oid_t));
 			free(dirname);
 			return len;
@@ -108,6 +108,23 @@ int dir_add(dummyfs_object_t *dir, const char *name, int type, oid_t *oid)
 		return -ENOMEM;
 	}
 
+	n->len = strlen(name) + 1;
+	n->deleted = 0;
+
+	if (dummyfs_incsz(n->len) != EOK) {
+		dummyfs_decsz(sizeof(dummyfs_dirent_t));
+		free(n);
+		return -ENOMEM;
+	}
+
+	n->name = malloc(n->len);
+
+	if (n->name == NULL) {
+		dummyfs_decsz(sizeof(dummyfs_dirent_t) + n->len);
+		free(n);
+		return -ENOMEM;
+	}
+
 	if (e == NULL) {
 		dir->entries = n;
 		n->next = n;
@@ -122,22 +139,6 @@ int dir_add(dummyfs_object_t *dir, const char *name, int type, oid_t *oid)
 		n->prev = e->prev;
 		n->next = e;
 		e->prev = n;
-	}
-
-	n->len = strlen(name) + 1;
-
-	if (dummyfs_incsz(n->len) != EOK) {
-		dummyfs_decsz(sizeof(dummyfs_dirent_t));
-		free(n);
-		return -ENOMEM;
-	}
-
-	n->name = malloc(n->len);
-
-	if (n->name == NULL) {
-		dummyfs_decsz(sizeof(dummyfs_dirent_t) + n->len);
-		free(n);
-		return -ENOMEM;
 	}
 
 	memcpy(n->name, name, n->len);
@@ -157,24 +158,10 @@ int dir_remove(dummyfs_object_t *dir, const char *name)
 	if (e == NULL)
 		return -ENOENT;
 
-	if (e == e->next) {
-		if (!strcmp(e->name, (char *)name)) {
-			dir->entries = NULL;
-			free(e->name);
-			free(e);
-			return EOK;
-		}
-		return -ENOENT;
-	}
-
 	do {
-		if (!strcmp(e->name, (char *)name)) {
-			e->prev->next = e->next;
-			e->next->prev = e->prev;
-			dummyfs_decsz(e->len + sizeof(dummyfs_dirent_t));
-			free(e->name);
-			free(e);
-			dir->size -= strlen(name);
+		if (!strcmp(e->name, (char *)name) && !e->deleted) {
+			dir->size -= strlen(e->name);
+			e->deleted = 1;
 			return EOK;
 		}
 		e = e->next;
@@ -183,9 +170,58 @@ int dir_remove(dummyfs_object_t *dir, const char *name)
 	return -ENOENT;
 }
 
+void dir_clean(dummyfs_object_t *dir)
+{
+	dummyfs_dirent_t *v;
+	dummyfs_dirent_t *e = dir->entries;
+
+	if (e == NULL)
+		return;
+
+	do {
+		/* paranoia check */
+		if (e == e->next) {
+			if (e->deleted) {
+				dir->entries = NULL;
+				dummyfs_decsz(e->len + sizeof(dummyfs_dirent_t));
+				free(e->name);
+				free(e);
+				return;
+			}
+			return;
+		}
+
+		if (e->deleted) {
+			e->prev->next = e->next;
+			e->next->prev = e->prev;
+			if (dir->entries == e)
+				dir->entries = e->next;
+			dummyfs_decsz(e->len + sizeof(dummyfs_dirent_t));
+			v = e;
+			e = e->next;
+
+			/* paranoia checks */
+			if (v == dir->entries)
+				dir->entries = dir->entries->next;
+
+
+			if (e == v) {
+				dir->entries = NULL;
+				e = NULL;
+			}
+
+			free(v->name);
+			free(v);
+		} else
+			e = e->next;
+	} while (e != dir->entries);
+}
+
 
 int dir_empty(dummyfs_object_t *dir)
 {
+	/* clean dir before checking */
+	dir_clean(dir);
 	if (dir->entries == NULL)
 		return EOK;
 

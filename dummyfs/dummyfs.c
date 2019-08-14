@@ -495,7 +495,7 @@ int dummyfs_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int s
 		object_put(d);
 		return -EINVAL;
 	}
-
+	dent->d_reclen = 0;
 	do {
 		if (diroffs >= offs) {
 			if ((sizeof(struct dirent) + ei->len) > size) {
@@ -503,9 +503,16 @@ int dummyfs_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int s
 				object_put(d);
 				return 	-EINVAL;
 			}
+			if (ei->deleted) {
+				ei = ei->next;
+				//debug("deleted\n");
+				dent->d_reclen += sizeof(struct dirent) + ei->len;
+				//diroffs += sizeof(struct dirent) + ei->len;
+				continue;
+			}
 
 			dent->d_ino = ei->oid.id;
-			dent->d_reclen = sizeof(struct dirent) + ei->len;
+			dent->d_reclen += sizeof(struct dirent) + ei->len;
 			dent->d_namlen = ei->len;
 			dent->d_type = ei->type;
 			memcpy(&(dent->d_name[0]), ei->name, ei->len);
@@ -551,6 +558,10 @@ static int dummyfs_close(oid_t *oid)
 
 	object_lock(o);
 	o->atime = time(NULL);
+
+	/* 2 refs means we can clean directory safely */
+	if (o->type == otDir && o->refs == 2)
+		dir_clean(o);
 
 	object_unlock(o);
 	object_put(o);

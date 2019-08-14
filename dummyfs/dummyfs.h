@@ -28,6 +28,7 @@ typedef struct _dummyfs_dirent_t {
 	unsigned int len;
 	u32 type;
 	oid_t oid;
+	u8 deleted;
 
 	struct _dummyfs_dirent_t *next;
 	struct _dummyfs_dirent_t *prev;
