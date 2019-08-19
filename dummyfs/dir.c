@@ -162,6 +162,7 @@ int dir_remove(dummyfs_object_t *dir, const char *name)
 		if (!strcmp(e->name, (char *)name) && !e->deleted) {
 			dir->size -= strlen(e->name);
 			e->deleted = 1;
+			dir->dirty = 1;
 			return EOK;
 		}
 		e = e->next;
@@ -186,8 +187,8 @@ void dir_clean(dummyfs_object_t *dir)
 				dummyfs_decsz(e->len + sizeof(dummyfs_dirent_t));
 				free(e->name);
 				free(e);
-				return;
 			}
+			dir->dirty = 0;
 			return;
 		}
 
@@ -215,6 +216,7 @@ void dir_clean(dummyfs_object_t *dir)
 		} else
 			e = e->next;
 	} while (e != dir->entries);
+	dir->dirty = 0;
 }
 
 

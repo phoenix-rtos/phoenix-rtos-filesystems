@@ -505,14 +505,12 @@ int dummyfs_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int s
 			}
 			if (ei->deleted) {
 				ei = ei->next;
-				//debug("deleted\n");
-				dent->d_reclen += sizeof(struct dirent) + ei->len;
-				//diroffs += sizeof(struct dirent) + ei->len;
+				dent->d_reclen++;
 				continue;
 			}
 
 			dent->d_ino = ei->oid.id;
-			dent->d_reclen += sizeof(struct dirent) + ei->len;
+			dent->d_reclen++;
 			dent->d_namlen = ei->len;
 			dent->d_type = ei->type;
 			memcpy(&(dent->d_name[0]), ei->name, ei->len);
@@ -521,7 +519,7 @@ int dummyfs_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int s
 			object_put(d);
 			return 	EOK;
 		}
-		diroffs += sizeof(struct dirent) + ei->len;
+		diroffs++;
 		ei = ei->next;
 	} while (ei != d->entries);
 
@@ -558,10 +556,6 @@ static int dummyfs_close(oid_t *oid)
 
 	object_lock(o);
 	o->atime = time(NULL);
-
-	/* 2 refs means we can clean directory safely */
-	if (o->type == otDir && o->refs == 2)
-		dir_clean(o);
 
 	object_unlock(o);
 	object_put(o);

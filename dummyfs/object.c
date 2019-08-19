@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/file.h>
 #include <sys/threads.h>
 #include <sys/msg.h>
 #include <sys/rb.h>
@@ -21,6 +22,7 @@
 #include <unistd.h>
 
 #include "dummyfs.h"
+#include "dir.h"
 
 idtree_t dummytree = { 0 };
 handle_t olock;
@@ -117,6 +119,10 @@ void object_put(dummyfs_object_t *o)
 	mutexLock(olock);
 	if (o != NULL && o->refs)
 		o->refs--;
+
+	if (!o->refs && o->type == otDir && o->dirty)
+		dir_clean(o);
+
 	mutexUnlock(olock);
 
 	return;

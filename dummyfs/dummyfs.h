@@ -71,6 +71,7 @@ typedef struct _dummyfs_object_t {
 	time_t mtime;
 	time_t ctime;
 
+	u8 dirty;
 } dummyfs_object_t;
 
 
