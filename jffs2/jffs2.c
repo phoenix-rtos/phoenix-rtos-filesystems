@@ -491,7 +491,7 @@ static int jffs2_srv_create(jffs2_partition_t *p, oid_t *dir, const char *name, 
 		return -EINVAL;
 
 	if (jffs2_is_device(p, dir))
-		return -EINVAL;
+		return -EEXIST;
 
 	idir = jffs2_iget(p->sb, dir->id);
 
