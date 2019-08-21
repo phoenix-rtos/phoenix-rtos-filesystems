@@ -85,10 +85,9 @@ dummyfs_object_t *dev_find(oid_t *oid, int create)
 }
 
 
-dummyfs_object_t *dev_destroy(oid_t *oid)
+int dev_destroy(oid_t *oid)
 {
 	dummyfs_dev_t find, *entry;
-	dummyfs_object_t *o;
 
 	memcpy(&find.dev, oid, sizeof(oid_t));
 
@@ -97,13 +96,13 @@ dummyfs_object_t *dev_destroy(oid_t *oid)
 
 	if (entry == NULL) {
 		mutexUnlock(dev_common.mutex);
-		return NULL;
+		return -EINVAL;
 	}
 
 	lib_rbRemove(&dev_common.dev, &entry->linkage);
 	free(entry);
 	mutexUnlock(dev_common.mutex);
-	return o;
+	return EOK;
 }
 
 

@@ -21,7 +21,7 @@
 extern dummyfs_object_t *dev_find(oid_t *oid, int create);
 
 
-extern dummyfs_object_t *dev_destroy(oid_t *oid);
+extern int dev_destroy(oid_t *oid);
 
 
 extern void dev_init(void);
