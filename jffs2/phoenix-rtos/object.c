@@ -170,6 +170,7 @@ void object_put(void *part, unsigned int id)
 			object_destroy(inode->i_sb->s_part, o);
 			/* at this point inode should be no longer accessible */
 			free(inode->i_mapping);
+			exit_rwsem(&inode->i_rwsem);
 			mutexUnlock(inode->i_lock);
 			resourceDestroy(inode->i_lock);
 			inode->i_sb->s_op->evict_inode(inode);

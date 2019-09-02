@@ -75,6 +75,8 @@ struct lock_class_key {
 
 void init_rwsem(struct rw_semaphore *sem);
 
+void exit_rwsem(struct rw_semaphore *sem);
+
 #define mutex_init(x) mutexCreate(&((x)->h))
 #define mutex_destroy(x) resourceDestroy((x)->h)
 

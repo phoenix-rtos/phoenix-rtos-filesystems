@@ -143,6 +143,7 @@ struct inode {
 	kgid_t						i_gid;
 	struct rcu_head				i_rcu;
 	handle_t					i_lock;
+	struct rw_semaphore			i_rwsem;
 };
 
 static inline bool dir_emit_dots(struct file *file, struct dir_context *ctx)
@@ -339,12 +340,22 @@ void iput(struct inode *inode);
 
 static inline void inode_lock(struct inode *inode)
 {
-	//mutex_lock(&inode->i_mutex);
+	down_write(&inode->i_rwsem);
 }
 
 static inline void inode_unlock(struct inode *inode)
 {
-	//mutex_unlock(&inode->i_mutex);
+	up_write(&inode->i_rwsem);
+}
+
+static inline void inode_lock_shared(struct inode *inode)
+{
+	down_read(&inode->i_rwsem);
+}
+
+static inline void inode_unlock_shared(struct inode *inode)
+{
+	up_read(&inode->i_rwsem);
 }
 
 void clear_inode(struct inode *inode);
