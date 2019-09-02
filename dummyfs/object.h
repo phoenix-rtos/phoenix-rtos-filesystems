@@ -21,6 +21,9 @@ extern dummyfs_object_t *object_create(void);
 extern dummyfs_object_t *object_get(unsigned int id);
 
 
+extern dummyfs_object_t *object_get_unlocked(unsigned int id);
+
+
 extern void object_put(dummyfs_object_t *o);
 
 

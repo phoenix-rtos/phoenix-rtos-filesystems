@@ -171,6 +171,7 @@ int dir_remove(dummyfs_object_t *dir, const char *name)
 	return -ENOENT;
 }
 
+
 void dir_clean(dummyfs_object_t *dir)
 {
 	dummyfs_dirent_t *v;
@@ -180,18 +181,6 @@ void dir_clean(dummyfs_object_t *dir)
 		return;
 
 	do {
-		/* paranoia check */
-		if (e == e->next) {
-			if (e->deleted) {
-				dir->entries = NULL;
-				dummyfs_decsz(e->len + sizeof(dummyfs_dirent_t));
-				free(e->name);
-				free(e);
-			}
-			dir->dirty = 0;
-			return;
-		}
-
 		if (e->deleted) {
 			e->prev->next = e->next;
 			e->next->prev = e->prev;
@@ -200,16 +189,6 @@ void dir_clean(dummyfs_object_t *dir)
 			dummyfs_decsz(e->len + sizeof(dummyfs_dirent_t));
 			v = e;
 			e = e->next;
-
-			/* paranoia checks */
-			if (v == dir->entries)
-				dir->entries = dir->entries->next;
-
-
-			if (e == v) {
-				dir->entries = NULL;
-				e = NULL;
-			}
 
 			free(v->name);
 			free(v);
@@ -224,8 +203,6 @@ int dir_empty(dummyfs_object_t *dir)
 {
 	/* clean dir before checking */
 	dir_clean(dir);
-	if (dir->entries == NULL)
-		return EOK;
 
 	if (dir->entries->next->next != dir->entries)
 		return -EBUSY;

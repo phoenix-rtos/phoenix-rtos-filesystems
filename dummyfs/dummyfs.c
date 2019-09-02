@@ -292,17 +292,14 @@ int dummyfs_link(oid_t *dir, const char *name, oid_t *oid)
 		ret = dir_replace(d, name, oid);
 		victim_o->nlink--;
 		// object_unlock(victim_o); //FIXME: per-object locking
-		object_put(victim_o);
 	}
 
 	if (ret != EOK) {
 		object_unlock(d);
 		object_lock(o);
 		o->nlink--;
-		if (o->type == otDir) {
+		if (o->type == otDir)
 			o->nlink--;
-			dir_destroy(o);
-		}
 		object_unlock(o);
 	}
 
@@ -311,9 +308,7 @@ int dummyfs_link(oid_t *dir, const char *name, oid_t *oid)
 	object_unlock(d);
 	object_put(o);
 	object_put(d);
-
-	if (victim_o)
-		dummyfs_destroy(&victim_oid);
+	object_put(victim_o);
 
 	return ret;
 }
@@ -385,9 +380,7 @@ int dummyfs_unlink(oid_t *dir, const char *name)
 			o->nlink--;
 		object_unlock(o);
 	}
-
 	object_put(o);
-	dummyfs_destroy(&o->oid);
 
 	return ret;
 }
@@ -421,8 +414,6 @@ int dummyfs_create(oid_t *dir, const char *name, oid_t *oid, int type, int mode,
 
 	if ((ret = dummyfs_link(dir, name, &o->oid)) != EOK) {
 		object_put(o);
-		object_remove(o);
-		free(o);
 		return ret;
 	}
 
@@ -444,7 +435,7 @@ int dummyfs_destroy(oid_t *oid)
 	dummyfs_object_t *o;
 	int ret = EOK;
 
-	o = dummyfs_get(oid);
+	o = object_get_unlocked(oid->id);
 
 	if (o == NULL)
 		return -ENOENT;

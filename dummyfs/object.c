@@ -28,6 +28,7 @@ idtree_t dummytree = { 0 };
 handle_t olock;
 
 #define dummy_node2obj(n) lib_treeof(dummyfs_object_t, node, n)
+extern int dummyfs_destroy(oid_t *oid);
 
 dummyfs_object_t *object_create(void)
 {
@@ -87,17 +88,21 @@ void object_unlock(dummyfs_object_t *o)
 
 int object_remove(dummyfs_object_t *o)
 {
-	mutexLock(olock);
-	if (o->nlink) {
-		mutexUnlock(olock);
+	if (o->nlink || o->refs)
 		return -EBUSY;
-	}
 
 	idtree_remove(&dummytree, &o->node);
-
-	mutexUnlock(olock);
-
 	return EOK;
+}
+
+
+dummyfs_object_t *object_get_unlocked(unsigned int id)
+{
+	dummyfs_object_t *o;
+
+	o = dummy_node2obj(idtree_find(&dummytree, id));
+
+	return o;
 }
 
 
@@ -106,7 +111,7 @@ dummyfs_object_t *object_get(unsigned int id)
 	dummyfs_object_t *o;
 
 	mutexLock(olock);
-	if ((o = dummy_node2obj(idtree_find(&dummytree, id))) != NULL)
+	if ((o = object_get_unlocked(id)) != NULL)
 		o->refs++;
 	mutexUnlock(olock);
 
@@ -117,14 +122,19 @@ dummyfs_object_t *object_get(unsigned int id)
 void object_put(dummyfs_object_t *o)
 {
 	mutexLock(olock);
-	if (o != NULL && o->refs)
+	if (o != NULL && o->refs) {
 		o->refs--;
 
-	if (!o->refs && o->type == otDir && o->dirty)
-		dir_clean(o);
+		if (!o->refs && o->type == otDir && o->dirty) {
+			object_lock(o);
+			dir_clean(o);
+			object_unlock(o);
+		}
 
+		if (!o->refs && !o->nlink)
+			dummyfs_destroy(&o->oid);
+	}
 	mutexUnlock(olock);
-
 	return;
 }
 
