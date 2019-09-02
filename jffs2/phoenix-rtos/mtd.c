@@ -32,6 +32,11 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 		return 0;
 
 	mutexLock(mtd->lock);
+	if (from > mtd->size || len < 0) {
+		printf("mtd_read: invalid read offset: 0x%lx max offset: 0x%llx", from, mtd->size);
+		BUG();
+	}
+
 	if (from % mtd->writesize) {
 		ret = flashdrv_read(mtd->dma, (from / mtd->writesize) + mtd->start, mtd->data_buf, mtd->meta_buf);
 		if (((ret >> 8) & 0xff) == 0xfe || (ret & 0xff) == 0x4) {
@@ -94,6 +99,11 @@ int mtd_write(struct mtd_info *mtd, loff_t to, size_t len, size_t *retlen,
 		return 0;
 
 	mutexLock(mtd->lock);
+	if (to > mtd->size || len < 0) {
+		printf("mtd_write: invalid read offset: 0x%lx max offset: 0x%llx", to, mtd->size);
+		BUG();
+	}
+
 	while (len) {
 		ret = flashdrv_read(mtd->dma, (to / mtd->writesize) + mtd->start, NULL, mtd->meta_buf);
 		if (((ret >> 8) & 0xff) == 0xfe || (ret & 0xff) == 0x4) {
@@ -147,7 +157,6 @@ int mtd_read_oob(struct mtd_info *mtd, loff_t from, struct mtd_oob_ops *ops)
 
 	int ret = 0;
 
-	mutexLock(mtd->lock);
 	while (ops->oobretlen < ops->ooblen) {
 		ret = flashdrv_read(mtd->dma, (from / mtd->writesize) + mtd->start, NULL, mtd->meta_buf);
 		if (((ret >> 8) & 0xff) == 0xfe || (ret & 0xff) == 0x4) {
@@ -160,7 +169,6 @@ int mtd_read_oob(struct mtd_info *mtd, loff_t from, struct mtd_oob_ops *ops)
 		from += mtd->writesize;
 	}
 
-	mutexUnlock(mtd->lock);
 	return 0;
 }
 

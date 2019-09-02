@@ -96,8 +96,16 @@ extern unsigned int dirty_writeback_interval; /* centiseconds */
 #define ClearPageUptodate(x) { }
 
 
-#define BUG() do { } while (0)
-#define BUG_ON(condition) do { } while (0)
+#define BUG() do { \
+	printf("BUG at %s:%d function %s\n", __FILE__, __LINE__, __func__); \
+	sleep(10000); \
+} while (1)
+
+#define BUG_ON(condition) do { \
+	if (condition) \
+		BUG(); \
+} while (0)
+
 #define WARN_ON(condition) do { } while (0)
 #define BUILD_BUG_ON(condition) ((void)sizeof(char[1 - 2*!!(condition)]))
 
