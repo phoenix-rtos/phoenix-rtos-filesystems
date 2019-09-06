@@ -22,10 +22,20 @@
 #define MTD_BLOCK_SIZE (64 * MTD_PAGE_SIZE)
 
 
+static int mtd_read_err(int ret)
+{
+		if (((ret >> 8) & 0xff) == 0xfe || (ret & 0x4))
+			return -EBADMSG;
+		else if (((ret >> 8) & 0x7) || (ret & 0x8))
+			return -EUCLEAN;
+		return 0;
+}
+
+
 int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 			     u_char *buf)
 {
-	int ret;
+	int ret, err = 0;
 	*retlen = 0;
 
 	if (!len)
@@ -39,11 +49,8 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 
 	if (from % mtd->writesize) {
 		ret = flashdrv_read(mtd->dma, (from / mtd->writesize) + mtd->start, mtd->data_buf, mtd->meta_buf);
-		if (((ret >> 8) & 0xff) == 0xfe || (ret & 0xff) == 0x4) {
-				printf("jffs2: Flash read error 0x%x\n", ret);
-				mutexUnlock(mtd->lock);
-				return -1;
-		}
+		err = mtd_read_err(ret);
+
 
 		*retlen += mtd->writesize - (from % mtd->writesize);
 		if (*retlen > len)
@@ -56,16 +63,12 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 
 	if (!len) {
 		mutexUnlock(mtd->lock);
-		return 0;
+		return err;
 	}
 
 	while (len >= mtd->writesize) {
 		ret = flashdrv_read(mtd->dma, (from / mtd->writesize) + mtd->start, mtd->data_buf, mtd->meta_buf);
-		if (((ret >> 8) & 0xff) == 0xfe || (ret & 0xff) == 0x4) {
-			printf("jffs2: Flash read error 0x%x\n", ret);
-			mutexUnlock(mtd->lock);
-			return -1;
-		}
+		err = err == -EBADMSG ? err : mtd_read_err(ret);
 
 		memcpy(buf + *retlen, mtd->data_buf, mtd->writesize);
 		len -= mtd->writesize;
@@ -75,17 +78,17 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 
 	if (len > 0) {
 		ret = flashdrv_read(mtd->dma, (from / mtd->writesize) + mtd->start, mtd->data_buf, mtd->meta_buf);
-		if (((ret >> 8) & 0xff) == 0xfe || (ret & 0xff) == 0x4) {
-			printf("jffs2: Flash read error 0x%x\n", ret);
-			mutexUnlock(mtd->lock);
-			return -1;
-		}
+		err = err == -EBADMSG ? err : mtd_read_err(ret);
 
 		memcpy(buf + *retlen, mtd->data_buf, len);
 		*retlen += len;
 	}
 	mutexUnlock(mtd->lock);
-	return 0;
+
+	if (err == -EBADMSG)
+		pr_err("mtd_read 0x%lx - 0x%lx uncorrectable flash error\n", from, from + len);
+
+	return err;
 }
 
 
@@ -109,7 +112,7 @@ int mtd_write(struct mtd_info *mtd, loff_t to, size_t len, size_t *retlen,
 		if (((ret >> 8) & 0xff) == 0xfe || (ret & 0xff) == 0x4) {
 			printf("jffs2: Oob flash read error 0x%x\n", ret);
 			mutexUnlock(mtd->lock);
-			return -1;
+			return -EBADMSG;
 		}
 
 		memcpy(mtd->data_buf, buf + *retlen, mtd->writesize);
@@ -155,21 +158,21 @@ int mtd_writev(struct mtd_info *mtd, const struct kvec *vecs,
 int mtd_read_oob(struct mtd_info *mtd, loff_t from, struct mtd_oob_ops *ops)
 {
 
-	int ret = 0;
+	int ret = 0, err = 0;
 
 	while (ops->oobretlen < ops->ooblen) {
 		ret = flashdrv_read(mtd->dma, (from / mtd->writesize) + mtd->start, NULL, mtd->meta_buf);
-		if (((ret >> 8) & 0xff) == 0xfe || (ret & 0xff) == 0x4) {
-			printf("jffs2: Oob flash readerror 0x%x\n", ret);
-			return -1;
-		}
+		err = err == -EBADMSG ? err : mtd_read_err(ret);
 
 		memcpy(ops->oobbuf + ops->oobretlen, mtd->meta_buf, ops->ooblen > mtd->oobsize ? mtd->oobsize : ops->ooblen);
 		ops->oobretlen += ops->ooblen > mtd->oobsize ? mtd->oobsize : ops->ooblen;
 		from += mtd->writesize;
 	}
 
-	return 0;
+	if (err == -EBADMSG)
+		pr_err("mtd_read_oob 0x%lx uncorrectable flash error\n", from);
+
+	return err;
 }
 
 
