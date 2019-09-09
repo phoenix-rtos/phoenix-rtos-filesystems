@@ -24,11 +24,17 @@
 
 static int mtd_read_err(int ret)
 {
-		if (((ret >> 8) & 0xff) == 0xfe || (ret & 0x4))
-			return -EBADMSG;
-		else if (((ret >> 8) & 0x7) || (ret & 0x8))
-			return -EUCLEAN;
+	/* block is erased */
+	if (((ret >> 8) & 0xff) == 0xff)
 		return 0;
+	/* uncorrectable error */
+	else if (((ret >> 8) & 0xff) == 0xfe || (ret & 0x4))
+		return -EBADMSG;
+	/* correctable error */
+	else if (((ret >> 8) & 0x7) || (ret & 0x8))
+		return -EUCLEAN;
+	/* no error */
+	return 0;
 }
 
 
@@ -43,7 +49,7 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 
 	mutexLock(mtd->lock);
 	if (from > mtd->size || len < 0) {
-		printf("mtd_read: invalid read offset: 0x%lx max offset: 0x%llx", from, mtd->size);
+		printf("mtd_read: invalid read offset: 0x%llx max offset: 0x%llx", from, mtd->size);
 		BUG();
 	}
 
@@ -86,7 +92,7 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 	mutexUnlock(mtd->lock);
 
 	if (err == -EBADMSG)
-		pr_err("mtd_read 0x%lx - 0x%lx uncorrectable flash error\n", from, from + len);
+		pr_err("mtd_read 0x%llx - 0x%llx uncorrectable flash error\n", from, from + len);
 
 	return err;
 }
@@ -95,7 +101,7 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 int mtd_write(struct mtd_info *mtd, loff_t to, size_t len, size_t *retlen,
 		const u_char *buf)
 {
-	int ret;
+	int ret, err;
 	*retlen = 0;
 
 	if (!len)
@@ -103,16 +109,16 @@ int mtd_write(struct mtd_info *mtd, loff_t to, size_t len, size_t *retlen,
 
 	mutexLock(mtd->lock);
 	if (to > mtd->size || len < 0) {
-		printf("mtd_write: invalid read offset: 0x%lx max offset: 0x%llx", to, mtd->size);
+		printf("mtd_write: invalid read offset: 0x%llx max offset: 0x%llx", to, mtd->size);
 		BUG();
 	}
 
 	while (len) {
 		ret = flashdrv_read(mtd->dma, (to / mtd->writesize) + mtd->start, NULL, mtd->meta_buf);
-		if (((ret >> 8) & 0xff) == 0xfe || (ret & 0xff) == 0x4) {
-			printf("jffs2: Oob flash read error 0x%x\n", ret);
+		err = mtd_read_err(ret);
+		if (err == -EBADMSG) {
 			mutexUnlock(mtd->lock);
-			return -EBADMSG;
+			return err;
 		}
 
 		memcpy(mtd->data_buf, buf + *retlen, mtd->writesize);
@@ -170,7 +176,7 @@ int mtd_read_oob(struct mtd_info *mtd, loff_t from, struct mtd_oob_ops *ops)
 	}
 
 	if (err == -EBADMSG)
-		pr_err("mtd_read_oob 0x%lx uncorrectable flash error\n", from);
+		pr_err("mtd_read_oob 0x%llx uncorrectable flash error\n", from);
 
 	return err;
 }

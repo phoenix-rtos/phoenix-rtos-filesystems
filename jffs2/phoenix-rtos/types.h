@@ -51,9 +51,7 @@ typedef struct {
 
 typedef unsigned short umode_t;
 
-typedef long loff_t;
-
-typedef int pid_t;
+typedef long long loff_t;
 
 typedef int gfp_t;
 
