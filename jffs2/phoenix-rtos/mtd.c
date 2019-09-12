@@ -126,6 +126,7 @@ int mtd_write(struct mtd_info *mtd, loff_t to, size_t len, size_t *retlen,
 		const u_char *buf)
 {
 	int ret, err = 0;
+	flashdrv_meta_t *meta = mtd->meta_buf;
 	*retlen = 0;
 
 	if (!len)
@@ -138,6 +139,7 @@ int mtd_write(struct mtd_info *mtd, loff_t to, size_t len, size_t *retlen,
 	}
 
 	while (len) {
+		memset(meta->errors, 0, sizeof(meta->errors));
 		ret = flashdrv_read(mtd->dma, (to / mtd->writesize) + mtd->start, NULL, mtd->meta_buf);
 		err = mtd_read_err(ret, mtd->meta_buf, err);
 		if (err == -EBADMSG) {
