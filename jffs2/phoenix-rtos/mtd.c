@@ -21,20 +21,44 @@
 #define MTD_PAGE_SIZE 4096
 #define MTD_BLOCK_SIZE (64 * MTD_PAGE_SIZE)
 
+#define ECC_BITFLIP_THRESHOLD 4
 
-static int mtd_read_err(int ret)
+static int mtd_read_err(int ret, flashdrv_meta_t *meta, int status)
 {
-	/* block is erased */
-	if (((ret >> 8) & 0xff) == 0xff)
-		return 0;
-	/* uncorrectable error */
-	else if (((ret >> 8) & 0xff) == 0xfe || (ret & 0x4))
+	int max_bitflip = 0;
+	int status_blk0 = (ret >> 8) & 0xff;
+	int i;
+	/* check current read status. if it is EBADMSG we have nothing to do here since
+	 * read is marked as uncorrectable */
+	if (status == -EBADMSG)
+		return status;
+
+	/* block 0 is erased... */
+	if (status_blk0 == 0xff) {
+		/* but we still need to count errors */
+		if (ret & 0xc) {
+			for (i = 0; i < sizeof(meta->errors)/sizeof(meta->errors[0]); i++)
+				max_bitflip = max(max_bitflip, (int)meta->errors[i]);
+		}
+		return max_bitflip > ECC_BITFLIP_THRESHOLD ? -EBADMSG : status;
+	}
+	/* uncorrectable errors */
+	else if (status_blk0 == 0xfe || (ret & 0x4)) {
 		return -EBADMSG;
-	/* correctable error */
-	else if (((ret >> 8) & 0x7) || (ret & 0x8))
-		return -EUCLEAN;
+	}
+	/* correctable errors */
+	else if ((status_blk0 & 0x7) || (ret & 0x8)) {
+		/* count them and return maximum */
+		if (status_blk0 & 0x7)
+			max_bitflip = max(max_bitflip, status_blk0);
+
+		for (i = 0; i < sizeof(meta->errors)/sizeof(meta->errors[0]); i++)
+			max_bitflip = max(max_bitflip, (int)meta->errors[i]);
+
+		return max_bitflip >= ECC_BITFLIP_THRESHOLD ? -EUCLEAN : status;
+	}
 	/* no error */
-	return 0;
+	return status;
 }
 
 
@@ -48,14 +72,14 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 		return 0;
 
 	mutexLock(mtd->lock);
-	if (from > mtd->size || len < 0) {
-		printf("mtd_read: invalid read offset: 0x%llx max offset: 0x%llx", from, mtd->size);
+	if (from > mtd->size || len < 0 || from + len > mtd->size) {
+		printf("mtd_read: invalid read offset: 0x%llx - 0x%llx max offset: 0x%llx", from, from + len, mtd->size);
 		BUG();
 	}
 
 	if (from % mtd->writesize) {
 		ret = flashdrv_read(mtd->dma, (from / mtd->writesize) + mtd->start, mtd->data_buf, mtd->meta_buf);
-		err = mtd_read_err(ret);
+		err = mtd_read_err(ret, mtd->meta_buf, err);
 
 
 		*retlen += mtd->writesize - (from % mtd->writesize);
@@ -74,7 +98,7 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 
 	while (len >= mtd->writesize) {
 		ret = flashdrv_read(mtd->dma, (from / mtd->writesize) + mtd->start, mtd->data_buf, mtd->meta_buf);
-		err = err == -EBADMSG ? err : mtd_read_err(ret);
+		err = mtd_read_err(ret, mtd->meta_buf, err);
 
 		memcpy(buf + *retlen, mtd->data_buf, mtd->writesize);
 		len -= mtd->writesize;
@@ -84,7 +108,7 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 
 	if (len > 0) {
 		ret = flashdrv_read(mtd->dma, (from / mtd->writesize) + mtd->start, mtd->data_buf, mtd->meta_buf);
-		err = err == -EBADMSG ? err : mtd_read_err(ret);
+		err = mtd_read_err(ret, mtd->meta_buf, err);
 
 		memcpy(buf + *retlen, mtd->data_buf, len);
 		*retlen += len;
@@ -101,21 +125,21 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 int mtd_write(struct mtd_info *mtd, loff_t to, size_t len, size_t *retlen,
 		const u_char *buf)
 {
-	int ret, err;
+	int ret, err = 0;
 	*retlen = 0;
 
 	if (!len)
 		return 0;
 
 	mutexLock(mtd->lock);
-	if (to > mtd->size || len < 0) {
-		printf("mtd_write: invalid read offset: 0x%llx max offset: 0x%llx", to, mtd->size);
+	if (to > mtd->size || len < 0 || to + len > mtd->size) {
+		printf("mtd_write: invalid write offset: 0x%llx-0x%llx max offset: 0x%llx", to, to + len, mtd->size);
 		BUG();
 	}
 
 	while (len) {
 		ret = flashdrv_read(mtd->dma, (to / mtd->writesize) + mtd->start, NULL, mtd->meta_buf);
-		err = mtd_read_err(ret);
+		err = mtd_read_err(ret, mtd->meta_buf, err);
 		if (err == -EBADMSG) {
 			mutexUnlock(mtd->lock);
 			return err;
@@ -125,7 +149,7 @@ int mtd_write(struct mtd_info *mtd, loff_t to, size_t len, size_t *retlen,
 
 		if ((ret = flashdrv_write(mtd->dma, (to / mtd->writesize) + mtd->start, mtd->data_buf, mtd->meta_buf))) {
 			mutexUnlock(mtd->lock);
-			printf("jffs2: Flash write error 0x%x\n", ret);
+			printf("mtd_write: Flash write error 0x%x\n to 0x%llx", ret, to);
 			return -1;
 		}
 
@@ -165,10 +189,12 @@ int mtd_read_oob(struct mtd_info *mtd, loff_t from, struct mtd_oob_ops *ops)
 {
 
 	int ret = 0, err = 0;
+	flashdrv_meta_t *meta = mtd->meta_buf;
 
 	while (ops->oobretlen < ops->ooblen) {
+		memset(meta->errors, 0, sizeof(meta->errors));
 		ret = flashdrv_read(mtd->dma, (from / mtd->writesize) + mtd->start, NULL, mtd->meta_buf);
-		err = err == -EBADMSG ? err : mtd_read_err(ret);
+		err = mtd_read_err(ret, mtd->meta_buf, err);
 
 		memcpy(ops->oobbuf + ops->oobretlen, mtd->meta_buf, ops->ooblen > mtd->oobsize ? mtd->oobsize : ops->ooblen);
 		ops->oobretlen += ops->ooblen > mtd->oobsize ? mtd->oobsize : ops->ooblen;
@@ -176,7 +202,7 @@ int mtd_read_oob(struct mtd_info *mtd, loff_t from, struct mtd_oob_ops *ops)
 	}
 
 	if (err == -EBADMSG)
-		pr_err("mtd_read_oob 0x%llx uncorrectable flash error\n", from);
+		pr_err("mtd_read_oob: 0x%llx uncorrectable flash error\n", from);
 
 	return err;
 }
@@ -188,7 +214,7 @@ int mtd_write_oob(struct mtd_info *mtd, loff_t to, struct mtd_oob_ops *ops)
 	int ret;
 
 	if (ops->ooblen > mtd->oobsize) {
-		printf("jffs2: Oob flash write len larger than oob size %d > %d\n", ops->ooblen, mtd->oobsize);
+		printf("mtd_write_oob: Oob flash write len larger than oob size %d > %d\n", ops->ooblen, mtd->oobsize);
 		return -1;
 	}
 
@@ -198,7 +224,7 @@ int mtd_write_oob(struct mtd_info *mtd, loff_t to, struct mtd_oob_ops *ops)
 	memcpy(mtd->meta_buf, ops->oobbuf, ops->ooblen);
 
 	if ((ret = flashdrv_write(mtd->dma, (to / mtd->writesize) + mtd->start, NULL, mtd->meta_buf))) {
-		printf("jffs2: Oob flash write error 0x%x\n", ret);
+		printf("mtd_write_oob: Oob flash write error 0x%x\n", ret);
 		return -1;
 	}
 	mutexUnlock(mtd->lock);
@@ -227,13 +253,13 @@ int mtd_erase(struct mtd_info *mtd, struct erase_info *instr)
 	int ret;
 
 	if (instr->len != mtd->erasesize || instr->addr % mtd->erasesize) {
-		printf("jffs2: Invalid flash erase parametrs\n");
+		printf("mtd_erase: Invalid flash erase parametrs\n");
 		return -1;
 	}
 
 	mutexLock(mtd->lock);
 	if ((ret = flashdrv_erase(mtd->dma, (u32)(instr->addr / mtd->writesize) + mtd->start))) {
-		printf("jffs2: Flash erase error 0x%d\n", ret);
+		printf("mtd_erase: Flash erase error 0x%d\n", ret);
 		return -1;
 	}
 
