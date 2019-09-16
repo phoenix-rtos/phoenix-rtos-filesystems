@@ -710,6 +710,8 @@ int main(int argc, char **argv)
 	if (daemonize) {
 		pid_t pid, sid;
 
+		/* set exit handler */
+		signal(SIGUSR1, signal_exit);
 		/* Fork off the parent process */
 		pid = fork();
 		if (pid < 0) {
@@ -719,14 +721,13 @@ int main(int argc, char **argv)
 
 		if (pid > 0) {
 			/* PARENT: wait for initailization to finish and then exit */
-			//FIXME: wait only for SIGUSR1, but currently the signal handling is broken
-			for (int i = 1; i < NSIG; ++i)
-				signal(i, signal_exit);
 			sleep(10);
 
 			LOG("failed to communicate with child\n");
 			exit(EXIT_FAILURE);
 		}
+		/* set default handler back again */
+		signal(SIGUSR1, signal_exit);
 
 		/* Create a new SID for the child process */
 		sid = setsid();
