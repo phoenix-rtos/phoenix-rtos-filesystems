@@ -248,7 +248,7 @@ int dummyfs_link(oid_t *dir, const char *name, oid_t *oid)
 	if (d->type != otDir) {
 		object_put(o);
 		object_put(d);
-		return -EINVAL;
+		return -EEXIST;
 	}
 
 	if (o->type == otDir && o->nlink != 0) {
@@ -666,6 +666,7 @@ int main(int argc, char **argv)
 	unsigned int rid;
 	const char *mountpt = NULL;
 	const char *remount_path = NULL;
+	int non_fs_namespace = 0;
 	int daemonize = 0;
 	int c;
 
@@ -675,7 +676,7 @@ int main(int argc, char **argv)
 
 	dummyfs_common.size = 0;
 
-	while ((c = getopt(argc, argv, "Dhm:r:")) != -1) {
+	while ((c = getopt(argc, argv, "Dhm:r:N:")) != -1) {
 		switch (c) {
 			case 'm':
 				mountpt = optarg;
@@ -688,6 +689,10 @@ int main(int argc, char **argv)
 				return 0;
 			case 'D':
 				daemonize = 1;
+				break;
+			case 'N':
+				non_fs_namespace = 1;
+				mountpt = optarg;
 				break;
 			default:
 				print_usage(argv[0]);
@@ -753,6 +758,14 @@ int main(int argc, char **argv)
 	}
 	else {
 		portCreate(&dummyfs_common.port);
+		if (non_fs_namespace) {
+			if (portRegister(dummyfs_common.port, mountpt, &root) < 0) {
+				LOG("can't mount as %s\n", mountpt);
+				return -1;
+			}
+			mountpt = NULL;
+		}
+
 	}
 
 	if (mutexCreate(&dummyfs_common.mutex) != EOK) {
@@ -779,14 +792,14 @@ int main(int argc, char **argv)
 
 	dummyfs_setattr(&o->oid, atMode, S_IFDIR | 0777, NULL, 0);
 
-	if (mountpt == NULL) {
+	if (!non_fs_namespace && mountpt == NULL) {
 		fetch_modules();
 		mountpt = remount_path;
 	}
 
 	if (daemonize) {
 		/* mount synchronously */
-		if (dummyfs_mount_sync(mountpt)) {
+		if (!non_fs_namespace && dummyfs_mount_sync(mountpt)) {
 			LOG("failed to mount, exiting\n");
 			return 1;
 		}
