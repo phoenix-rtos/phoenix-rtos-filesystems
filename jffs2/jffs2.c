@@ -165,12 +165,8 @@ static int jffs2_srv_lookup(jffs2_partition_t *p, oid_t *dir, const char *name, 
 
 	if (dev_find_ino(p->devs, res->id) != NULL)
 		memcpy(dev, &(dev_find_ino(p->devs, res->id)->dev), sizeof(oid_t));
-	else {
-		if (S_ISCHR(inode->i_mode))
-			len = -ENOENT;
-		else
-			memcpy(dev, res, sizeof(oid_t));
-	}
+	else
+		memcpy(dev, res, sizeof(oid_t));
 
 	if (lnk != NULL && S_ISLNK(inode->i_mode)) {
 		if (strlen(inode->i_link) < lnksz)
@@ -521,31 +517,12 @@ static int jffs2_srv_create(jffs2_partition_t *p, oid_t *dir, const char *name, 
 		ret = -EEXIST;
 		inode = d_inode(dtemp);
 
-		/* Entry exists so we need to check if it is dangling device entry */
-		if(S_ISCHR(inode->i_mode) && dev_find_ino(p->devs, inode->i_ino) == NULL) {
-			/* Now we check if we can reuse this entry. If we want to create device,
-			 * entry can be used again. Otherwise we continue, entry will be obsoleted */
-			if (type == otDev) {
-				ret = EOK;
-				dev_find_oid(p->devs, dev, inode->i_ino, 1);
-				oid->id = inode->i_ino;
-				iput(inode);
-				free(dentry->d_name.name);
-				free(dentry);
-				inode_unlock(idir);
-				iput(idir);
-				return ret;
-			}
-			iput(inode);
-
-		} else {
-			iput(inode);
-			free(dentry->d_name.name);
-			free(dentry);
-			inode_unlock(idir);
-			iput(idir);
-			return ret;
-		}
+		iput(inode);
+		free(dentry->d_name.name);
+		free(dentry);
+		inode_unlock(idir);
+		iput(idir);
+		return ret;
 	}
 
 	oid->port = p->port;
@@ -602,7 +579,7 @@ static int jffs2_srv_readdir(jffs2_partition_t *p, oid_t *dir, offs_t offs, stru
 {
 	struct inode *inode;
 	struct file file;
-	struct dir_context ctx = {dir_print, offs, dent, -1, p->devs};
+	struct dir_context ctx = {dir_print, offs, dent, -1};
 
 	if (!dir->id)
 		return -EINVAL;
@@ -614,6 +591,7 @@ static int jffs2_srv_readdir(jffs2_partition_t *p, oid_t *dir, offs_t offs, stru
 
 	inode_lock_shared(inode);
 	if (!(S_ISDIR(inode->i_mode))) {
+		inode_unlock_shared(inode);
 		iput(inode);
 		return -ENOTDIR;
 	}
@@ -677,10 +655,12 @@ static int jffs2_srv_read(jffs2_partition_t *p, oid_t *oid, offs_t offs, void *d
 	inode_lock_shared(inode);
 
 	if(S_ISDIR(inode->i_mode)) {
+		inode_unlock_shared(inode);
 		iput(inode);
 		return -EISDIR;
 	} else if (S_ISCHR(inode->i_mode)) {
 		printf("jffs2: Used wrong oid to read from device\n");
+		inode_unlock_shared(inode);
 		iput(inode);
 		return -EINVAL;
 	} else if (S_ISLNK(inode->i_mode)) {
@@ -690,6 +670,7 @@ static int jffs2_srv_read(jffs2_partition_t *p, oid_t *oid, offs_t offs, void *d
 			ret = len;
 
 		memcpy(data, inode->i_link, ret);
+		inode_unlock_shared(inode);
 		iput(inode);
 		return ret;
 	}
@@ -698,6 +679,7 @@ static int jffs2_srv_read(jffs2_partition_t *p, oid_t *oid, offs_t offs, void *d
 	c = JFFS2_SB_INFO(inode->i_sb);
 
 	if (inode->i_size < offs) {
+		inode_unlock_shared(inode);
 		iput(inode);
 		return 0;
 	}
@@ -817,13 +799,16 @@ static int jffs2_srv_write(jffs2_partition_t *p, oid_t *oid, offs_t offs, void *
 	inode_lock(inode);
 
 	if(S_ISDIR(inode->i_mode)) {
+		inode_unlock(inode);
 		iput(inode);
 		return -EISDIR;
 	} else if (S_ISCHR(inode->i_mode)) {
 		printf("jffs2: Used wrong oid to write to device\n");
+		inode_unlock(inode);
 		iput(inode);
 		return -EINVAL;
 	} else if (S_ISLNK(inode->i_mode)) {
+		inode_unlock(inode);
 		iput(inode);
 		return -EINVAL;
 	}
@@ -831,12 +816,14 @@ static int jffs2_srv_write(jffs2_partition_t *p, oid_t *oid, offs_t offs, void *
 	ri = jffs2_alloc_raw_inode();
 
 	if (ri == NULL) {
+		inode_unlock(inode);
 		iput(inode);
 		return -ENOMEM;
 	}
 
 	if ((ret = jffs2_srv_prepare_write(inode, offs, len))) {
 		jffs2_free_raw_inode(ri);
+		inode_unlock(inode);
 		iput(inode);
 		return ret;
 	}

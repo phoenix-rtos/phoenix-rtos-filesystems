@@ -66,7 +66,6 @@ struct dir_context {
 	loff_t pos;
 	struct dirent *dent;
 	int emit;
-	void *devs;
 };
 
 
@@ -167,9 +166,6 @@ static inline int dir_print(struct dir_context *ctx, const char *name, int len, 
 		case DT_CHR:
 		case DT_BLK:
 			ctx->dent->d_type = otDev;
-			/* skip if its dangling device entry */
-			if (dev_find_ino(ctx->devs, ino) == NULL)
-				return 1;
 			break;
 		case DT_LNK:
 			ctx->dent->d_type = otSymlink;
