@@ -449,7 +449,7 @@ int dummyfs_destroy(oid_t *oid)
 		else if (o->type == otDir)
 			dir_destroy(o);
 		else if (o->type == otDev)
-			dev_destroy(oid);
+			dev_destroy(&o->dev);
 
 		dummyfs_decsz(sizeof(dummyfs_object_t));
 		free(o);
