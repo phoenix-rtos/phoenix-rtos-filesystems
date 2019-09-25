@@ -21,44 +21,56 @@
 #define MTD_PAGE_SIZE 4096
 #define MTD_BLOCK_SIZE (64 * MTD_PAGE_SIZE)
 
-#define ECC_BITFLIP_THRESHOLD 4
+#define ECC_BITFLIP_THRESHOLD 10
+#define ECCN_BITFLIP_STRENGHT 14
+#define ECC0_BITFLIP_STRENGHT 16
 
-static int mtd_read_err(int ret, flashdrv_meta_t *meta, int status)
+static int mtd_read_err(int ret, flashdrv_meta_t *meta, int status, void *data)
 {
 	int max_bitflip = 0;
-	int status_blk0 = (ret >> 8) & 0xff;
-	int i;
+	unsigned *blk;
+	int i, j, err = 0;
 	/* check current read status. if it is EBADMSG we have nothing to do here since
 	 * read is marked as uncorrectable */
 	if (status == -EBADMSG)
 		return status;
 
-	/* block 0 is erased... */
-	if (status_blk0 == 0xff) {
-		/* but we still need to count errors */
-		if (ret & 0xc) {
-			for (i = 0; i < sizeof(meta->errors)/sizeof(meta->errors[0]); i++)
-				max_bitflip = max(max_bitflip, (int)meta->errors[i]);
+	/* check status for every block */
+	for (i = 0; i < sizeof(meta->errors)/sizeof(meta->errors[0]); i++) {
+		/* no error or all ones */
+		if (meta->errors[i] == 0x0 || meta->errors[i] == 0xff) {
+			continue;
 		}
-		return max_bitflip > ECC_BITFLIP_THRESHOLD ? -EBADMSG : status;
-	}
-	/* uncorrectable errors */
-	else if (status_blk0 == 0xfe || (ret & 0x4)) {
-		return -EBADMSG;
-	}
-	/* correctable errors */
-	else if ((status_blk0 & 0x7) || (ret & 0x8)) {
-		/* count them and return maximum */
-		if (status_blk0 & 0x7)
-			max_bitflip = max(max_bitflip, status_blk0);
+		/* uncorrectable errors but maybe block is erased and we can still use it */
+		else if (meta->errors[i] == 0xfe) {
+			err = 0;
+			if (i == 0) {
+				blk = (unsigned *)meta->metadata;
+				for (j = 0; j < sizeof(meta->metadata)/sizeof(unsigned); ++j)
+					err += (sizeof(unsigned) * 8) - __builtin_popcount(*blk + j);
 
-		for (i = 0; i < sizeof(meta->errors)/sizeof(meta->errors[0]); i++)
+				if (err > ECC0_BITFLIP_STRENGHT)
+					return -EBADMSG;
+
+				memset(blk, 0xff, sizeof(meta->metadata));
+				max_bitflip = max(max_bitflip, err);
+			} else {
+				blk = data + ((i - 1) * 512);
+				for (j = 0; j < 128; j++)
+					err += (sizeof(unsigned) * 8) - __builtin_popcount(*(blk + j));
+
+				if (err > ECCN_BITFLIP_STRENGHT)
+					return -EBADMSG;
+
+				memset(blk, 0xff, 512);
+				max_bitflip = max(max_bitflip, err);
+			}
+		}
+		/* correctable errors */
+		else
 			max_bitflip = max(max_bitflip, (int)meta->errors[i]);
-
-		return max_bitflip >= ECC_BITFLIP_THRESHOLD ? -EUCLEAN : status;
 	}
-	/* no error */
-	return status;
+	return max_bitflip >= ECC_BITFLIP_THRESHOLD ? -EUCLEAN : status;
 }
 
 
@@ -79,7 +91,7 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 
 	if (from % mtd->writesize) {
 		ret = flashdrv_read(mtd->dma, (from / mtd->writesize) + mtd->start, mtd->data_buf, mtd->meta_buf);
-		err = mtd_read_err(ret, mtd->meta_buf, err);
+		err = mtd_read_err(ret, mtd->meta_buf, err, mtd->data_buf);
 
 
 		*retlen += mtd->writesize - (from % mtd->writesize);
@@ -98,7 +110,7 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 
 	while (len >= mtd->writesize) {
 		ret = flashdrv_read(mtd->dma, (from / mtd->writesize) + mtd->start, mtd->data_buf, mtd->meta_buf);
-		err = mtd_read_err(ret, mtd->meta_buf, err);
+		err = mtd_read_err(ret, mtd->meta_buf, err, mtd->data_buf);
 
 		memcpy(buf + *retlen, mtd->data_buf, mtd->writesize);
 		len -= mtd->writesize;
@@ -108,7 +120,7 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 
 	if (len > 0) {
 		ret = flashdrv_read(mtd->dma, (from / mtd->writesize) + mtd->start, mtd->data_buf, mtd->meta_buf);
-		err = mtd_read_err(ret, mtd->meta_buf, err);
+		err = mtd_read_err(ret, mtd->meta_buf, err, mtd->data_buf);
 
 		memcpy(buf + *retlen, mtd->data_buf, len);
 		*retlen += len;
@@ -141,7 +153,7 @@ int mtd_write(struct mtd_info *mtd, loff_t to, size_t len, size_t *retlen,
 	while (len) {
 		memset(meta->errors, 0, sizeof(meta->errors));
 		ret = flashdrv_read(mtd->dma, (to / mtd->writesize) + mtd->start, NULL, mtd->meta_buf);
-		err = mtd_read_err(ret, mtd->meta_buf, err);
+		err = mtd_read_err(ret, mtd->meta_buf, err, mtd->data_buf);
 		if (err == -EBADMSG) {
 			mutexUnlock(mtd->lock);
 			return err;
@@ -196,7 +208,7 @@ int mtd_read_oob(struct mtd_info *mtd, loff_t from, struct mtd_oob_ops *ops)
 	while (ops->oobretlen < ops->ooblen) {
 		memset(meta->errors, 0, sizeof(meta->errors));
 		ret = flashdrv_read(mtd->dma, (from / mtd->writesize) + mtd->start, NULL, mtd->meta_buf);
-		err = mtd_read_err(ret, mtd->meta_buf, err);
+		err = mtd_read_err(ret, mtd->meta_buf, err, mtd->data_buf);
 
 		memcpy(ops->oobbuf + ops->oobretlen, mtd->meta_buf, ops->ooblen > mtd->oobsize ? mtd->oobsize : ops->ooblen);
 		ops->oobretlen += ops->ooblen > mtd->oobsize ? mtd->oobsize : ops->ooblen;
