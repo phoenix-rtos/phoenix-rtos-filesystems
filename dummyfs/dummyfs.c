@@ -57,7 +57,7 @@ int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res, oid_t *dev)
 {
 	dummyfs_object_t *o, *d;
 	int len = 0;
-	int err = 0;
+	int err = -ENOENT;
 
 	if (dir == NULL)
 		d = object_get(0);
