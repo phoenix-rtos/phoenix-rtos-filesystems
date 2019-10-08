@@ -82,7 +82,7 @@ struct mtd_info {
 	flashdrv_dma_t *dma;
 	void *data_buf;
 	void *meta_buf;
-	u32 start;
+	uint32_t start;
 	handle_t lock;
 };
 

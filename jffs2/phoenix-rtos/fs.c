@@ -190,7 +190,7 @@ static int bad_inode_permission(struct inode *inode, int mask)
 }
 
 static int bad_inode_getattr(const struct path *path, struct kstat *stat,
-			     u32 request_mask, unsigned int query_flags)
+			     uint32_t request_mask, unsigned int query_flags)
 {
 	return -EIO;
 }
@@ -398,7 +398,7 @@ int sync_filesystem(struct super_block *sb)
 
 struct dentry *generic_fh_to_dentry(struct super_block *sb,
 	struct fid *fid, int fh_len, int fh_type,
-	struct inode *(*get_inode) (struct super_block *sb, u64 ino, u32 gen))
+	struct inode *(*get_inode) (struct super_block *sb, uint64_t ino, uint32_t gen))
 {
 	return NULL;
 }
@@ -406,7 +406,7 @@ struct dentry *generic_fh_to_dentry(struct super_block *sb,
 
 struct dentry *generic_fh_to_parent(struct super_block *sb,
 	struct fid *fid, int fh_len, int fh_type,
-	struct inode *(*get_inode) (struct super_block *sb, u64 ino, u32 gen))
+	struct inode *(*get_inode) (struct super_block *sb, uint64_t ino, uint32_t gen))
 {
 	return NULL;
 }

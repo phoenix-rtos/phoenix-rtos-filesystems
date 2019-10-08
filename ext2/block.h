@@ -16,39 +16,40 @@
 #ifndef _BLOCK_H_
 #define _BLOCK_H_ /* block.h */
 
+#include <stdint.h>
 #include "ext2.h"
 
-extern int write_block(u32 block, void *data);
+extern int write_block(uint32_t block, void *data);
 
 
-extern int read_block(u32 block, void *data);
+extern int read_block(uint32_t block, void *data);
 
 
-extern int read_blocks(u32 block, u32 count, void *data);
+extern int read_blocks(uint32_t block, uint32_t count, void *data);
 
 
-extern int search_block(void *data, const char *name, u8 len, oid_t *res);
+extern int search_block(void *data, const char *name, uint8_t len, oid_t *res);
 
 
-extern void free_blocks(u32 start, u32 count);
+extern void free_blocks(uint32_t start, uint32_t count);
 
 
-extern int free_inode_blocks(ext2_object_t *o, u32 block, u32 count);
+extern int free_inode_blocks(ext2_object_t *o, uint32_t block, uint32_t count);
 
 
-extern void get_block(ext2_object_t *o, u32 block, void *data);
+extern void get_block(ext2_object_t *o, uint32_t block, void *data);
 
 
-extern u32 get_block_no(ext2_object_t *o, u32 block);
+extern uint32_t get_block_no(ext2_object_t *o, uint32_t block);
 
 
-extern void set_block(ext2_object_t *o, u32 block, void *data);
+extern void set_block(ext2_object_t *o, uint32_t block, void *data);
 
 
-extern int set_blocks(ext2_object_t *o, u32 start_block, u32 count, void *data);
+extern int set_blocks(ext2_object_t *o, uint32_t start_block, uint32_t count, void *data);
 
 
-static inline u32 block_offset(u32 block_no)
+static inline uint32_t block_offset(uint32_t block_no)
 {
 	return ext2->first_block + (ext2->block_size * (block_no - ext2->sb->first_data_block));
 }

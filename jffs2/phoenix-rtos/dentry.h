@@ -17,9 +17,8 @@
 #ifndef _OS_PHOENIX_DENTRY_H_
 #define _OS_PHOENIX_DENTRY_H_
 
-
 struct qstr {
-	u32 len;
+	uint32_t len;
 	const unsigned char *name;
 };
 

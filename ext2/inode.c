@@ -12,6 +12,8 @@
  *
  * %LICENSE%
  */
+
+#include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
@@ -25,13 +27,13 @@
 #include "sb.h"
 
 
-ext2_inode_t *inode_get(u32 ino)
+ext2_inode_t *inode_get(uint32_t ino)
 {
 	void *inode_block;
 	ext2_inode_t *inode;
-	u32 group;
-	u32 block;
-	u32 inodes_in_block;
+	uint32_t group;
+	uint32_t block;
+	uint32_t inodes_in_block;
 
 	if (ino < ROOTNODE_NO)
 		return NULL;
@@ -59,12 +61,12 @@ int inode_put(ext2_inode_t *inode)
 	return EOK;
 }
 
-int inode_set(u32 ino, ext2_inode_t *inode)
+int inode_set(uint32_t ino, ext2_inode_t *inode)
 {
 	void *inode_block;
-	u32 group;
-	u32 block;
-	u32 inodes_in_block;
+	uint32_t group;
+	uint32_t block;
+	uint32_t inodes_in_block;
 
 	if (ino < ROOTNODE_NO)
 		return -EINVAL;
@@ -86,7 +88,7 @@ int inode_set(u32 ino, ext2_inode_t *inode)
 	return EOK;
 }
 
-static int find_group_dir(u32 pino)
+static int find_group_dir(uint32_t pino)
 {
 	int i;
 	int pgroup = (pino - 1) / ext2->inodes_in_group;
@@ -123,7 +125,7 @@ static int find_group_dir(u32 pino)
 }
 
 
-static int find_group_file(u32 pino)
+static int find_group_file(uint32_t pino)
 {
 	int i;
 	int ngroups = ext2->gdt_size;
@@ -154,9 +156,9 @@ static int find_group_file(u32 pino)
 	return -1;
 }
 
-u32 inode_create(ext2_inode_t *inode, u32 mode, u32 pino)
+uint32_t inode_create(ext2_inode_t *inode, uint32_t mode, uint32_t pino)
 {
-	u32 ino;
+	uint32_t ino;
 	int group;
 	void *inode_bmp;
 
@@ -198,10 +200,10 @@ u32 inode_create(ext2_inode_t *inode, u32 mode, u32 pino)
 }
 
 
-int inode_free(u32 ino, ext2_inode_t *inode)
+int inode_free(uint32_t ino, ext2_inode_t *inode)
 {
 
-	u32 group = (ino - 1) / ext2->inodes_in_group;
+	uint32_t group = (ino - 1) / ext2->inodes_in_group;
 	void *inode_bmp = malloc(ext2->block_size);
 
 	if (inode->mode & EXT2_S_IFDIR)

@@ -35,12 +35,12 @@ int new_encode_dev(dev_t dev)
 	return dev;
 }
 
-dev_t old_decode_dev(u16 dev)
+dev_t old_decode_dev(uint16_t dev)
 {
 	return dev;
 }
 
-dev_t new_decode_dev(u32 dev)
+dev_t new_decode_dev(uint32_t dev)
 {
 	return dev;
 }

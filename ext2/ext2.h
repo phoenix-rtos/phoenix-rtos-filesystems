@@ -17,60 +17,61 @@
 #define _EXT2_H_ /* ext2.h */
 
 #include <sys/rb.h>
+#include <stdint.h>
 
 /* ext2 magic number */
 #define EXT2_MAGIC 0xEF53
 
 /* superblock structure */
 typedef struct _superblock_t {
-	u32     inodes_count;       /* inodes count */
-	u32     blocks_count;       /* blocks count */
-	u32     r_blocks_count;     /* reserved blocks count */
-	u32     free_blocks_count;  /* free blocks count */
-	u32     free_inodes_count;  /* free inodes count */
-	u32     first_data_block;   /* first data block */
-	u32     log_block_size;     /* shift left 1024 */
-	u32     log_frag_size;
-	u32     blocks_in_group;    /* number of blocks in group */
-	u32     frags_in_group;     /* number of fragments in group */
-	u32     inodes_in_group;    /* number of inodes in group */
-	u32     mount_time;         /* POSIX */
-	u32     write_time;         /* POSIX */
-	u16     mount_count;
-	u16     max_mount_count;
-	u16     magic;
-	u16     state;
-	u16     errors;
-	u16     minor_rev_level;
-	u32     lastcheck;          /* POSIX */
-	u32     checkinterval;      /* POSIX */
-	u32     creator_os;
-	u32     rev_level;
-	u16     def_resuid;
-	u16     def_resgid;
+	uint32_t     inodes_count;       /* inodes count */
+	uint32_t     blocks_count;       /* blocks count */
+	uint32_t     r_blocks_count;     /* reserved blocks count */
+	uint32_t     free_blocks_count;  /* free blocks count */
+	uint32_t     free_inodes_count;  /* free inodes count */
+	uint32_t     first_data_block;   /* first data block */
+	uint32_t     log_block_size;     /* shift left 1024 */
+	uint32_t     log_frag_size;
+	uint32_t     blocks_in_group;    /* number of blocks in group */
+	uint32_t     frags_in_group;     /* number of fragments in group */
+	uint32_t     inodes_in_group;    /* number of inodes in group */
+	uint32_t     mount_time;         /* POSIX */
+	uint32_t     write_time;         /* POSIX */
+	uint16_t     mount_count;
+	uint16_t     max_mount_count;
+	uint16_t     magic;
+	uint16_t     state;
+	uint16_t     errors;
+	uint16_t     minor_rev_level;
+	uint32_t     lastcheck;          /* POSIX */
+	uint32_t     checkinterval;      /* POSIX */
+	uint32_t     creator_os;
+	uint32_t     rev_level;
+	uint16_t     def_resuid;
+	uint16_t     def_resgid;
 	/* DYNAMIC_REV */
-	u32     first_inode;        /* first non reserved inode */
-	u16     inode_size;         /* inode size */
-	u16     block_group_no;     /* block group No of this superblock */
-	u32     feature_compat;
-	u32     feature_incompat;
-	u32     feature_ro_compat;
-	u8      uuid[16];
+	uint32_t     first_inode;        /* first non reserved inode */
+	uint16_t     inode_size;         /* inode size */
+	uint16_t     block_group_no;     /* block group No of this superblock */
+	uint32_t     feature_compat;
+	uint32_t     feature_incompat;
+	uint32_t     feature_ro_compat;
+	uint8_t      uuid[16];
 	char    volume_name[16];
 	char    last_mounted[64];
-	u32     algorithm_usage_bitmap;
+	uint32_t     algorithm_usage_bitmap;
 } __attribute__ ((packed)) superblock_t;
 
 /* block group descriptor structure */
 typedef struct _group_desc_t {
-	u32 block_bitmap;           /* block number of block bitmap */
-	u32 inode_bitmap;           /* block number of inode bitmap */
-	u32 ext2_inode_table;       /* block number of inode table */
-	u16 free_blocks_count;      /* free block in the group */
-	u16 free_inodes_count;      /* free inodes in the group */
-	u16 used_dirs_count;        /* directories in the group */
-	u16 pad;                    /* alignment to word */
-	u32 reserved[3];            /* nulls to pad out 24 bytes */
+	uint32_t block_bitmap;           /* block number of block bitmap */
+	uint32_t inode_bitmap;           /* block number of inode bitmap */
+	uint32_t ext2_inode_table;       /* block number of inode table */
+	uint16_t free_blocks_count;      /* free block in the group */
+	uint16_t free_inodes_count;      /* free inodes in the group */
+	uint16_t used_dirs_count;        /* directories in the group */
+	uint16_t pad;                    /* alignment to word */
+	uint32_t reserved[3];            /* nulls to pad out 24 bytes */
 } group_desc_t;
 
 enum {
@@ -134,73 +135,73 @@ enum {
 
 /* inode structure */
 typedef struct _ext2_inode_t {
-	u16 mode;                   /* file mode (type and access rights) */
-	u16 uid;                    /* owner id (low 16 bits) */
-	u32 size;                   /* file length in bytes */
-	u32 atime;                  /* last access time */
-	u32 ctime;                  /* creation time */
-	u32 mtime;                  /* modification time */
-	u32 dtime;                  /* deletion time */
-	u16 gid;                    /* user group id (low 16 bits) */
-	u16 links_count;            /* hard links count */
-	u32 blocks;                 /* number of data block of a file */
-	u32 flags;                  /* file flags */
+	uint16_t mode;                   /* file mode (type and access rights) */
+	uint16_t uid;                    /* owner id (low 16 bits) */
+	uint32_t size;                   /* file length in bytes */
+	uint32_t atime;                  /* last access time */
+	uint32_t ctime;                  /* creation time */
+	uint32_t mtime;                  /* modification time */
+	uint32_t dtime;                  /* deletion time */
+	uint16_t gid;                    /* user group id (low 16 bits) */
+	uint16_t links_count;            /* hard links count */
+	uint32_t blocks;                 /* number of data block of a file */
+	uint32_t flags;                  /* file flags */
 	union {
 		struct {
-			u32 reserved;
+			uint32_t reserved;
 		} linux1;
 		struct {
-			u32 translator;
+			uint32_t translator;
 		} hurd1;
 		struct {
-			u32 reserved;
+			uint32_t reserved;
 		} masix1;
 	} osd1;                     /* OS dependent 1 */
-	u32 block[EXT2_N_BLOCKS];   /* pointers to blocks */
-	u32 generation;             /* file version (used by NFS) */
-	u32 file_acl;               /* extended attributes */
-	u32 dir_acl;                /* multiple purposes (rev0 always 0) */
-	u32 faddr;                  /* location of file fragment */
+	uint32_t block[EXT2_N_BLOCKS];   /* pointers to blocks */
+	uint32_t generation;             /* file version (used by NFS) */
+	uint32_t file_acl;               /* extended attributes */
+	uint32_t dir_acl;                /* multiple purposes (rev0 always 0) */
+	uint32_t faddr;                  /* location of file fragment */
 	union {
 		struct {
-			u8  frag;           /* fragment number */
-			u8  fsize;          /* fragment size */
-			u16 pad;
-			u16 uid_high;
-			u16 gid_high;
-			u32 reserved;
+			uint8_t  frag;           /* fragment number */
+			uint8_t  fsize;          /* fragment size */
+			uint16_t pad;
+			uint16_t uid_high;
+			uint16_t gid_high;
+			uint32_t reserved;
 		} linux2;
 		struct {
-			u8  frag;
-			u8  fsize;
-			u16 mode_high;
-			u16 uid_high;
-			u16 gid_high;
-			u32 author;
+			uint8_t  frag;
+			uint8_t  fsize;
+			uint16_t mode_high;
+			uint16_t uid_high;
+			uint16_t gid_high;
+			uint32_t author;
 		} hurd2;
 		struct {
-			u8  frag;
-			u8  fsize;
-			u16 pad;
-			u32 reserved[2];
+			uint8_t  frag;
+			uint8_t  fsize;
+			uint16_t pad;
+			uint32_t reserved[2];
 		} masix2;
 	} osd2;                     /* OS dependent 2 */
 } ext2_inode_t;
 
 typedef struct _ext2_block_t {
-	u32 bno;
-	u32 *data;
+	uint32_t bno;
+	uint32_t *data;
 } ext2_block_t;
 
 typedef struct _ext2_object_t {
 	oid_t oid;
 	oid_t dev;
-	u32 ino;
+	uint32_t ino;
 
-	u32 refs;
-	u32 type;
-	u8  dirty;
-	u8  locked;
+	uint32_t refs;
+	uint32_t type;
+	uint8_t  dirty;
+	uint8_t  locked;
 
 	rbnode_t node;
 	handle_t lock;
@@ -226,28 +227,28 @@ enum {
 
 /* directory entry structure */
 typedef struct _ext2_dir_entry_t {
-	u32     inode;      /* inode number */
-	u16     rec_len;    /* directory entry length */
-	u8      name_len;   /* name length */
-	u8      file_type;
+	uint32_t     inode;      /* inode number */
+	uint16_t     rec_len;    /* directory entry length */
+	uint8_t      name_len;   /* name length */
+	uint8_t      file_type;
 	char    name[];     /* file name (max length EXT2_NAME_LEN) */
 } ext2_dir_entry_t;
 
 typedef struct _ext2_info_t {
-	u32             block_size;
-	u32             blocks_count;
-	u32             blocks_in_group;
-	u32             inode_size;
-	u32             inodes_count;
-	u32             inodes_in_group;
-	u32             gdt_size;
+	uint32_t             block_size;
+	uint32_t             blocks_count;
+	uint32_t             blocks_in_group;
+	uint32_t             inode_size;
+	uint32_t             inodes_count;
+	uint32_t             inodes_in_group;
+	uint32_t             gdt_size;
 	group_desc_t    *gdt;
-	u32             first_block;
-	u32             sb_sect;
+	uint32_t             first_block;
+	uint32_t             sb_sect;
 	ext2_inode_t    *root_node;
 	superblock_t    *sb;
 	struct mbr_t    *mbr;
-	u32			    port;
+	uint32_t			    port;
 } ext2_info_t;
 
 #define SECTOR_SIZE 512
@@ -256,7 +257,7 @@ typedef struct _ext2_info_t {
 
 ext2_info_t     *ext2;
 
-static inline void split_path(const char *path, u32 *start, u32 *end, u32 len)
+static inline void split_path(const char *path, uint32_t *start, uint32_t *end, uint32_t len)
 {
 	const char *s = path + *start;
 	while (*s++ == '/' && *start < len)
@@ -268,13 +269,13 @@ static inline void split_path(const char *path, u32 *start, u32 *end, u32 len)
 		(*end)++;
 }
 
-static inline u32 find_zero_bit(u32 *addr, u32 size, u32 off)
+static inline uint32_t find_zero_bit(uint32_t *addr, uint32_t size, uint32_t off)
 {
-	u32 tmp = 0;
-	u32 len = size / (sizeof(u32) * 8);
-	u32 i;
+	uint32_t tmp = 0;
+	uint32_t len = size / (sizeof(uint32_t) * 8);
+	uint32_t i;
 
-	for (i = off / (sizeof(u32) * 8); i < len; i++) {
+	for (i = off / (sizeof(uint32_t) * 8); i < len; i++) {
 		tmp = addr[i] ^ ~0UL;
 		if (tmp)
 			break;
@@ -282,22 +283,22 @@ static inline u32 find_zero_bit(u32 *addr, u32 size, u32 off)
 	if (i == len)
 		return 0;
 
-	return (i * (sizeof(u32) * 8)) + (u32)__builtin_ffsl(tmp);
+	return (i * (sizeof(uint32_t) * 8)) + (uint32_t)__builtin_ffsl(tmp);
 }
 
-static inline u8 check_bit(u32 *addr, u32 off)
+static inline uint8_t check_bit(uint32_t *addr, uint32_t off)
 {
-	u32 woff = (off - 1) % (sizeof(u32) * 8);
-	u32 aoff = (off - 1) / (sizeof(u32) * 8);
+	uint32_t woff = (off - 1) % (sizeof(uint32_t) * 8);
+	uint32_t aoff = (off - 1) / (sizeof(uint32_t) * 8);
 
 	return (addr[aoff] & 1UL << woff) != 0;
 }
 
-static inline u32 toggle_bit(u32 *addr, u32 off)
+static inline uint32_t toggle_bit(uint32_t *addr, uint32_t off)
 {
-	u32 woff = (off - 1) % (sizeof(u32) * 8);
-	u32 aoff = (off - 1) / (sizeof(u32) * 8);
-	u32 old = addr[aoff];
+	uint32_t woff = (off - 1) % (sizeof(uint32_t) * 8);
+	uint32_t aoff = (off - 1) / (sizeof(uint32_t) * 8);
+	uint32_t old = addr[aoff];
 
 	addr[aoff] ^= 1UL << woff;
 

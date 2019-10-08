@@ -272,7 +272,7 @@ int mtd_erase(struct mtd_info *mtd, struct erase_info *instr)
 	}
 
 	mutexLock(mtd->lock);
-	if ((ret = flashdrv_erase(mtd->dma, (u32)(instr->addr / mtd->writesize) + mtd->start))) {
+	if ((ret = flashdrv_erase(mtd->dma, (uint32_t)(instr->addr / mtd->writesize) + mtd->start))) {
 		printf("mtd_erase: Flash erase error 0x%d\n", ret);
 		return -1;
 	}

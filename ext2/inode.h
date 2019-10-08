@@ -16,20 +16,21 @@
 #ifndef _INODE_H_
 #define _INODE_H_ /* inode.h */
 
+#include <stdint.h>
 
-extern ext2_inode_t *inode_get(u32 ino);
-
-
-extern u32 inode_create(ext2_inode_t *inode, u32 mode, u32 pino);
+extern ext2_inode_t *inode_get(uint32_t ino);
 
 
-extern int inode_free(u32 ino, ext2_inode_t *inode);
+extern uint32_t inode_create(ext2_inode_t *inode, uint32_t mode, uint32_t pino);
+
+
+extern int inode_free(uint32_t ino, ext2_inode_t *inode);
 
 
 extern int inode_put(ext2_inode_t *inode);
 
 
-extern int inode_set(u32 ino, ext2_inode_t *inode);
+extern int inode_set(uint32_t ino, ext2_inode_t *inode);
 
 
 #endif /* inode.h */

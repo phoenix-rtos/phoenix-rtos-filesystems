@@ -13,6 +13,7 @@
  * %LICENSE%
  */
 
+#include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -26,7 +27,7 @@
 
 
 
-int write_block(u32 block, void *data)
+int write_block(uint32_t block, void *data)
 {
 	int ret;
 
@@ -41,7 +42,7 @@ int write_block(u32 block, void *data)
 }
 
 
-static inline int write_blocks(u32 start_block, u32 count, void *data)
+static inline int write_blocks(uint32_t start_block, uint32_t count, void *data)
 {
 	int ret;
 
@@ -56,7 +57,7 @@ static inline int write_blocks(u32 start_block, u32 count, void *data)
 }
 
 
-int read_block(u32 block, void *data)
+int read_block(uint32_t block, void *data)
 {
 	int ret;
 
@@ -74,7 +75,7 @@ int read_block(u32 block, void *data)
 
 
 /* reads from starting block */
-int read_blocks(u32 start_block, u32 count, void *data)
+int read_blocks(uint32_t start_block, uint32_t count, void *data)
 {
 	int ret;
 
@@ -92,7 +93,7 @@ int read_blocks(u32 start_block, u32 count, void *data)
 
 
 /* search block for a given file name */
-int search_block(void *data, const char *name, u8 len, oid_t *res)
+int search_block(void *data, const char *name, uint8_t len, oid_t *res)
 {
 	ext2_dir_entry_t *entry;
 	int off = 0;
@@ -114,7 +115,7 @@ int search_block(void *data, const char *name, u8 len, oid_t *res)
 
 
 /* calculates the offs inside indirection blocks, returns depth of the indirection */
-static inline int block_off(long block_no, u32 offs[4])
+static inline int block_off(long block_no, uint32_t offs[4])
 {
 	int addr = 256 << ext2->sb->log_block_size;
 	int addr_bits = 8 + ext2->sb->log_block_size;
@@ -143,10 +144,10 @@ static inline int block_off(long block_no, u32 offs[4])
 }
 
 
-static u32 new_block(u32 ino, ext2_inode_t *inode, u32 bno)
+static uint32_t new_block(uint32_t ino, ext2_inode_t *inode, uint32_t bno)
 {
 	int group = 0, pgroup = 0;
-	u32 off = 0;
+	uint32_t off = 0;
 	void *block_bmp = malloc(ext2->block_size);
 
 	if (bno) {
@@ -187,7 +188,7 @@ static u32 new_block(u32 ino, ext2_inode_t *inode, u32 bno)
 }
 
 
-static inline u32 *block_read_ind(ext2_object_t *o, u32 *bno, int depth)
+static inline uint32_t *block_read_ind(ext2_object_t *o, uint32_t *bno, int depth)
 {
 	depth -= 2;
 	if (depth < 0 || depth > 2)
@@ -211,11 +212,11 @@ static inline u32 *block_read_ind(ext2_object_t *o, u32 *bno, int depth)
 }
 
 
-inline u32 get_block_no(ext2_object_t *o, u32 block)
+inline uint32_t get_block_no(ext2_object_t *o, uint32_t block)
 {
-	u32 *tind, *dind, *ind;
-	u32 offs[4] = { 0 };
-	u32 ret;
+	uint32_t *tind, *dind, *ind;
+	uint32_t offs[4] = { 0 };
+	uint32_t ret;
 	int depth = block_off(block, offs);
 
 	if (depth == 4)
@@ -240,10 +241,10 @@ inline u32 get_block_no(ext2_object_t *o, u32 block)
 
 
 /* gets block of a given number (relative to inode) */
-void get_block(ext2_object_t *o, u32 block, void *data)
+void get_block(ext2_object_t *o, uint32_t block, void *data)
 {
-	u32 *tind, *dind, *ind;
-	u32 offs[4] = { 0 };
+	uint32_t *tind, *dind, *ind;
+	uint32_t offs[4] = { 0 };
 	int depth = block_off(block, offs);
 
 	if (depth == 4) {
@@ -267,10 +268,10 @@ void get_block(ext2_object_t *o, u32 block, void *data)
 		read_block(o->inode->block[offs[0]], data);
 }
 
-void free_block(u32 bno)
+void free_block(uint32_t bno)
 {
-	u32 group;
-	u32 off;
+	uint32_t group;
+	uint32_t off;
 	void *block_bmp = malloc(ext2->block_size);
 
 	if (bno == 0)
@@ -291,12 +292,12 @@ void free_block(u32 bno)
 }
 
 
-void free_blocks(u32 start, u32 count)
+void free_blocks(uint32_t start, uint32_t count)
 {
-	u32 group;
-	u32 off;
-	u32 left = count;
-	u32 current = start;
+	uint32_t group;
+	uint32_t off;
+	uint32_t left = count;
+	uint32_t current = start;
 	void *block_bmp = malloc(ext2->block_size);
 
 	group = (start - 1) / ext2->blocks_in_group;
@@ -327,12 +328,12 @@ void free_blocks(u32 start, u32 count)
 }
 
 
-int free_inode_blocks(ext2_object_t *o, u32 start, u32 count)
+int free_inode_blocks(ext2_object_t *o, uint32_t start, uint32_t count)
 {
-	u32 *tind, *dind, *ind = NULL;
-	u32 offs[4] = { 0 };
-	u32 current = start;
-	u32 left = count;
+	uint32_t *tind, *dind, *ind = NULL;
+	uint32_t offs[4] = { 0 };
+	uint32_t current = start;
+	uint32_t left = count;
 	int depth = 0;
 	while (left) {
 		depth = block_off(current, offs);
@@ -394,10 +395,10 @@ int free_inode_blocks(ext2_object_t *o, u32 start, u32 count)
 }
 
 /* sets block of a given number (relative to inode) */
-void set_block(ext2_object_t *o, u32 block, void *data)
+void set_block(ext2_object_t *o, uint32_t block, void *data)
 {
-	u32 *tind, *dind, *ind;
-	u32 offs[4] = { 0 };
+	uint32_t *tind, *dind, *ind;
+	uint32_t offs[4] = { 0 };
 	int depth = block_off(block, offs);
 
 	if (depth == 4)
@@ -434,14 +435,14 @@ void set_block(ext2_object_t *o, u32 block, void *data)
 
 
 /* tries to allocate goal number of consecutive blocks */
-u32 alloc_blocks(ext2_object_t *o, u32 start_block, u32 goal, u32 bno)
+uint32_t alloc_blocks(ext2_object_t *o, uint32_t start_block, uint32_t goal, uint32_t bno)
 {
-	u32 count = 1;
+	uint32_t count = 1;
 	int group = 0, pgroup = 0;
-	u32 off = 0;
-	u32 offs[4] = { 0 };
-	u32 *tind, *dind, *ind;
-	u32 end_block, current_block;
+	uint32_t off = 0;
+	uint32_t offs[4] = { 0 };
+	uint32_t *tind, *dind, *ind;
+	uint32_t end_block, current_block;
 	int depth;
 	void *block_bmp = malloc(ext2->block_size);
 
@@ -529,11 +530,11 @@ u32 alloc_blocks(ext2_object_t *o, u32 start_block, u32 goal, u32 bno)
 	return count;
 }
 
-int set_blocks(ext2_object_t *o, u32 start_block, u32 count, void *data)
+int set_blocks(ext2_object_t *o, uint32_t start_block, uint32_t count, void *data)
 {
-	u32 block = start_block;
-	u32 checkpoint = start_block;
-	u32 last, current;
+	uint32_t block = start_block;
+	uint32_t checkpoint = start_block;
+	uint32_t last, current;
 
 	last = 0;
 

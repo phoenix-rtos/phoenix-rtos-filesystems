@@ -13,6 +13,7 @@
  * %LICENSE%
  */
 
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -32,9 +33,9 @@
 /* reads a file */
 static int _ext2_read(oid_t *oid, offs_t offs, char *data, unsigned int len, int lock)
 {
-	u32 read_len, read_sz, current_block, end_block;
-	u32 start_block = offs / ext2->block_size;
-	u32 block_off = offs % ext2->block_size; /* block offset */
+	uint32_t read_len, read_sz, current_block, end_block;
+	uint32_t start_block = offs / ext2->block_size;
+	uint32_t block_off = offs % ext2->block_size; /* block offset */
 	ext2_object_t *o = object_get(oid->id);
 	void *tmp;
 
@@ -91,24 +92,24 @@ static int _ext2_read(oid_t *oid, offs_t offs, char *data, unsigned int len, int
 }
 
 
-int ext2_read(oid_t *oid, offs_t offs, char *data, u32 len)
+int ext2_read(oid_t *oid, offs_t offs, char *data, uint32_t len)
 {
 	return _ext2_read(oid, offs, data, len, 1);
 }
 
 
-int ext2_read_locked(oid_t *oid, offs_t offs, char *data, u32 len)
+int ext2_read_locked(oid_t *oid, offs_t offs, char *data, uint32_t len)
 {
 	return _ext2_read(oid, offs, data, len, 0);
 }
 
 
 /* writes a file */
-static int _ext2_write(oid_t *oid, offs_t offs, char *data, u32 len, int lock)
+static int _ext2_write(oid_t *oid, offs_t offs, char *data, uint32_t len, int lock)
 {
-	u32 write_len, write_sz, current_block, end_block;
-	u32 start_block = offs / ext2->block_size;
-	u32 block_off = offs % ext2->block_size; /* block offset */
+	uint32_t write_len, write_sz, current_block, end_block;
+	uint32_t start_block = offs / ext2->block_size;
+	uint32_t block_off = offs % ext2->block_size; /* block offset */
 	ext2_object_t *o = object_get(oid->id);
 	void *tmp;
 
@@ -186,24 +187,24 @@ static int _ext2_write(oid_t *oid, offs_t offs, char *data, u32 len, int lock)
 }
 
 
-int ext2_write(oid_t *oid, offs_t offs, char *data, u32 len)
+int ext2_write(oid_t *oid, offs_t offs, char *data, uint32_t len)
 {
 	return _ext2_write(oid, offs, data, len, 1);
 }
 
 
-int ext2_write_locked(oid_t *oid, offs_t offs, char *data, u32 len)
+int ext2_write_locked(oid_t *oid, offs_t offs, char *data, uint32_t len)
 {
 	return _ext2_write(oid, offs, data, len, 0);
 }
 
 
-int ext2_truncate(oid_t *oid, u32 size)
+int ext2_truncate(oid_t *oid, uint32_t size)
 {
 	ext2_object_t *o = object_get(oid->id);
-	u32 target_block = size / ext2->block_size;
-	u32 end_block = o->inode->size / ext2->block_size;
-	u32 current, count, last = 0;
+	uint32_t target_block = size / ext2->block_size;
+	uint32_t end_block = o->inode->size / ext2->block_size;
+	uint32_t current, count, last = 0;
 
 	if (o == NULL)
 		return -EINVAL;

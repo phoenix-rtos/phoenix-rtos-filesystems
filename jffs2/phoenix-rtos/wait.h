@@ -57,7 +57,7 @@ enum {
 
 struct work_struct {
 	work_func_t func;
-	u8 state;
+	uint8_t state;
 	handle_t lock;
 	handle_t cond;
 	handle_t wait_cond;
