@@ -17,7 +17,7 @@
 #include "crc32.h"
 
 /* taken from Linux kernel */
-u32 crc32(u32 crc, void *p, size_t len)
+uint32_t crc32(uint32_t crc, void *p, size_t len)
 {
 	int i;
 	while (len--) {

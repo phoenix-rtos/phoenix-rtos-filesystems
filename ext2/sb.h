@@ -22,7 +22,7 @@
 extern void gdt_sync(int group);
 
 
-extern int ext2_read_sb(u32 sect);
+extern int ext2_read_sb(uint32_t sect);
 
 
 extern int ext2_write_sb(void);

@@ -51,9 +51,9 @@ struct rw_semaphore {
 	handle_t	lock;
 	handle_t	rcond;
 	handle_t	wcond;
-	u32			cnt;
-	u32			rwait;
-	u32			wwait;
+	uint32_t		cnt;
+	uint32_t		rwait;
+	uint32_t		wwait;
 };
 
 extern void up_read(struct rw_semaphore *sem);

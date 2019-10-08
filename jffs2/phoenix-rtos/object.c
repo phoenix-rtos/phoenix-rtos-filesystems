@@ -26,7 +26,7 @@
 typedef struct _jffs2_objects_t {
 	handle_t	lock;
 	rbtree_t	tree;
-	u32			cnt;
+	uint32_t	cnt;
 	struct list_head lru_list;
 } jffs2_objects_t;
 

@@ -12,6 +12,8 @@
  *
  * %LICENSE%
  */
+
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/threads.h>
@@ -22,9 +24,9 @@
 #include "file.h"
 
 /* search dir for a given file name */
-int dir_find(ext2_object_t *d, const char *name, u32 len, oid_t *res)
+int dir_find(ext2_object_t *d, const char *name, uint32_t len, oid_t *res)
 {
-	u32 offs = 0;
+	uint32_t offs = 0;
 	void *data;
 	int err = 0;
 
@@ -49,8 +51,8 @@ int dir_find(ext2_object_t *d, const char *name, u32 len, oid_t *res)
 int dir_add(ext2_object_t *d, const char *name, int type, oid_t *oid)
 {
 
-	u32	rec_len = 0;
-	u32 offs = 0;
+	uint32_t	rec_len = 0;
+	uint32_t offs = 0;
 	void *data = NULL;
 	ext2_dir_entry_t *dentry;
 
@@ -116,10 +118,10 @@ int dir_add(ext2_object_t *d, const char *name, int type, oid_t *oid)
 
 int dir_remove(ext2_object_t *d, const char *name)
 {
-	u32 offs = 0;
-	u32 block_offs;
+	uint32_t offs = 0;
+	uint32_t block_offs;
 	int found = 0;
-	u32 prev_offs = 0;
+	uint32_t prev_offs = 0;
 	ext2_dir_entry_t *dentry, *dtemp;
 	void *data = malloc(ext2->block_size);
 
@@ -182,7 +184,7 @@ int dir_remove(ext2_object_t *d, const char *name)
 int dir_is_empty(ext2_object_t *d)
 {
 
-	u32 offs = 0;
+	uint32_t offs = 0;
 	void *data = NULL;
 	ext2_dir_entry_t *dentry;
 

@@ -35,9 +35,9 @@ int old_encode_dev(dev_t dev);
 
 int new_encode_dev(dev_t dev);
 
-dev_t old_decode_dev(u16 val);
+dev_t old_decode_dev(uint16_t val);
 
-dev_t new_decode_dev(u32 dev);
+dev_t new_decode_dev(uint32_t dev);
 
 
 extern jffs2_dev_t *dev_find_oid(void *ptr, oid_t *oid, unsigned long ino, int create);

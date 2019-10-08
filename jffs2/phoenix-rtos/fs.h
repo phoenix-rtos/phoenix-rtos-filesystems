@@ -58,7 +58,7 @@ struct address_space;
 struct iattr;
 struct mtd_info;
 
-typedef int (*filldir_t)(struct dir_context *, const char *, int, loff_t, u64,
+typedef int (*filldir_t)(struct dir_context *, const char *, int, loff_t, uint64_t,
 					 unsigned);
 
 struct dir_context {
@@ -72,7 +72,7 @@ struct dir_context {
 struct file {
 	struct inode *f_inode;
 	struct address_space *f_mapping;
-	u64 f_pino;
+	uint64_t f_pino;
 };
 
 
@@ -83,7 +83,7 @@ static inline struct inode *file_inode(const struct file *f)
 
 
 static inline bool dir_emit(struct dir_context *ctx, const char *name,
-		int namelen, u64 ino, unsigned type)
+		int namelen, uint64_t ino, unsigned type)
 {
 	return ctx->actor(ctx, name, namelen, ctx->pos, ino, type);
 }
@@ -154,7 +154,7 @@ static inline bool dir_emit_dots(struct file *file, struct dir_context *ctx)
 	return 1;
 }
 
-static inline int dir_print(struct dir_context *ctx, const char *name, int len, loff_t pos, u64 ino, unsigned type)
+static inline int dir_print(struct dir_context *ctx, const char *name, int len, loff_t pos, uint64_t ino, unsigned type)
 {
 	switch (type) {
 		case DT_REG:
@@ -235,7 +235,7 @@ struct inode_operations {
 	int (*rename) (struct inode *, struct dentry *,
 			struct inode *, struct dentry *, unsigned int);
 	int (*setattr) (struct dentry *, struct iattr *);
-	int (*getattr) (const struct path *, struct kstat *, u32, unsigned int);
+	int (*getattr) (const struct path *, struct kstat *, uint32_t, unsigned int);
 	ssize_t (*listxattr) (struct dentry *, char *, size_t);
 	int (*update_time)(struct inode *, struct timespec *, int);
 	int (*atomic_open)(struct inode *, struct dentry *,
@@ -420,11 +420,11 @@ typedef struct {
 struct kstatfs {
 	long f_type;
 	long f_bsize;
-	u64 f_blocks;
-	u64 f_bfree;
-	u64 f_bavail;
-	u64 f_files;
-	u64 f_ffree;
+	uint64_t f_blocks;
+	uint64_t f_bfree;
+	uint64_t f_bavail;
+	uint64_t f_files;
+	uint64_t f_ffree;
 	__kernel_fsid_t f_fsid;
 	long f_namelen;
 	long f_frsize;
@@ -435,26 +435,26 @@ struct kstatfs {
 struct fid {
 	union {
 		struct {
-			u32 ino;
-			u32 gen;
-			u32 parent_ino;
-			u32 parent_gen;
+			uint32_t ino;
+			uint32_t gen;
+			uint32_t parent_ino;
+			uint32_t parent_gen;
 		} i32;
- 		struct {
- 			u32 block;
- 			u16 partref;
- 			u16 parent_partref;
- 			u32 generation;
- 			u32 parent_block;
- 			u32 parent_generation;
- 		} udf;
-		__u32 raw[0];
+		struct {
+			uint32_t block;
+			uint16_t partref;
+			uint16_t parent_partref;
+			uint32_t generation;
+			uint32_t parent_block;
+			uint32_t parent_generation;
+		} udf;
+		uint32_t raw[0];
 	};
 };
 
 
 struct export_operations {
-	int (*encode_fh)(struct inode *inode, __u32 *fh, int *max_len,
+	int (*encode_fh)(struct inode *inode, uint32_t *fh, int *max_len,
 			struct inode *parent);
 	struct dentry * (*fh_to_dentry)(struct super_block *sb, struct fid *fid,
 			int fh_len, int fh_type);
@@ -465,18 +465,18 @@ struct export_operations {
 	struct dentry * (*get_parent)(struct dentry *child);
 	int (*commit_metadata)(struct inode *inode);
 
-	int (*get_uuid)(struct super_block *sb, u8 *buf, u32 *len, u64 *offset);
+	int (*get_uuid)(struct super_block *sb, uint8_t *buf, uint32_t *len, uint64_t *offset);
 };
 
 
 extern struct dentry *generic_fh_to_dentry(struct super_block *sb,
 	struct fid *fid, int fh_len, int fh_type,
-	struct inode *(*get_inode) (struct super_block *sb, u64 ino, u32 gen));
+	struct inode *(*get_inode) (struct super_block *sb, uint64_t ino, uint32_t gen));
 
 
 extern struct dentry *generic_fh_to_parent(struct super_block *sb,
 	struct fid *fid, int fh_len, int fh_type,
-	struct inode *(*get_inode) (struct super_block *sb, u64 ino, u32 gen));
+	struct inode *(*get_inode) (struct super_block *sb, uint64_t ino, uint32_t gen));
 
 
 #define MODULE_ALIAS_FS(x)

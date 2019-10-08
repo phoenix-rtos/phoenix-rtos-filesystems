@@ -16,6 +16,7 @@
 #define _DUMMYFS_H_
 
 #include <errno.h>
+#include <stdint.h>
 #include <time.h>
 #include <sys/file.h>
 #include <posix/idtree.h>
@@ -26,9 +27,9 @@
 typedef struct _dummyfs_dirent_t {
 	char *name;
 	unsigned int len;
-	u32 type;
+	uint32_t type;
 	oid_t oid;
-	u8 deleted;
+	uint8_t deleted;
 
 	struct _dummyfs_dirent_t *next;
 	struct _dummyfs_dirent_t *prev;
@@ -49,11 +50,11 @@ typedef struct _dummyfs_chunk_t {
 
 typedef struct _dummyfs_object_t {
 	oid_t oid, dev;
-	u32 type;
+	uint32_t type;
 
 	unsigned int uid;
 	unsigned int gid;
-	u32 mode;
+	uint32_t mode;
 
 	int refs;
 	int nlink;
@@ -64,19 +65,19 @@ typedef struct _dummyfs_object_t {
 	union {
 		dummyfs_dirent_t *entries;
 		dummyfs_chunk_t *chunks;
-		u32 port;
+		uint32_t port;
 	};
 
 	time_t atime;
 	time_t mtime;
 	time_t ctime;
 
-	u8 dirty;
+	uint8_t dirty;
 } dummyfs_object_t;
 
 
 struct _dummyfs_common_t{
-	u32 port;
+	uint32_t port;
 	handle_t mutex;
 	int size;
 };

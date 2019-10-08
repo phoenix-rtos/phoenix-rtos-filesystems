@@ -70,26 +70,26 @@ enum { ATA_PRIMARY = 0x00, ATA_SECONDARY = 0x01 };
 enum { ATA_READ = 0x00, ATA_WRITE = 0x01 };
 
 typedef struct _ata_opt_t {
-	u8 force;	/* force initialize in compatibility mode */
-	u8 use_int; /* use int if possible */
-	u8 use_dma; /* use dma if possible */
-	u8 use_multitransfer; /* makes sense only without dma */
+	uint8_t force;	/* force initialize in compatibility mode */
+	uint8_t use_int; /* use int if possible */
+	uint8_t use_dma; /* use dma if possible */
+	uint8_t use_multitransfer; /* makes sense only without dma */
 } ata_opt_t;
 
 struct ata_channel;
 
 struct ata_dev {
-	u8 reserved;
-	u8 channel;            /* 0 (Primary Channel) or 1 (Secondary Channel) */
-	u8 drive;              /* 0 (Master Drive) or 1 (Slave Drive) */
-	u8 type;               /* 0: ATA, 1:ATAPI */
+	uint8_t reserved;
+	uint8_t channel;            /* 0 (Primary Channel) or 1 (Secondary Channel) */
+	uint8_t drive;              /* 0 (Master Drive) or 1 (Slave Drive) */
+	uint8_t type;               /* 0: ATA, 1:ATAPI */
 
-	u16 signature;
-	u16 capabilities;
-	u32 command_sets;
+	uint16_t signature;
+	uint16_t capabilities;
+	uint32_t command_sets;
 
-	u64 size;
-	u32 sector_size;
+	uint64_t size;
+	uint32_t sector_size;
 	atainfo_t info;
 
 	struct ata_channel *ac;
@@ -97,21 +97,21 @@ struct ata_dev {
 
 
 struct ata_channel {
-	u16 base;
-	u16 ctrl;           // Control Base address.
-	u16 bmide;          // Bus Master IDE address
-	u16 reg_addr[22];
+	uint16_t base;
+	uint16_t ctrl;           // Control Base address.
+	uint16_t bmide;          // Bus Master IDE address
+	uint16_t reg_addr[22];
 	unsigned int  irq_reg;
-	u8  no_int;         // No Interrupt;
+	uint8_t  no_int;         // No Interrupt;
 
-	u8 status;
-	u8 altstatus;
+	uint8_t status;
+	uint8_t altstatus;
 
-	u8 bmstatus;
-	u8 bmstatus_irq;
+	uint8_t bmstatus;
+	uint8_t bmstatus_irq;
 
 	handle_t irq_spin;
-	volatile u8 irq_invoked;
+	volatile uint8_t irq_invoked;
 	handle_t waitq;
 	handle_t inth;
 
@@ -127,11 +127,11 @@ struct ata_bus {
 };
 
 typedef struct _ata_msg_t {
-	u16 bus;
-	u16 channel;
-	u16 device;
+	uint16_t bus;
+	uint16_t channel;
+	uint16_t device;
 	offs_t offset;
-	u16 len;
+	uint16_t len;
 	char data[];
 } __attribute__((packed)) ata_msg_t;
 

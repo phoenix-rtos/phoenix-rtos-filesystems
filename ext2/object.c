@@ -13,6 +13,7 @@
  * %LICENSE%
  */
 
+#include <stdint.h>
 #include <stdlib.h>
 #include <sys/rb.h>
 #include <sys/file.h>
@@ -35,7 +36,7 @@ struct {
 	handle_t ulock;
 	handle_t clock;
 	rbtree_t used;
-	u32	used_cnt;
+	uint32_t	used_cnt;
 	ext2_object_t *cache[CACHE_SIZE];
 } ext2_objects;
 

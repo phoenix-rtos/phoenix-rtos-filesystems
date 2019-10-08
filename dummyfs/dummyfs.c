@@ -13,6 +13,7 @@
  */
 
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <sys/stat.h> /* to set mode for / */
@@ -671,7 +672,7 @@ int main(int argc, char **argv)
 	int c;
 
 #ifdef TARGET_IMX6ULL
-	u32 reserved;
+	uint32_t reserved;
 #endif
 
 	dummyfs_common.size = 0;

@@ -44,11 +44,11 @@ static int ext2_destroy(oid_t *oid);
 
 static int ext2_lookup(oid_t *dir, const char *name, oid_t *res, oid_t *dev)
 {
-	u32 start = 0, end = 0;
-	u32 ino = dir ? dir->id : ROOTNODE_NO;
+	uint32_t start = 0, end = 0;
+	uint32_t ino = dir ? dir->id : ROOTNODE_NO;
 	int err;
 	char *namedup;
-	u32 len = strlen(name);
+	uint32_t len = strlen(name);
 	ext2_object_t *d, *o;
 
 	if (ino < 2)
@@ -494,7 +494,7 @@ static void ext2_close(oid_t *oid)
 
 int main(void)
 {
-	u32 port;
+	uint32_t port;
 	oid_t toid, tdev;
 	oid_t root;
 	oid_t sysoid;

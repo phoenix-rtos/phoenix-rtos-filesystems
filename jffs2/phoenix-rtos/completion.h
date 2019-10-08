@@ -17,9 +17,8 @@
 #ifndef _OS_PHOENIX_COMPLETION_H_
 #define _OS_PHOENIX_COMPLETION_H_
 
-
 struct completion {
-	u8 complete;
+	uint8_t complete;
 	handle_t lock;
 	handle_t cond;
 };

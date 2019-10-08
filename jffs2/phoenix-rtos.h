@@ -430,9 +430,9 @@ void rcu_barrier(void);
 
 
 typedef struct _jffs2_partition_t {
-	u32	port;
-	u32	start;
-	u32	size;
+	uint32_t port;
+	uint32_t start;
+	uint32_t size;
 	int flags;
 	int root;
 	struct super_block *sb;
@@ -446,7 +446,7 @@ typedef struct _jffs2_common_t {
 	struct file_system_type		*fs;
 	struct workqueue_struct		*system_long_wq;
 	jffs2_partition_t			*partition;
-	u32							partition_cnt;
+	uint32_t			partition_cnt;
 } jffs2_common_t;
 
 extern jffs2_common_t jffs2_common;
