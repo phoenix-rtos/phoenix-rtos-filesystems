@@ -16,6 +16,7 @@
 #define _OS_PHOENIX_H_
 
 #include <stdlib.h>
+#include <sys/minmax.h>
 #include <sys/threads.h>
 #include <sys/mman.h>
 #include <sys/rb.h>
