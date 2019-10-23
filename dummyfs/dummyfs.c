@@ -595,7 +595,7 @@ int fetch_modules(void)
 #ifdef NOMMU
 		prog_addr = (void *)prog.addr;
 #else
-		prog_addr = (void *)mmap(NULL, (prog.size + 0xfff) & ~0xfff, 0x1 | 0x2, 0, OID_PHYSMEM, prog.addr);
+		prog_addr = (void *)mmap(NULL, (prog.size + 0xfff) & ~0xfff, 0x1 | 0x2, MAP_ANONYMOUS, -1, prog.addr);
 #endif
 //		char tmp[256];
 //		snprintf(tmp, sizeof(tmp), "prog %d size %x\n", i, prog.size);
@@ -686,6 +686,12 @@ static void signal_exit(int sig)
 }
 
 
+#define LOG(msg, ...) do { \
+	char buf[128]; \
+	sprintf(buf, __FILE__ ":%d - " msg "\n", __LINE__, ##__VA_ARGS__ ); \
+	debug(buf); \
+} while (0)
+
 #define PORT_DESCRIPTOR 3
 
 int main(int argc, char **argv)
@@ -700,10 +706,7 @@ int main(int argc, char **argv)
 	int daemonize = 0;
 	int c, err;
 
-#ifdef TARGET_IMX6ULL
-	uint32_t reserved;
-#endif
-
+	debug("dummy start\n");
 	dummyfs_common.size = 0;
 
 	while ((c = getopt(argc, argv, "Dhm:r:N:")) != -1) {
@@ -729,44 +732,6 @@ int main(int argc, char **argv)
 				return 1;
 		}
 	}
-
-	if (daemonize && !mountpt) {
-		LOG("can't daemonize without mountpoint, exiting!\n");
-		return 1;
-	}
-
-	/* Daemonizing first to make all initialization in child process.
-	 * Otherwise the port will be destroyed when parent exits. */
-	if (daemonize) {
-		pid_t pid, sid;
-
-		/* set exit handler */
-		signal(SIGUSR1, signal_exit);
-		/* Fork off the parent process */
-		pid = fork();
-		if (pid < 0) {
-			LOG("fork failed: [%d] -> %s\n", errno, strerror(errno));
-			exit(EXIT_FAILURE);
-		}
-
-		if (pid > 0) {
-			/* PARENT: wait for initailization to finish and then exit */
-			sleep(10);
-
-			LOG("failed to communicate with child\n");
-			exit(EXIT_FAILURE);
-		}
-		/* set default handler back again */
-		signal(SIGUSR1, signal_exit);
-
-		/* Create a new SID for the child process */
-		sid = setsid();
-		if (sid < 0) {
-			LOG("setsid failed: [%d] -> %s\n", errno, strerror(errno));
-			exit(EXIT_FAILURE);
-		}
-	}
-
 
 #if 0
 	if (mountpt == NULL) {
@@ -807,8 +772,6 @@ int main(int argc, char **argv)
 	root.port = dummyfs_common.port;
 	root.id = 0;
 
-	SetRoot(&root, S_IFDIR);
-
 	if (mutexCreate(&dummyfs_common.mutex) != EOK) {
 		LOG("could not create mutex\n");
 		return 2;
@@ -838,31 +801,42 @@ int main(int argc, char **argv)
 		mountpt = remount_path;
 	}
 
-	if (daemonize) {
-		/* mount synchronously */
-		if (!non_fs_namespace && dummyfs_mount_sync(mountpt)) {
-			LOG("failed to mount, exiting\n");
-			return 1;
-		}
+	/* Daemonizing first to make all initialization in child process.
+	 * Otherwise the port will be destroyed when parent exits. */
+	pid_t pid, sid;
 
-		/* init completed - wake parent */
-		kill(getppid(), SIGUSR1);
+	/* Fork off the parent process */
+	pid = fork();
+	if (pid < 0) {
+		LOG("fork failed: [%d] -> %s\n", errno, strerror(errno));
+		exit(EXIT_FAILURE);
 	}
-	else if (mountpt != NULL) {
-		beginthread(dummyfs_mount_async, 4, &mtstack, sizeof(mtstack), (void*)mountpt);
+
+	if (pid > 0) {
+		LOG("DAEMONIZED\n");
+		exit(EXIT_SUCCESS);
+	}
+
+
+	/* Create a new SID for the child process */
+	sid = setsid();
+	if (sid < 0) {
+		LOG("setsid failed: [%d] -> %s\n", errno, strerror(errno));
+		exit(EXIT_FAILURE);
 	}
 
 	/*** MAIN LOOP ***/
 
 	LOG("initialized\n");
-
+	debug("dummy init\n");
 	for (;;) {
+		
 		if (msgRecv(dummyfs_common.port, &msg, &rid) < 0)
 			continue;
 
+		LOG("msg type %d", msg.type);
 		switch (msg.type) {
-
-			case mtOpen: {
+			case mtLookup: {
 				oid_t dir = {dummyfs_common.port, 0};
 				dir.id = msg.object;
 
@@ -873,12 +847,15 @@ int main(int argc, char **argv)
 				oid_t dev;
 
 				int err = dummyfs_lookup(&dir, path, &file, &dev);
-
+				debug("LOOKUP\n");
 				if ((err == -ENOENT) && (msg.i.lookup.flags & O_CREAT)) {
+					debug("dummy create\n");
 					int type = otFile;
 					if (msg.i.lookup.flags & O_DIRECTORY)
 						type = otDir;
 					err = dummyfs_create(&dir, path, &file, type, msg.i.lookup.mode, &dev);
+					if (err == -20)
+						debug("enotdir\n");
 				}
 
 				free(path);
