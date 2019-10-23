@@ -21,8 +21,10 @@
 #include <sys/file.h>
 #include <posix/idtree.h>
 
+
 #define DUMMYFS_SIZE_MAX 32 * 1024 * 1024
 
+typedef uint32_t u32;
 
 typedef struct _dummyfs_dirent_t {
 	char *name;
@@ -76,8 +78,8 @@ typedef struct _dummyfs_object_t {
 } dummyfs_object_t;
 
 
-struct _dummyfs_common_t{
-	uint32_t port;
+struct _dummyfs_common_t {
+	int port;
 	handle_t mutex;
 	int size;
 };

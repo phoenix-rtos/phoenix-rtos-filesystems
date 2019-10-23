@@ -174,7 +174,7 @@ int dummyfs_truncate_internal(dummyfs_object_t *o, size_t size)
 }
 
 
-int dummyfs_read(oid_t *oid, offs_t offs, char *buff, size_t len)
+static int _dummyfs_read(oid_t *oid, offs_t offs, char *buff, size_t len)
 {
 	int ret = EOK;
 	int readsz;
@@ -187,10 +187,14 @@ int dummyfs_read(oid_t *oid, offs_t offs, char *buff, size_t len)
 	if (o == NULL)
 		return -EINVAL;
 
+	if (o->type == otDir) {
+		return dummyfs_readdir(oid, offs, buff, len);
+	}
+
 	if (o->type != otFile && o->type != otSymlink)
 		ret = -EINVAL;
 
-	if (buff == NULL)
+	if (buff == NULL || offs < 0)
 		ret = -EINVAL;
 
 	if (o->size <= offs) {
@@ -240,30 +244,44 @@ int dummyfs_read(oid_t *oid, offs_t offs, char *buff, size_t len)
 }
 
 
-int dummyfs_write(oid_t *oid, offs_t offs, const char *buff, size_t len)
+int dummyfs_read(oid_t *oid, offs_t offs, char *buff, size_t len, int *status)
+{
+	int ret = _dummyfs_read(oid, offs, buff, len);
+	if (ret < 0) {
+		*status = ret;
+		return 0;
+	}
+	*status = EOK;
+	return ret;
+}
+
+
+int dummyfs_write(oid_t *oid, offs_t offs, const char *buff, size_t len, int *status)
 {
 	dummyfs_object_t *o;
-	int ret = EOK;
+	int ret;
+
+	*status = EOK;
 
 	o = object_get(oid->id);
 
 	if (o == NULL)
-		return -EINVAL;
+		*status = -EINVAL;
 
 	if (o->type != otFile)
-		ret = -EINVAL;
+		*status = -EINVAL;
 
 	if (buff == NULL)
-		ret = -EINVAL;
+		*status = -EINVAL;
 
-	if (ret != EOK) {
+	if (*status != EOK) {
 		object_put(o);
-		return ret;
+		return 0;
 	}
 
 	object_lock(o);
 
-	ret = dummyfs_write_internal(o, offs, buff, len);
+	ret = dummyfs_write_internal(o, offs, buff, len, status);
 
 	object_unlock(o);
 	object_put(o);
@@ -271,20 +289,22 @@ int dummyfs_write(oid_t *oid, offs_t offs, const char *buff, size_t len)
 	return ret;
 }
 
-int dummyfs_write_internal(dummyfs_object_t *o, offs_t offs, const char *buff, size_t len)
+
+int dummyfs_write_internal(dummyfs_object_t *o, offs_t offs, const char *buff, size_t len, int *status)
 {
 
 	int writesz, writeoffs;
 	dummyfs_chunk_t *chunk;
-	int ret = EOK;
+	int ret = 0;
+	*status = EOK;
 
 	if (len == 0) {
-		return EOK;
+		return 0;
 	}
 
 	if (offs + len > o->size) {
-		if ((ret = dummyfs_truncate_internal(o, offs + len)) != EOK)
-			return ret;
+		if ((*status = dummyfs_truncate_internal(o, offs + len)) != EOK)
+			return 0;
 	}
 
 	for (chunk = o->chunks; chunk->next != o->chunks; chunk = chunk->next) {
@@ -292,21 +312,22 @@ int dummyfs_write_internal(dummyfs_object_t *o, offs_t offs, const char *buff, s
 			break; /* found appropriate chunk */
 	}
 
-	ret = 0;
 	do {
 		writeoffs = offs - chunk->offs;
 		writesz = len > chunk->size - writeoffs ? chunk->size - writeoffs : len;
 
 		if (!chunk->used) {
 			if (dummyfs_incsz(chunk->size) != EOK) {
-				return -ENOMEM;
+				*status = -ENOMEM;
+				return ret;
 			}
 
 			chunk->data = malloc(chunk->size);
 
 			if (chunk->data == NULL) {
 				dummyfs_decsz(chunk->size);
-				return -ENOMEM;
+				*status = -ENOMEM;
+				return ret;
 			}
 
 			memset(chunk->data, 0, writeoffs);

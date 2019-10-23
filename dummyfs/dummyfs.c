@@ -28,6 +28,7 @@
 #include <signal.h>
 #include <poll.h>
 #include <phoenix/sysinfo.h>
+#include <fcntl.h>
 
 #include "dummyfs.h"
 #include "dir.h"
@@ -110,7 +111,7 @@ int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res, oid_t *dev)
 	object_unlock(d);
 	object_put(d);
 
-	return len;
+	return EOK;
 }
 
 
@@ -161,9 +162,11 @@ int dummyfs_setattr(oid_t *oid, int type, int attr, const void *data, size_t siz
 }
 
 
-int dummyfs_getattr(oid_t *oid, int type, int *attr)
+ssize_t dummyfs_getattr(oid_t *oid, int type, void *attr, size_t maxlen)
 {
 	dummyfs_object_t *o;
+	struct stat *stat;
+	ssize_t retval;
 
 	if ((o = dummyfs_get(oid)) == NULL)
 		return -ENOENT;
@@ -171,6 +174,27 @@ int dummyfs_getattr(oid_t *oid, int type, int *attr)
 	object_lock(o);
 	switch (type) {
 
+		case atSize:
+			*(int *)attr = o->size;
+			retval = sizeof(int);
+			break;
+
+		case atStatStruct:
+			stat = (struct stat *)attr;
+			stat->st_dev = oid->port;
+			stat->st_ino = oid->id;
+			stat->st_mode = o->mode;
+			stat->st_nlink = o->nlink;
+			stat->st_uid = o->uid;
+			stat->st_gid = o->gid;
+			stat->st_size = o->size;
+			stat->st_atime = o->atime;
+			stat->st_mtime = o->mtime;
+			stat->st_ctime = o->ctime;
+			retval = sizeof(struct stat);
+			break;
+
+#if 0
 		case (atUid):
 			*attr = o->uid;
 			break;
@@ -181,10 +205,6 @@ int dummyfs_getattr(oid_t *oid, int type, int *attr)
 
 		case (atMode):
 			*attr = o->mode;
-			break;
-
-		case (atSize):
-			*attr = o->size;
 			break;
 
 		case (atType):
@@ -215,12 +235,13 @@ int dummyfs_getattr(oid_t *oid, int type, int *attr)
 			// trivial implementation: assume read/write is always possible
 			*attr = POLLIN|POLLRDNORM|POLLOUT|POLLWRNORM;
 			break;
+#endif
 	}
 
 	object_unlock(o);
 	object_put(o);
 
-	return EOK;
+	return retval;
 }
 
 // allow overriding files by link() to support naive rename() implementation
@@ -422,12 +443,12 @@ int dummyfs_create(oid_t *dir, const char *name, oid_t *oid, int type, int mode,
 		const char* path = name + strlen(name) + 1;
 		object_lock(o);
 		// TODO: remove symlink if write failed
-		dummyfs_write_internal(o, 0, path, strlen(path) + 1);
+		dummyfs_write_internal(o, 0, path, strlen(path) + 1, &ret);
 		object_unlock(o);
 	}
 
 	object_put(o);
-	return EOK;
+	return ret;
 }
 
 
@@ -509,7 +530,7 @@ int dummyfs_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int s
 
 			object_unlock(d);
 			object_put(d);
-			return 	EOK;
+			return 	sizeof(struct dirent) + ei->len;
 		}
 		diroffs++;
 		ei = ei->next;
@@ -563,20 +584,25 @@ int fetch_modules(void)
 	oid_t sysoid = { 0 };
 	void *prog_addr;
 	syspageprog_t prog;
-	int i, progsz;
+	int i, progsz, ret;
 
 	progsz = syspageprog(NULL, -1);
-	dummyfs_create(&root, "syspage", &sysoid, otDir, 0, NULL);
+	dummyfs_create(&root, "syspage", &sysoid, otDir, S_IFDIR, NULL);
 
 	for (i = 0; i < progsz; i++) {
+
 		syspageprog(&prog, i);
 #ifdef NOMMU
 		prog_addr = (void *)prog.addr;
 #else
 		prog_addr = (void *)mmap(NULL, (prog.size + 0xfff) & ~0xfff, 0x1 | 0x2, 0, OID_PHYSMEM, prog.addr);
 #endif
-		dummyfs_create(&sysoid, prog.name, &toid, otFile, 0, NULL);
-		dummyfs_write(&toid, 0, prog_addr, prog.size);
+//		char tmp[256];
+//		snprintf(tmp, sizeof(tmp), "prog %d size %x\n", i, prog.size);
+//		debug(tmp);
+
+		dummyfs_create(&sysoid, prog.name, &toid, otFile, S_IFREG, NULL);
+		dummyfs_write(&toid, 0, prog_addr, prog.size, &ret);
 
 		munmap(prog_addr, (prog.size + 0xfff) & ~0xfff);
 	}
@@ -586,6 +612,7 @@ int fetch_modules(void)
 
 int dummyfs_do_mount(const char *path, oid_t *oid)
 {
+/*	TBD
 	struct stat buf;
 	oid_t toid;
 	msg_t msg = {0};
@@ -608,7 +635,7 @@ int dummyfs_do_mount(const char *path, oid_t *oid)
 
 	if ((err = msgSend(toid.port, &msg)) < 0)
 		return err;
-
+*/
 	return 0;
 }
 
@@ -659,6 +686,8 @@ static void signal_exit(int sig)
 }
 
 
+#define PORT_DESCRIPTOR 3
+
 int main(int argc, char **argv)
 {
 	oid_t root = { 0 };
@@ -669,7 +698,7 @@ int main(int argc, char **argv)
 	const char *remount_path = NULL;
 	int non_fs_namespace = 0;
 	int daemonize = 0;
-	int c;
+	int c, err;
 
 #ifdef TARGET_IMX6ULL
 	uint32_t reserved;
@@ -738,6 +767,8 @@ int main(int argc, char **argv)
 		}
 	}
 
+
+#if 0
 	if (mountpt == NULL) {
 #ifndef TARGET_IMX6ULL
 		while (write(1, "", 0) < 0)
@@ -769,6 +800,14 @@ int main(int argc, char **argv)
 		}
 
 	}
+#endif
+
+
+	dummyfs_common.port = PORT_DESCRIPTOR;
+	root.port = dummyfs_common.port;
+	root.id = 0;
+
+	SetRoot(&root, S_IFDIR);
 
 	if (mutexCreate(&dummyfs_common.mutex) != EOK) {
 		LOG("could not create mutex\n");
@@ -823,6 +862,111 @@ int main(int argc, char **argv)
 
 		switch (msg.type) {
 
+			case mtOpen: {
+				oid_t dir = {dummyfs_common.port, 0};
+				dir.id = msg.object;
+
+				char *path = calloc(1, msg.i.size + 1);
+				memcpy(path, msg.i.data, msg.i.size);
+
+				oid_t file;
+				oid_t dev;
+
+				int err = dummyfs_lookup(&dir, path, &file, &dev);
+
+				if ((err == -ENOENT) && (msg.i.lookup.flags & O_CREAT)) {
+					int type = otFile;
+					if (msg.i.lookup.flags & O_DIRECTORY)
+						type = otDir;
+					err = dummyfs_create(&dir, path, &file, type, msg.i.lookup.mode, &dev);
+				}
+
+				free(path);
+
+				if (!err) {
+					dummyfs_object_t *o = object_get(file.id);
+					msg.o.lookup.id = file.id;
+					msg.o.lookup.mode = o->mode;
+					object_put(o);
+				}
+				break;
+			}
+
+			case mtRead: {
+				oid_t oid;
+
+				oid.port = dummyfs_common.port;
+				oid.id = msg.object;
+
+				msg.o.io = dummyfs_read(&oid, msg.i.io.offs, msg.o.data, msg.o.size, &err);
+				break;
+			}
+
+			case mtWrite: {
+				oid_t oid;
+
+				oid.port = dummyfs_common.port;
+				oid.id = msg.object;
+
+				msg.o.io = dummyfs_write(&oid, msg.i.io.offs, msg.i.data, msg.i.size, &err);
+				break;
+			}
+
+			case mtSetAttr: {
+				oid_t oid;
+
+				oid.port = dummyfs_common.port;
+				oid.id = msg.object;
+
+				err = dummyfs_setattr(&oid, msg.i.attr, *(int *)msg.i.data, NULL, 0);
+				break;
+			}
+
+			case mtGetAttr: {
+				oid_t oid;
+
+				oid.port = dummyfs_common.port;
+				oid.id = msg.object;
+
+				err = dummyfs_getattr(&oid, msg.i.attr, msg.o.data, msg.o.size);
+				break;
+			}
+
+			case mtLink: {
+				oid_t oid, file;
+
+				oid.port = dummyfs_common.port;
+				oid.id = msg.object;
+
+				file = msg.i.link;
+
+				char *path = calloc(1, msg.i.size + 1);
+				memcpy(path, msg.i.data, msg.i.size);
+
+				err = dummyfs_link(&oid, path, &file);
+
+				free(path);
+				break;
+			}
+
+			case mtUnlink: {
+				oid_t oid;
+
+				oid.port = dummyfs_common.port;
+				oid.id = msg.object;
+
+				char *path = calloc(1, msg.i.size + 1);
+				memcpy(path, msg.i.data, msg.i.size);
+
+				err = dummyfs_unlink(&oid, path);
+
+				free(path);
+				break;				
+			}
+
+
+
+#if 0
 			case mtOpen:
 				msg.o.io.err = dummyfs_open(&msg.i.openclose.oid);
 				break;
@@ -879,8 +1023,9 @@ int main(int argc, char **argv)
 				msg.o.io.err = dummyfs_readdir(&msg.i.readdir.dir, msg.i.readdir.offs,
 						msg.o.data, msg.o.size);
 				break;
+#endif
 		}
-		msgRespond(dummyfs_common.port, &msg, rid);
+		msgRespond(dummyfs_common.port, err, &msg, rid);
 	}
 
 	return EOK;

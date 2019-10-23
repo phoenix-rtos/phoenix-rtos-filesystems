@@ -1,0 +1,9 @@
+#
+# Makefile for Phoenix-RTOS 3 device drivers
+#
+# pc filesystems
+#
+# Copyright 2019 Phoenix Systems
+#
+
+include dummyfs/Makefile
