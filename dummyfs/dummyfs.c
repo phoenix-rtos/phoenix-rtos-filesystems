@@ -706,7 +706,7 @@ int main(int argc, char **argv)
 	int daemonize = 0;
 	int c, err;
 
-	debug("dummy start\n");
+	LOG("Started");
 	dummyfs_common.size = 0;
 
 	while ((c = getopt(argc, argv, "Dhm:r:N:")) != -1) {
@@ -812,11 +812,8 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
-	if (pid > 0) {
-		LOG("DAEMONIZED\n");
+	if (pid > 0)
 		exit(EXIT_SUCCESS);
-	}
-
 
 	/* Create a new SID for the child process */
 	sid = setsid();
@@ -827,14 +824,12 @@ int main(int argc, char **argv)
 
 	/*** MAIN LOOP ***/
 
-	LOG("initialized\n");
-	debug("dummy init\n");
+	LOG("Initialized");
 	for (;;) {
-		
+
 		if (msgRecv(dummyfs_common.port, &msg, &rid) < 0)
 			continue;
 
-		LOG("msg type %d", msg.type);
 		switch (msg.type) {
 			case mtLookup: {
 				oid_t dir = {dummyfs_common.port, 0};
@@ -847,15 +842,11 @@ int main(int argc, char **argv)
 				oid_t dev;
 
 				int err = dummyfs_lookup(&dir, path, &file, &dev);
-				debug("LOOKUP\n");
 				if ((err == -ENOENT) && (msg.i.lookup.flags & O_CREAT)) {
-					debug("dummy create\n");
 					int type = otFile;
 					if (msg.i.lookup.flags & O_DIRECTORY)
 						type = otDir;
 					err = dummyfs_create(&dir, path, &file, type, msg.i.lookup.mode, &dev);
-					if (err == -20)
-						debug("enotdir\n");
 				}
 
 				free(path);

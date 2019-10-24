@@ -268,8 +268,13 @@ int dummyfs_write(oid_t *oid, offs_t offs, const char *buff, size_t len, int *st
 	if (o == NULL)
 		*status = -EINVAL;
 
-	if (o->type != otFile)
+	if (o->type != otFile) {
+		if (o->type == otDev && len == sizeof(oid_t)) {
+			memcpy(&o->dev, buff, len);
+			return len;
+		}
 		*status = -EINVAL;
+	}
 
 	if (buff == NULL)
 		*status = -EINVAL;
