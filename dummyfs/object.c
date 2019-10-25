@@ -98,10 +98,11 @@ int object_remove(dummyfs_object_t *o)
 
 dummyfs_object_t *object_get_unlocked(unsigned int id)
 {
-	dummyfs_object_t *o;
+	dummyfs_object_t *o = NULL;
+	idnode_t *n = idtree_find(&dummytree, id);
 
-	o = dummy_node2obj(idtree_find(&dummytree, id));
-
+	if (n != NULL)
+		o = dummy_node2obj(n);
 	return o;
 }
 

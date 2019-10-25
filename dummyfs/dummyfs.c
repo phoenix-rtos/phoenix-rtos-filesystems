@@ -36,7 +36,11 @@
 #include "object.h"
 #include "dev.h"
 
-#define LOG(msg, ...) printf("dummyfs: " msg, ##__VA_ARGS__)
+#define LOG(msg, ...) do { \
+	char buf[128]; \
+	sprintf(buf, __FILE__ ":%d - " msg "\n", __LINE__, ##__VA_ARGS__ ); \
+	debug(buf); \
+} while (0)
 
 struct _dummyfs_common_t dummyfs_common;
 
@@ -258,10 +262,11 @@ int dummyfs_link(oid_t *dir, const char *name, oid_t *oid)
 
 	if (dummyfs_device(dir))
 		return -EINVAL;
-
+	LOG("dir get");
 	if ((d = object_get(dir->id)) == NULL)
 		return -ENOENT;
 
+	LOG("dummy get");
 	if ((o = dummyfs_get(oid)) == NULL) {
 		object_put(d);
 		return -ENOENT;
@@ -413,27 +418,25 @@ int dummyfs_create(oid_t *dir, const char *name, oid_t *oid, int type, int mode,
 	dummyfs_object_t *o;
 	int ret;
 
-	if (type == otDev)
-		o = dev_find(dev, 1);
-	else
-		o = object_create();
+	o = object_create();
 
 	if (o == NULL)
 		return -ENOMEM;
-
+	LOG("obj created");
 	object_lock(o);
 	o->oid.port = dummyfs_common.port;
 	o->type = type;
 	o->mode = mode;
 	o->atime = o->mtime = o->ctime = time(NULL);
 
-	if (type == otDev)
-		memcpy(oid, dev, sizeof(oid_t));
-	else
-		memcpy(oid, &o->oid, sizeof(oid_t));
+	if (o->type == otDev && dev != NULL)
+		memcpy(&o->dev, dev, sizeof(oid_t));
+
+	memcpy(oid, &o->oid, sizeof(oid_t));
 
 	object_unlock(o);
 
+	LOG("link %s dir %llu", name, dir->id);
 	if ((ret = dummyfs_link(dir, name, &o->oid)) != EOK) {
 		object_put(o);
 		return ret;
@@ -447,6 +450,7 @@ int dummyfs_create(oid_t *dir, const char *name, oid_t *oid, int type, int mode,
 		object_unlock(o);
 	}
 
+	LOG("done");
 	object_put(o);
 	return ret;
 }
@@ -685,13 +689,6 @@ static void signal_exit(int sig)
 	exit(EXIT_SUCCESS);
 }
 
-
-#define LOG(msg, ...) do { \
-	char buf[128]; \
-	sprintf(buf, __FILE__ ":%d - " msg "\n", __LINE__, ##__VA_ARGS__ ); \
-	debug(buf); \
-} while (0)
-
 #define PORT_DESCRIPTOR 3
 
 int main(int argc, char **argv)
@@ -829,24 +826,23 @@ int main(int argc, char **argv)
 
 		if (msgRecv(dummyfs_common.port, &msg, &rid) < 0)
 			continue;
-
+		LOG("msg type %d", msg.type);
 		switch (msg.type) {
 			case mtLookup: {
 				oid_t dir = {dummyfs_common.port, 0};
 				dir.id = msg.object;
-
+				LOG("lookup dir id %llu %d", dir.id, dir.id);
 				char *path = calloc(1, msg.i.size + 1);
 				memcpy(path, msg.i.data, msg.i.size);
 
 				oid_t file;
 				oid_t dev;
-
+				LOG("path %s 0x%x", path, msg.i.lookup.mode);
 				int err = dummyfs_lookup(&dir, path, &file, &dev);
 				if ((err == -ENOENT) && (msg.i.lookup.flags & O_CREAT)) {
-					int type = otFile;
-					if (msg.i.lookup.flags & O_DIRECTORY)
-						type = otDir;
-					err = dummyfs_create(&dir, path, &file, type, msg.i.lookup.mode, &dev);
+					int type = S_ISDIR(msg.i.lookup.mode) ? otDir : (S_ISREG(msg.i.lookup.mode) ? otFile : otDev);
+					LOG("create");
+					err = dummyfs_create(&dir, path, &file, type, msg.i.lookup.mode, &msg.i.lookup.dev);
 				}
 
 				free(path);
@@ -875,7 +871,7 @@ int main(int argc, char **argv)
 
 				oid.port = dummyfs_common.port;
 				oid.id = msg.object;
-
+				LOG("dummy write");
 				msg.o.io = dummyfs_write(&oid, msg.i.io.offs, msg.i.data, msg.i.size, &err);
 				break;
 			}
@@ -932,7 +928,11 @@ int main(int argc, char **argv)
 				break;				
 			}
 
-
+			case mtOpen: {
+				msg.o.open = msg.object;
+				err = EOK;
+				break;				
+			}
 
 #if 0
 			case mtOpen:

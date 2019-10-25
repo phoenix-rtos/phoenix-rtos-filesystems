@@ -172,7 +172,11 @@ int dummyfs_truncate_internal(dummyfs_object_t *o, size_t size)
 
 	return EOK;
 }
-
+#define LOG(msg, ...) do { \
+	char buf[128]; \
+	sprintf(buf, __FILE__ ":%d - " msg "\n", __LINE__, ##__VA_ARGS__ ); \
+	debug(buf); \
+} while (0)
 
 static int _dummyfs_read(oid_t *oid, offs_t offs, char *buff, size_t len)
 {
@@ -186,9 +190,19 @@ static int _dummyfs_read(oid_t *oid, offs_t offs, char *buff, size_t len)
 
 	if (o == NULL)
 		return -EINVAL;
-
+	LOG("READ %d %u", o->type, len);
 	if (o->type == otDir) {
 		return dummyfs_readdir(oid, offs, buff, len);
+	} else if (o->type == otDev && len >= sizeof(oid_t)) {
+		LOG("DEV");
+		if (o->dev.port == 0)
+			memcpy(buff, &o->oid, sizeof(oid_t));
+		else
+			memcpy(buff, &o->dev, sizeof(oid_t));
+
+		LOG("oid %llu %u", o->oid.id, o->oid.port);
+		LOG("dev %llu %u", o->dev.id, o->dev.port);
+		return sizeof(oid_t);
 	}
 
 	if (o->type != otFile && o->type != otSymlink)
@@ -243,6 +257,12 @@ static int _dummyfs_read(oid_t *oid, offs_t offs, char *buff, size_t len)
 	return ret;
 }
 
+#define LOG(msg, ...) do { \
+	char buf[128]; \
+	sprintf(buf, __FILE__ ":%d - " msg "\n", __LINE__, ##__VA_ARGS__ ); \
+	debug(buf); \
+} while (0)
+
 
 int dummyfs_read(oid_t *oid, offs_t offs, char *buff, size_t len, int *status)
 {
@@ -267,9 +287,10 @@ int dummyfs_write(oid_t *oid, offs_t offs, const char *buff, size_t len, int *st
 
 	if (o == NULL)
 		*status = -EINVAL;
-
+	LOG("write type %d", o->type);
 	if (o->type != otFile) {
-		if (o->type == otDev && len == sizeof(oid_t)) {
+		if (o->type == otDev && len >= sizeof(oid_t)) {
+			LOG("dev set");
 			memcpy(&o->dev, buff, len);
 			return len;
 		}
