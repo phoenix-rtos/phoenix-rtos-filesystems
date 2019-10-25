@@ -491,10 +491,6 @@ int dummyfs_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int s
 	dummyfs_dirent_t *ei;
 	offs_t diroffs = 0;
 	int ret = -ENOENT;
-
-	if (dummyfs_device(dir))
-		return -EINVAL;
-
 	d = object_get(dir->id);
 
 	if (d == NULL)
@@ -531,10 +527,9 @@ int dummyfs_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int s
 			dent->d_namlen = ei->len;
 			dent->d_type = ei->type;
 			memcpy(&(dent->d_name[0]), ei->name, ei->len);
-
 			object_unlock(d);
 			object_put(d);
-			return 	sizeof(struct dirent) + ei->len;
+			return 	1;
 		}
 		diroffs++;
 		ei = ei->next;
@@ -826,22 +821,21 @@ int main(int argc, char **argv)
 
 		if (msgRecv(dummyfs_common.port, &msg, &rid) < 0)
 			continue;
-		LOG("msg type %d", msg.type);
+
 		switch (msg.type) {
 			case mtLookup: {
 				oid_t dir = {dummyfs_common.port, 0};
 				dir.id = msg.object;
-				LOG("lookup dir id %llu %d", dir.id, dir.id);
+
 				char *path = calloc(1, msg.i.size + 1);
 				memcpy(path, msg.i.data, msg.i.size);
 
 				oid_t file;
 				oid_t dev;
-				LOG("path %s 0x%x", path, msg.i.lookup.mode);
+
 				int err = dummyfs_lookup(&dir, path, &file, &dev);
 				if ((err == -ENOENT) && (msg.i.lookup.flags & O_CREAT)) {
 					int type = S_ISDIR(msg.i.lookup.mode) ? otDir : (S_ISREG(msg.i.lookup.mode) ? otFile : otDev);
-					LOG("create");
 					err = dummyfs_create(&dir, path, &file, type, msg.i.lookup.mode, &msg.i.lookup.dev);
 				}
 
