@@ -67,8 +67,6 @@ int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res, oid_t *dev)
 
 	if (dir == NULL)
 		d = object_get(0);
-	else if (dummyfs_device(dir))
-		return -EINVAL;
 	else if ((d = object_get(dir->id)) == NULL)
 		return -ENOENT;
 
@@ -83,16 +81,12 @@ int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res, oid_t *dev)
 			len++;
 
 		err = dir_find(d, name + len, res);
-
 		if (err <= 0)
 			break;
 
 		len += err;
 		object_unlock(d);
 		object_put(d);
-
-		if (dummyfs_device(res))
-			break;
 
 		d = object_get(res->id);
 		object_lock(d);
@@ -833,7 +827,7 @@ int main(int argc, char **argv)
 				oid_t file;
 				oid_t dev;
 
-				int err = dummyfs_lookup(&dir, path, &file, &dev);
+				err = dummyfs_lookup(&dir, path, &file, &dev);
 				if ((err == -ENOENT) && (msg.i.lookup.flags & O_CREAT)) {
 					int type = S_ISDIR(msg.i.lookup.mode) ? otDir : (S_ISREG(msg.i.lookup.mode) ? otFile : otDev);
 					err = dummyfs_create(&dir, path, &file, type, msg.i.lookup.mode, &msg.i.lookup.dev);
