@@ -588,7 +588,7 @@ int fetch_modules(void)
 #ifdef NOMMU
 		prog_addr = (void *)prog.addr;
 #else
-		prog_addr = (void *)mmap(NULL, (prog.size + 0xfff) & ~0xfff, 0x1 | 0x2, MAP_ANONYMOUS, -1, prog.addr);
+		prog_addr = (void *)mmap(NULL, (prog.size + 0xfff) & ~0xfff, PROT_READ | PROT_WRITE, MAP_NONE, FD_PHYSMEM, prog.addr);
 #endif
 //		char tmp[256];
 //		snprintf(tmp, sizeof(tmp), "prog %d size %x\n", i, prog.size);
