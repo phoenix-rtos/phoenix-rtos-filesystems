@@ -14,25 +14,27 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <dirent.h>
 #include <sys/msg.h>
 #include <sys/threads.h>
-#include <string.h>
+#include <phoenix/stat.h>
 
 #include "dummyfs.h"
 #include "file.h"
 #include "object.h"
 
-int dummyfs_truncate(oid_t *oid, size_t size)
+int dummyfs_truncate(id_t *id, size_t size)
 {
 	dummyfs_object_t *o;
 	int ret;
 
-	o = object_get(oid->id);
+	o = object_get(id);
 
 	if (o == NULL)
 		return -EINVAL;
 
-	if (o->type != otFile) {
+	if (!S_ISREG(o->mode)) {
 		object_put(o);
 		return -EACCES;
 	}
@@ -178,7 +180,10 @@ int dummyfs_truncate_internal(dummyfs_object_t *o, size_t size)
 	debug(buf); \
 } while (0)
 
-static int _dummyfs_read(oid_t *oid, offs_t offs, char *buff, size_t len)
+
+extern int dummyfs_readdir(id_t *id, offs_t offs, struct dirent *dent, size_t size);
+
+static int _dummyfs_read(id_t *id, offs_t offs, char *buff, size_t len)
 {
 	int ret = EOK;
 	int readsz;
@@ -186,20 +191,19 @@ static int _dummyfs_read(oid_t *oid, offs_t offs, char *buff, size_t len)
 	dummyfs_chunk_t *chunk;
 	dummyfs_object_t *o;
 
-	o = object_get(oid->id);
+	o = object_get(id);
 
 	if (o == NULL)
 		return -EINVAL;
 
-	if (o->type == otDir) {
-		return dummyfs_readdir(oid, offs, buff, len);
-	} else if (o->type == otDev && len >= sizeof(oid_t)) {
+	if (S_ISDIR(o->mode)) {
+		return dummyfs_readdir(id, offs, (struct dirent *)buff, len);
+	} else if ((S_ISCHR(o->mode) || S_ISBLK(o->mode)) && len >= sizeof(oid_t)) {
 		memcpy(buff, &o->dev, sizeof(oid_t));
-		LOG("dev %llu %u", o->dev.id, o->dev.port);
 		return sizeof(oid_t);
 	}
 
-	if (o->type != otFile && o->type != otSymlink)
+	if (!S_ISREG(o->mode) && S_ISLNK(o->mode))
 		ret = -EINVAL;
 
 	if (buff == NULL || offs < 0)
@@ -258,9 +262,9 @@ static int _dummyfs_read(oid_t *oid, offs_t offs, char *buff, size_t len)
 } while (0)
 
 
-int dummyfs_read(oid_t *oid, offs_t offs, char *buff, size_t len, int *status)
+int dummyfs_read(id_t *id, offs_t offs, char *buff, size_t len, int *status)
 {
-	int ret = _dummyfs_read(oid, offs, buff, len);
+	int ret = _dummyfs_read(id, offs, buff, len);
 	if (ret < 0) {
 		*status = ret;
 		return 0;
@@ -270,26 +274,20 @@ int dummyfs_read(oid_t *oid, offs_t offs, char *buff, size_t len, int *status)
 }
 
 
-int dummyfs_write(oid_t *oid, offs_t offs, const char *buff, size_t len, int *status)
+int dummyfs_write(id_t *id, offs_t offs, const char *buff, size_t len, int *status)
 {
 	dummyfs_object_t *o;
 	int ret;
 
 	*status = EOK;
 
-	o = object_get(oid->id);
+	o = object_get(id);
 
 	if (o == NULL)
 		*status = -EINVAL;
 
-	LOG("write type %d", o->type);
-	if (o->type != otFile) {
-		if (o->type == otDev) {
-			LOG("write dev %d %s",len, buff);
-			return len;
-		}
+	if (!S_ISREG(o->mode))
 		*status = -EINVAL;
-	}
 
 	if (buff == NULL)
 		*status = -EINVAL;
@@ -316,6 +314,7 @@ int dummyfs_write_internal(dummyfs_object_t *o, offs_t offs, const char *buff, s
 	int writesz, writeoffs;
 	dummyfs_chunk_t *chunk;
 	int ret = 0;
+
 	*status = EOK;
 
 	if (len == 0) {

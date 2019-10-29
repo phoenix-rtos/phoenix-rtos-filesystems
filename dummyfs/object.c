@@ -14,21 +14,29 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/file.h>
 #include <sys/threads.h>
 #include <sys/msg.h>
 #include <sys/rb.h>
 #include <posix/idtree.h>
-#include <unistd.h>
+#include <phoenix/stat.h>
 
 #include "dummyfs.h"
 #include "dir.h"
+
+#define LOG_OBJ(msg, ...) do { \
+	char buf[128]; \
+	sprintf(buf, __FILE__ ":%d - " msg "\n", __LINE__, ##__VA_ARGS__ ); \
+	debug(buf); \
+} while (0)
+//#define LOG_OBJECT(msg, ...)
 
 idtree_t dummytree = { 0 };
 handle_t olock;
 
 #define dummy_node2obj(n) lib_treeof(dummyfs_object_t, node, n)
-extern int dummyfs_destroy(oid_t *oid);
+extern int dummyfs_destroy(id_t *id);
 
 dummyfs_object_t *object_create(void)
 {
@@ -63,9 +71,8 @@ dummyfs_object_t *object_create(void)
 
 	mutexUnlock(dummyfs_common.mutex);
 
-	r->oid.id = id;
+	r->id = id;
 	r->refs = 1;
-	r->type = otUnknown;
 	r->nlink = 0;
 
 	mutexUnlock(olock);
@@ -96,7 +103,7 @@ int object_remove(dummyfs_object_t *o)
 }
 
 
-dummyfs_object_t *object_get_unlocked(unsigned int id)
+dummyfs_object_t *object_get_unlocked(int id)
 {
 	dummyfs_object_t *o = NULL;
 	idnode_t *n = idtree_find(&dummytree, id);
@@ -107,12 +114,12 @@ dummyfs_object_t *object_get_unlocked(unsigned int id)
 }
 
 
-dummyfs_object_t *object_get(unsigned int id)
+dummyfs_object_t *object_get(id_t *id)
 {
 	dummyfs_object_t *o;
 
 	mutexLock(olock);
-	if ((o = object_get_unlocked(id)) != NULL)
+	if ((o = object_get_unlocked(id ? (int)*id : 0)) != NULL)
 		o->refs++;
 	mutexUnlock(olock);
 
@@ -126,15 +133,17 @@ void object_put(dummyfs_object_t *o)
 	if (o != NULL && o->refs) {
 		o->refs--;
 
-		if (!o->refs && o->type == otDir && o->dirty) {
+		if (!o->refs && S_ISDIR(o->mode) && o->dirty) {
 			object_lock(o);
 			dir_clean(o);
 			object_unlock(o);
 		}
 
 		if (!o->refs && !o->nlink)
-			dummyfs_destroy(&o->oid);
-	}
+			dummyfs_destroy(&o->id);
+	} else if (o != NULL && !o->refs)
+		LOG_OBJ("INVALID REFCOUNT FOR object id %llu", o->id);
+
 	mutexUnlock(olock);
 	return;
 }

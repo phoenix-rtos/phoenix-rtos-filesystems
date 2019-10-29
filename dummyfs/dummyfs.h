@@ -18,86 +18,100 @@
 #include <errno.h>
 #include <stdint.h>
 #include <time.h>
+#include <sys/types.h>
 #include <sys/file.h>
 #include <posix/idtree.h>
 
 
+#define DUMMYFS_SIZE_CHECK 1
 #define DUMMYFS_SIZE_MAX 32 * 1024 * 1024
 
-typedef uint32_t u32;
+
+struct _dummyfs_object_t;
+
 
 typedef struct _dummyfs_dirent_t {
-	char *name;
-	unsigned int len;
-	uint32_t type;
-	oid_t oid;
-	uint8_t deleted;
-
 	struct _dummyfs_dirent_t *next;
 	struct _dummyfs_dirent_t *prev;
+
+	struct _dummyfs_object_t *o;
+	char *name;
+	size_t len;
+	uint8_t deleted;
 } dummyfs_dirent_t;
 
 
 typedef struct _dummyfs_chunk_t {
-	char *data;
-
 	offs_t offs;
-	size_t size;
-	size_t used;
 
+	char *data;
 	struct _dummyfs_chunk_t *next;
 	struct _dummyfs_chunk_t *prev;
+
+	size_t size;
+	size_t used;
 } dummyfs_chunk_t;
 
 
 typedef struct _dummyfs_object_t {
-	oid_t oid, dev;
-	uint32_t type;
-
-	unsigned int uid;
-	unsigned int gid;
-	uint32_t mode;
-
-	int refs;
-	int nlink;
-
 	idnode_t node;
-	size_t size;
 
 	union {
-		dummyfs_dirent_t *entries;
+		struct {
+			dummyfs_dirent_t *entries;
+			uint8_t dirty;
+		};
 		dummyfs_chunk_t *chunks;
-		uint32_t port;
+		oid_t dev;
 	};
+
+	id_t id;
 
 	time_t atime;
 	time_t mtime;
 	time_t ctime;
 
-	uint8_t dirty;
+	uint32_t uid;
+	uint32_t gid;
+	uint32_t mode;
+
+	int32_t refs;
+	int32_t nlink;
+
+	size_t size;
 } dummyfs_object_t;
 
 
 struct _dummyfs_common_t {
-	int port;
+	int portfd;
+	id_t rootId;
 	handle_t mutex;
-	int size;
+#if  DUMMYFS_SIZE_CHECK == 1
+	size_t size;
+#endif
 };
 
 
 extern struct _dummyfs_common_t dummyfs_common;
 
 
-static inline int dummyfs_incsz(int size) {
+static inline int dummyfs_incsz(size_t size) {
+#if  DUMMYFS_SIZE_CHECK == 1
 	if (dummyfs_common.size + size > DUMMYFS_SIZE_MAX)
 		return -ENOMEM;
 	dummyfs_common.size += size;
+#endif
 	return EOK;
 }
 
 
-static inline void dummyfs_decsz(int size) {
-	dummyfs_common.size -= size;
+static inline void dummyfs_decsz(size_t size) {
+#if DUMMYFS_SIZE_CHECK == 1
+	if (dummyfs_common.size >= size)
+		dummyfs_common.size -= size;
+	else
+		dummyfs_common.size = 0;
+#endif
 }
 
 

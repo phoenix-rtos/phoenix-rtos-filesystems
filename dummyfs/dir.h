@@ -15,24 +15,27 @@
 #ifndef _DUMMYFS_DIR_H_
 #define _DUMMYFS_DIR_H_
 
-extern int dir_find(dummyfs_object_t *dir, const char *name, oid_t *res);
+#include "dummyfs.h"
 
 
-extern int dir_replace(dummyfs_object_t *dir, const char *name, oid_t *new);
+int dir_findId(const dummyfs_object_t *dir, const char *name, const size_t len, id_t *resId, mode_t *mode);
 
 
-extern int dir_add(dummyfs_object_t *dir, const char *name, int type, oid_t *oid);
+int dir_replace(dummyfs_object_t *dir, const char *name, const size_t len, const dummyfs_object_t *o);
 
 
-extern int dir_remove(dummyfs_object_t *dir, const char *name);
+int dir_add(dummyfs_object_t *dir, const char *name, const size_t len, const dummyfs_object_t *o);
 
 
-extern int dir_empty(dummyfs_object_t *dir);
+int dir_remove(dummyfs_object_t *dir, const char *name, const size_t len);
+
+
+int dir_empty(const dummyfs_object_t *dir);
 
 
 void dir_clean(dummyfs_object_t *dir);
 
 
-extern void dir_destroy(dummyfs_object_t *dir);
+void dir_destroy(dummyfs_object_t *dir);
 
 #endif /* _DUMMYFS_DIR_H_ */

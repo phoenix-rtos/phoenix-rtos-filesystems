@@ -13,89 +13,88 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/msg.h>
 #include <string.h>
+#include <sys/msg.h>
+#include <phoenix/stat.h>
 
 #include "dummyfs.h"
 
-
-int dir_find(dummyfs_object_t *dir, const char *name, oid_t *res)
+static int dir_find(const dummyfs_object_t *dir, const char *name, const size_t len, dummyfs_object_t **o)
 {
 
 	dummyfs_dirent_t *e = dir->entries;
-	char *dirname = strdup(name);
-	char *end = strchr(dirname, '/');
-	int len;
 
-	if (dir->type != otDir)
+	if (!S_ISDIR(dir->mode) || o == NULL)
 		return -EINVAL;
 
 	if (e == NULL)
 		return -ENOENT;
 
-	if (end != NULL)
-		*end = 0;
-
-	len = strlen(dirname);
-
 	/* Iterate over all entries to find the matching one */
 	do {
-		if (!strcmp(e->name, dirname) && !e->deleted) {
-			memcpy(res, &e->oid, sizeof(oid_t));
-			free(dirname);
-			return len;
-		}
-
-		e = e->next;
-	} while (e != dir->entries);
-
-	free(dirname);
-	return -ENOENT;
-}
-
-
-int dir_replace(dummyfs_object_t *dir, const char *name, oid_t *new)
-{
-
-	dummyfs_dirent_t *e = dir->entries;
-	char *dirname = strdup(name);
-	char *end = strchr(dirname, '/');
-
-	if (dir->type != otDir)
-		return -EINVAL;
-
-	if (e == NULL)
-		return -ENOENT;
-
-	if (end != NULL)
-		*end = 0;
-
-	/* Iterate over all entries to find the matching one */
-	do {
-		if (!strcmp(e->name, dirname)) {
-			memcpy(&e->oid, new, sizeof(oid_t));
-			free(dirname);
+		if (e->len - 1 == len && !strncmp(e->name, name, len) && !e->deleted) {
+			*o = e->o;
 			return EOK;
 		}
 
 		e = e->next;
 	} while (e != dir->entries);
 
-	free(dirname);
 	return -ENOENT;
 }
 
 
-int dir_add(dummyfs_object_t *dir, const char *name, int type, oid_t *oid)
+int dir_findId(const dummyfs_object_t *dir, const char *name, const size_t len, id_t *resId, mode_t *mode)
 {
-	oid_t res;
+
+	dummyfs_object_t *o;
+	int err = -ENOENT;
+
+	err = dir_find(dir, name, len, &o);
+
+	if (err == EOK) {
+		*resId = o->id;
+		if (mode)
+			*mode = o->mode;
+	}
+
+	return err;
+}
+
+
+
+int dir_replace(dummyfs_object_t *dir, const char *name, const size_t len, dummyfs_object_t *o)
+{
+
+	dummyfs_dirent_t *e = dir->entries;
+
+	if (!S_ISDIR(dir->mode) || o == NULL)
+		return -EINVAL;
+
+	/* Iterate over all entries to find the matching one */
+	do {
+		if ((e->len - 1 == len) && !strncmp(e->name, name, len)) {
+			e->o = o;
+			return EOK;
+		}
+
+		e = e->next;
+	} while (e != dir->entries);
+
+	return -ENOENT;
+}
+
+
+int dir_add(dummyfs_object_t *dir, const char *name, const size_t len, dummyfs_object_t *o)
+{
+	id_t resId;
 	dummyfs_dirent_t *n;
 	dummyfs_dirent_t *e = dir->entries;
 
 	if (dir == NULL)
 		return -EINVAL;
 
-	if (dir_find(dir, name, &res) >= 0)
+	if (dir_findId(dir, name, len, &resId, NULL) == EOK)
 		return -EEXIST;
 
 	if (dummyfs_incsz(sizeof(dummyfs_dirent_t)) != EOK)
@@ -108,7 +107,7 @@ int dir_add(dummyfs_object_t *dir, const char *name, int type, oid_t *oid)
 		return -ENOMEM;
 	}
 
-	n->len = strlen(name) + 1;
+	n->len = len + 1;
 	n->deleted = 0;
 
 	if (dummyfs_incsz(n->len) != EOK) {
@@ -117,7 +116,7 @@ int dir_add(dummyfs_object_t *dir, const char *name, int type, oid_t *oid)
 		return -ENOMEM;
 	}
 
-	n->name = malloc(n->len);
+	n->name = calloc(1, n->len);
 
 	if (n->name == NULL) {
 		dummyfs_decsz(sizeof(dummyfs_dirent_t) + n->len);
@@ -141,17 +140,15 @@ int dir_add(dummyfs_object_t *dir, const char *name, int type, oid_t *oid)
 		e->prev = n;
 	}
 
-	memcpy(n->name, name, n->len);
-	n->name[n->len - 1] = '\0';
-	memcpy(&n->oid, oid, sizeof(oid_t));
-	n->type = type;
-	dir->size += strlen(name);
+	memcpy(n->name, name, len);
+	n->o = o;
+	dir->size += n->len;
 
 	return EOK;
 }
 
 
-int dir_remove(dummyfs_object_t *dir, const char *name)
+int dir_remove(dummyfs_object_t *dir, const char *name, const size_t len)
 {
 	dummyfs_dirent_t *e = dir->entries;
 
@@ -159,8 +156,8 @@ int dir_remove(dummyfs_object_t *dir, const char *name)
 		return -ENOENT;
 
 	do {
-		if (!strcmp(e->name, (char *)name) && !e->deleted) {
-			dir->size -= strlen(e->name);
+		if (!strncmp(e->name, (char *)name, len) && !e->deleted) {
+			dir->size -= e->len;
 			e->deleted = 1;
 			dir->dirty = 1;
 			return EOK;
