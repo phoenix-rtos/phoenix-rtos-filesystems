@@ -156,7 +156,7 @@ int dir_remove(dummyfs_object_t *dir, const char *name, const size_t len)
 		return -ENOENT;
 
 	do {
-		if (!strncmp(e->name, (char *)name, len) && !e->deleted) {
+		if ((e->len - 1 == len) && !strncmp(e->name, (char *)name, len) && !e->deleted) {
 			dir->size -= e->len;
 			e->deleted = 1;
 			dir->dirty = 1;
