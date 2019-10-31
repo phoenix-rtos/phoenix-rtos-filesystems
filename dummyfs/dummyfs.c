@@ -424,7 +424,7 @@ int dummyfs_readdir(id_t *id, offs_t offs, struct dirent *dent, unsigned int siz
 			memcpy(&(dent->d_name[0]), ei->name, ei->len);
 			object_unlock(d);
 			object_put(d);
-			return 	1;
+			return dent->d_reclen;
 		}
 		diroffs++;
 		ei = ei->next;
