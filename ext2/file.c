@@ -18,10 +18,12 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
-#include <sys/file.h>
 #include <time.h>
+#include <sys/file.h>
+#include <sys/threads.h>
 
-#include "pc-ata.h"
+#include <atasrv.h>
+
 #include "ext2.h"
 #include "file.h"
 #include "object.h"
@@ -31,12 +33,11 @@
 
 
 /* reads a file */
-static int _ext2_read(oid_t *oid, offs_t offs, char *data, unsigned int len, int lock)
+static int _ext2_read(ext2_object_t *o, offs_t offs, char *data, size_t len, int *status)
 {
 	uint32_t read_len, read_sz, current_block, end_block;
-	uint32_t start_block = offs / ext2->block_size;
-	uint32_t block_off = offs % ext2->block_size; /* block offset */
-	ext2_object_t *o = object_get(oid->id);
+	uint32_t start_block = offs / o->f->block_size;
+	uint32_t block_off = offs % o->f->block_size; /* block offset */
 	void *tmp;
 
 	if (o == NULL)
@@ -44,11 +45,6 @@ static int _ext2_read(oid_t *oid, offs_t offs, char *data, unsigned int len, int
 
 	if (len == 0)
 		return 0;
-
-	if (o->type == otDev) {
-		object_put(o);
-		return -EINVAL;
-	}
 
 	if (o->inode->size <= offs)
 		return EOK;
@@ -59,23 +55,21 @@ static int _ext2_read(oid_t *oid, offs_t offs, char *data, unsigned int len, int
 		read_len = len;
 
 	current_block = start_block + 1;
-	end_block = (offs + read_len) / ext2->block_size;
+	end_block = (offs + read_len) / o->f->block_size;
 
-	tmp = malloc(ext2->block_size);
-
-	if (lock) mutexLock(o->lock);
+	tmp = malloc(o->f->block_size);
 
 	get_block(o, start_block, tmp);
 
-	read_sz = ext2->block_size - block_off > read_len ?
-		read_len : ext2->block_size - block_off;
+	read_sz = o->f->block_size - block_off > read_len ?
+		read_len : o->f->block_size - block_off;
 
 	memcpy(data, tmp + block_off, read_sz);
 
 	while (current_block < end_block) {
 		get_block(o, current_block, data + read_sz);
 		current_block++;
-		read_sz += ext2->block_size;
+		read_sz += o->f->block_size;
 	}
 
 	if (start_block != end_block && read_len > read_sz) {
@@ -83,34 +77,40 @@ static int _ext2_read(oid_t *oid, offs_t offs, char *data, unsigned int len, int
 		memcpy(data + read_sz, tmp, read_len - read_sz);
 	}
 
-	if (lock) mutexUnlock(o->lock);
-
 	o->inode->atime = time(NULL);
-	object_put(o);
 	free(tmp);
 	return read_len;
 }
 
 
-int ext2_read(oid_t *oid, offs_t offs, char *data, uint32_t len)
+int ext2_read_unlocked(ext2_fs_info_t *f, id_t *id, offs_t offs, char *data, size_t len, int *status)
 {
-	return _ext2_read(oid, offs, data, len, 1);
+	int ret;
+	ext2_object_t *o = object_get(f, id);
+	ret = _ext2_read(o, offs, data, len, status);
+	object_put(o);
+	return ret;
 }
 
 
-int ext2_read_locked(oid_t *oid, offs_t offs, char *data, uint32_t len)
+int ext2_read(ext2_fs_info_t *f, id_t *id, offs_t offs, char *data, size_t len, int *status)
 {
-	return _ext2_read(oid, offs, data, len, 0);
+	int ret;
+	ext2_object_t *o = object_get(f, id);
+	mutexLock(o->lock);
+	ret = _ext2_read(o, offs, data, len, status);
+	mutexUnlock(o->lock);
+	object_put(o);
+	return ret;
 }
 
 
 /* writes a file */
-static int _ext2_write(oid_t *oid, offs_t offs, char *data, uint32_t len, int lock)
+static int _ext2_write(ext2_object_t *o, offs_t offs, const char *data, size_t len, int *status)
 {
 	uint32_t write_len, write_sz, current_block, end_block;
-	uint32_t start_block = offs / ext2->block_size;
-	uint32_t block_off = offs % ext2->block_size; /* block offset */
-	ext2_object_t *o = object_get(oid->id);
+	uint32_t start_block = offs / o->f->block_size;
+	uint32_t block_off = offs % o->f->block_size; /* block offset */
 	void *tmp;
 
 	if (o == NULL)
@@ -121,38 +121,21 @@ static int _ext2_write(oid_t *oid, offs_t offs, char *data, uint32_t len, int lo
 		return EOK;
 	}
 
-	if (o->type == otDev) {
-		object_put(o);
-		return -EINVAL;
-	}
-
-	if (o->locked) {
-		object_put(o);
-		return -EINVAL;
-	}
-
-	if (!o->inode->links_count) {
-		object_put(o);
-		return -EINVAL;
-	}
-
 	write_len = len;
 	write_sz = 0;
 
 	current_block = start_block;
-	end_block = (offs + write_len) / ext2->block_size;
+	end_block = (offs + write_len) / o->f->block_size;
 
-	tmp = malloc(ext2->block_size);
+	tmp = malloc(o->f->block_size);
 
-	if (lock) mutexLock(o->lock);
-
-	if (block_off || write_len < ext2->block_size) {
+	if (block_off || write_len < o->f->block_size) {
 
 		current_block++;
 		get_block(o, start_block, tmp);
 
-		write_sz = ext2->block_size - block_off > write_len ?
-			write_len : ext2->block_size - block_off;
+		write_sz = o->f->block_size - block_off > write_len ?
+			write_len : o->f->block_size - block_off;
 
 		memcpy(tmp + block_off, data, write_sz);
 		set_block(o, start_block, tmp);
@@ -160,7 +143,7 @@ static int _ext2_write(oid_t *oid, offs_t offs, char *data, uint32_t len, int lo
 
 	if (current_block < end_block) {
 		set_blocks(o, current_block, end_block - current_block, data + write_sz);
-		write_sz += ext2->block_size * (end_block - current_block);
+		write_sz += o->f->block_size * (end_block - current_block);
 		current_block += end_block - current_block;
 	}
 
@@ -177,42 +160,45 @@ static int _ext2_write(oid_t *oid, offs_t offs, char *data, uint32_t len, int lo
 
 	o->dirty = 1;
 
-	if (lock) mutexUnlock(o->lock);
 	o->inode->mtime = o->inode->atime = time(NULL);
 	object_sync(o);
-	object_put(o);
 	free(tmp);
-	ext2_write_sb();
+	ext2_write_sb(o->f);
 	return write_len;
 }
 
 
-int ext2_write(oid_t *oid, offs_t offs, char *data, uint32_t len)
+int ext2_write_unlocked(ext2_fs_info_t *f, id_t *id, offs_t offs, const char *data, size_t len, int *status)
 {
-	return _ext2_write(oid, offs, data, len, 1);
+	int ret;
+	ext2_object_t *o = object_get(f, id);
+	ret = _ext2_write(o, offs, data, len, status);
+	object_put(o);
+	return ret;
 }
 
 
-int ext2_write_locked(oid_t *oid, offs_t offs, char *data, uint32_t len)
+int ext2_write(ext2_fs_info_t *f, id_t *id, offs_t offs, const char *data, size_t len, int *status)
 {
-	return _ext2_write(oid, offs, data, len, 0);
+	int ret;
+	ext2_object_t *o = object_get(f, id);
+	mutexLock(o->lock);
+	ret = _ext2_write(o, offs, data, len, status);
+	mutexUnlock(o->lock);
+	object_put(o);
+	return ret;
 }
 
 
-int ext2_truncate(oid_t *oid, uint32_t size)
+int ext2_truncate(ext2_fs_info_t *f, id_t *id, size_t size)
 {
-	ext2_object_t *o = object_get(oid->id);
-	uint32_t target_block = size / ext2->block_size;
-	uint32_t end_block = o->inode->size / ext2->block_size;
+	ext2_object_t *o = object_get(f, id);
+	uint32_t target_block = size / f->block_size;
+	uint32_t end_block = o->inode->size / f->block_size;
 	uint32_t current, count, last = 0;
 
 	if (o == NULL)
 		return -EINVAL;
-
-	if (o->type == otDev) {
-		object_put(o);
-		return -EINVAL;
-	}
 
 	mutexLock(o->lock);
 
@@ -226,23 +212,23 @@ int ext2_truncate(oid_t *oid, uint32_t size)
 				count++;
 				last = current;
 			} else {
-				free_blocks(last, count);
+				free_blocks(f, last, count);
 				last = current;
 				count = 1;
 			}
-			o->inode->blocks -= ext2->block_size / 512;
+			o->inode->blocks -= f->block_size / 512 /* TODO: this shouldbe sector size? */;
 			end_block--;
 		}
 
 		if (last && count)
-			free_blocks(last, count);
+			free_blocks(f, last, count);
 
-		end_block = o->inode->size / ext2->block_size;
+		end_block = o->inode->size / f->block_size;
 		free_inode_blocks(o, end_block, end_block - target_block);
 
 		if (!size) {
 			o->inode->blocks = 0;
-			free_blocks(get_block_no(o, 0), 1);
+			free_blocks(f, get_block_no(o, 0), 1);
 			free_inode_blocks(o, 0, 1);
 		}
 	}
@@ -253,7 +239,7 @@ int ext2_truncate(oid_t *oid, uint32_t size)
 	mutexUnlock(o->lock);
 	object_sync(o);
 	object_put(o);
-	ext2_write_sb();
+	ext2_write_sb(f);
 	return EOK;
 }
 

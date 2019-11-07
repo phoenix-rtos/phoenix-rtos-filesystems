@@ -20,10 +20,10 @@
 extern int dir_is_empty(ext2_object_t *dir);
 
 
-extern int dir_find(ext2_object_t *dir, const char *name, uint32_t len, oid_t *res);
+extern int dir_find(ext2_object_t *dir, const char *name, uint32_t len, id_t *resId);
 
 
-extern int dir_add(ext2_object_t *dir, const char *name, int type, oid_t *oid);
+extern int dir_add(ext2_object_t *dir, const char *name, size_t len, uint16_t type, id_t *id);
 
 
 extern int dir_remove(ext2_object_t *dir, const char *name);

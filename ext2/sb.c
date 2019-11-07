@@ -18,52 +18,49 @@
 #include <errno.h>
 #include <string.h>
 
+#include <atasrv.h>
+
 #include "ext2.h"
 #include "sb.h"
-#include "mbr.h"
 #include "block.h"
-#include "pc-ata.h"
 
+/* ext2 superblock size and offset. */
+#define EXT2_SB_SZ 1024
+#define EXT2_SB_OFF EXT2_SB_SZ
 
-void gdt_sync(int group)
+/* ext2 magic number */
+#define EXT2_MAGIC 0xEF53
+
+void gdt_sync(ext2_fs_info_t *f, int group)
 {
-	uint32_t bno = (group * sizeof(group_desc_t)) / ext2->block_size;
+	uint32_t bno = (group * sizeof(ext2_group_desc_t)) / f->block_size;
 
-	write_block(2 + bno, &(ext2->gdt[bno * (ext2->block_size / sizeof(group_desc_t))]));
+	write_block(f, 2 + bno, &(f->gdt[bno * (f->block_size / sizeof(ext2_group_desc_t))]));
 }
 
-int ext2_read_sb(uint32_t sect)
+int ext2_read_sb(id_t *devId, ext2_fs_info_t *f)
 {
+	int ret = 0, err;
 
-	int ret = 0;
-	ext2->sb = malloc(SUPERBLOCK_SIZE);
-	/* this is assumption that sector size is 512,
-	 * superblock starts on 1024 byte of ext2 partition */
-	ret = ata_read((sect + 2) * SECTOR_SIZE, (char *)ext2->sb, SUPERBLOCK_SIZE);
+	ret = atasrv_read(devId, EXT2_SB_OFF, (char *)f->sb, EXT2_SB_SZ, &err);
 
-	if (ret != SUPERBLOCK_SIZE) {
-		printf("ext2: superblock read error %d\n", ret);
-		free(ext2->sb);
-		ext2->sb = NULL;
+	if (ret != EXT2_SB_SZ)
 		return -EFAULT;
-	}
-	if (ext2->sb->magic != EXT2_MAGIC) {
-		free(ext2->sb);
-		ext2->sb = NULL;
+
+	if (f->sb->magic != EXT2_MAGIC)
 		return -EFAULT;
-	}
 
 	return EOK;
 }
 
 
-int ext2_write_sb(void)
+int ext2_write_sb(ext2_fs_info_t *f)
 {
-	int ret = 0;
+	int ret = 0, err;
 
-	ret = ata_write((ext2->sb_sect + 2) * SECTOR_SIZE, (char *)ext2->sb, SUPERBLOCK_SIZE);
+	ret = atasrv_write(&f->devId, EXT2_SB_OFF, (char *)f->sb, EXT2_SB_SZ, &err);
 
-	if (ret != SUPERBLOCK_SIZE) {
+	if (ret != EXT2_SB_SZ) {
 		printf("ext2: superblock write error %d\n", ret);
 		return -EFAULT;
 	}
@@ -72,83 +69,53 @@ int ext2_write_sb(void)
 }
 
 
-void ext2_init_sb(int pentry)
+void ext2_init_fs(id_t *devId, ext2_fs_info_t *f)
 {
-	int size;
+	int size, err;
 	void *buff;
 
-	ext2->block_size = SUPERBLOCK_SIZE << ext2->sb->log_block_size;
-	ext2->blocks_count = ext2->sb->blocks_count;
-	printf("ext2: Mounting %.2f MiB partition\n", (float)(ext2->block_size * ext2->blocks_count)/1024/1024);
-	ext2->blocks_in_group = ext2->sb->blocks_in_group;
-	ext2->inode_size = ext2->sb->inode_size;
-	ext2->inodes_count = ext2->sb->inodes_count;
-	ext2->inodes_in_group = ext2->sb->inodes_in_group;
-	ext2->gdt_size = 1 + (ext2->sb->blocks_count - 1) / ext2->sb->blocks_in_group;
-	ext2->gdt_size = 1 + (ext2->sb->inodes_count - 1) / ext2->sb->inodes_in_group;
-	ext2->gdt =  malloc(ext2->gdt_size * sizeof(group_desc_t));
-	if(ext2->mbr != NULL)
-		ext2->first_block = (ext2->mbr->pent[pentry].first_sect_lba * SECTOR_SIZE) + ext2->sb->first_data_block * ext2->block_size;
-	else
-		ext2->first_block = ext2->sb->first_data_block * ext2->block_size;
+	f->block_size = EXT2_SB_SZ << f->sb->log_block_size;
+	f->blocks_count = f->sb->blocks_count;
+	printf("ext2: Mounting %.2f MiB partition\n", (float)(f->block_size * f->blocks_count)/1024/1024);
+	f->blocks_in_group = f->sb->blocks_in_group;
+	f->inode_size = f->sb->inode_size;
+	f->inodes_count = f->sb->inodes_count;
+	f->inodes_in_group = f->sb->inodes_in_group;
+	f->gdt_size = 1 + (f->sb->blocks_count - 1) / f->sb->blocks_in_group;
+	f->gdt_size = 1 + (f->sb->inodes_count - 1) / f->sb->inodes_in_group;
+	f->gdt =  malloc(f->gdt_size * sizeof(ext2_group_desc_t));
+	f->first_block = f->sb->first_data_block * f->block_size;
 
-	size = (ext2->gdt_size * sizeof(group_desc_t)) / ext2->block_size;
+	size = (f->gdt_size * sizeof(ext2_group_desc_t)) / f->block_size;
 
 	if (size)
-		read_blocks(ext2->sb->first_data_block + 1, (ext2->gdt_size * sizeof(group_desc_t)) / ext2->block_size, ext2->gdt);
+		read_blocks(f, f->sb->first_data_block + 1, (f->gdt_size * sizeof(ext2_group_desc_t)) / f->block_size, f->gdt);
 	else {
-		buff = malloc(ext2->block_size);
-		size = (ext2->gdt_size * sizeof(group_desc_t));
-		ata_read(ext2->first_block + ext2->block_size, buff, ext2->block_size);
-		memcpy(ext2->gdt, buff, size);
+		buff = malloc(f->block_size);
+		size = (f->gdt_size * sizeof(ext2_group_desc_t));
+		atasrv_read(&f->devId, f->first_block + f->block_size, buff, f->block_size, &err);
+		memcpy(f->gdt, buff, size);
 		free(buff);
 	}
 	//TODO: features check
 }
 
 
-int ext2_init(void)
+int ext2_mount(id_t *devId, void **fsData)
 {
-	int i = 0;
 	int ret = -EFAULT;
+	ext2_fs_info_t *f = malloc(sizeof(ext2_fs_info_t));
+	f->sb = malloc(sizeof(ext2_superblock_t));
 
-	ext2->mbr = read_mbr();
-	if (!ext2->mbr) {
-		printf("ext2: no mbr found %s\n", "");
-		/* even if there is no partition table we can still
-		 * try to read superblock */
-		if (ext2_read_sb(0) == EOK) {
-			ext2->sb_sect = 0;
-			ext2_init_sb(i);
-			return EOK;
-		}
-		return -EFAULT;
-	}
+	*fsData = f;
 
-	//check_partitions
-	/* check for protective mbr */
-	if (ext2->mbr->pent[0].type == PENTRY_PROTECTIVE) {
-		/* this is where gpt should be read
-		 * but we do not support it right now */
-		printf("ext2: gpt is not supported... %s\n", "");
-		return -EFAULT;
-	}
-
-	/* we only mount first ext2 partition found in mbr */
-	for (i = 0; i < 4; i++) {
-		if(ext2->mbr->pent[i].type == PENTRY_LINUX) {
-			if ((ret = ext2_read_sb(ext2->mbr->pent[i].first_sect_lba)) == EOK) {
-				ext2->sb_sect = ext2->mbr->pent[i].first_sect_lba;
-				break;
-			}
-		}
-	}
+	ret = ext2_read_sb(devId, f);
 
 	if (ret != EOK) {
 		printf("ext2: no ext2 partition found\n");
 		return ret;
 	}
 
-	ext2_init_sb(i);
+	ext2_init_fs(devId, f);
 	return ret;
 }

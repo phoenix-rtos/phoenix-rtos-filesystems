@@ -17,100 +17,60 @@
 #include <stdio.h>
 #include <errno.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <string.h>
 #include <sys/msg.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <sys/file.h>
+#include <sys/threads.h>
 #include <dirent.h>
+#include <phoenix/sysinfo.h>
 
 #include "ext2.h"
 #include "inode.h"
-#include "mbr.h"
 #include "file.h"
 #include "sb.h"
 #include "dir.h"
 #include "inode.h"
 #include "object.h"
-#include "pc-ata.h"
-
-#include "../../phoenix-rtos-kernel/include/sysinfo.h"
+#include <phoenix/msg.h>
 
 
-static int ext2_link(oid_t *dir, const char *name, oid_t *oid);
-static int ext2_unlink(oid_t *dir, const char *name);
-static int ext2_destroy(oid_t *oid);
+static int ext2_destroy(ext2_fs_info_t *f, id_t *id);
+static int ext2_link(ext2_fs_info_t *f, id_t *dirId, const char *name, const size_t len, id_t *id);
 
 
-static int ext2_lookup(oid_t *dir, const char *name, oid_t *res, oid_t *dev)
+static int ext2_lookup(ext2_fs_info_t *f, id_t *id, const char *name, const size_t len, id_t *resId, mode_t *mode)
 {
-	uint32_t start = 0, end = 0;
-	uint32_t ino = dir ? dir->id : ROOTNODE_NO;
 	int err;
-	char *namedup;
-	uint32_t len = strlen(name);
-	ext2_object_t *d, *o;
+	ext2_object_t *d;
 
-	if (ino < 2)
+	if (*id < 2)
 		return -EINVAL;
 
 	if (len == 0)
 		return -ENOENT;
 
-	d = object_get(ino);
+	d = object_get(f, id);
 
 	if (d == NULL)
 		return -ENOENT;
 
 	mutexLock(d->lock);
-	while (start < len)
-	{
-		split_path(name, &start, &end, len);
-		if (start == end)
-			continue;
-
-		err = dir_find(d, name + start, end - start, res);
-
-		mutexUnlock(d->lock);
-		object_put(d);
-
-		if (err < 0) {
-			return err;
-		}
-
-		o = object_get(res->id);
-
-		if (o == NULL) {
-			namedup = malloc(end - start);
-			memcpy(namedup, name + start, end + start);
-			ext2_unlink(&d->oid, namedup);
-			free(namedup);
-			return end;
-		}
-
-		res->port = ext2->port;
-
-		d = o;
-		start = end;
-		mutexLock(d->lock);
-	}
-
-	o = object_get(res->id);
-
-	if (o && o->type == otDev)
-		memcpy(dev, &o->dev, sizeof(oid_t));
-	else
-		memcpy(dev, res, sizeof(oid_t));
-	object_put(o);
+	err = dir_find(d, name, len, resId);
 	mutexUnlock(d->lock);
+
 	object_put(d);
-	return end;
+
+	return err;
 }
 
 
-static int ext2_setattr(oid_t *oid, int type, int attr)
+static int ext2_setattr(ext2_fs_info_t *f, id_t *id, int type, int attr, const void *data, size_t size)
 {
-	ext2_object_t *o = object_get(oid->id);
+	ext2_object_t *o = object_get(f, id);
 	int res = EOK;
 
 	if (o == NULL)
@@ -120,20 +80,23 @@ static int ext2_setattr(oid_t *oid, int type, int attr)
 
 	switch(type) {
 
-	case atMode:
-		o->inode->mode |= (attr & 0x1FF);
-		break;
-	case atUid:
-		o->inode->uid = attr;
-		break;
-	case atGid:
-		o->inode->gid = attr;
-		break;
-	case atSize:
-		mutexUnlock(o->lock);
-		ext2_truncate(oid, attr);
-		mutexLock(o->lock);
-		break;
+		case atMode:
+			o->inode->mode |= (attr & 0x1FF);
+			break;
+
+		case atUid:
+			o->inode->uid = attr;
+			break;
+
+		case atGid:
+			o->inode->gid = attr;
+			break;
+
+		case atSize:
+			mutexUnlock(o->lock);
+			ext2_truncate(f, id, attr);
+			mutexLock(o->lock);
+			break;
 	}
 
 	o->inode->mtime = o->inode->atime = time(NULL);
@@ -145,9 +108,11 @@ static int ext2_setattr(oid_t *oid, int type, int attr)
 }
 
 
-static int ext2_getattr(oid_t *oid, int type, int *attr)
+static int ext2_getattr(ext2_fs_info_t *f, id_t *id, int type, void *attr, size_t maxlen)
 {
-	ext2_object_t *o = object_get(oid->id);
+	ext2_object_t *o = object_get(f, id);
+	struct stat *stat;
+	ssize_t ret = 0;
 
 	if (o == NULL)
 		return -EINVAL;
@@ -156,80 +121,44 @@ static int ext2_getattr(oid_t *oid, int type, int *attr)
 
 	switch(type) {
 
-	case atMode:
-		*attr = o->inode->mode;
-		break;
-	case atUid:
-		*attr = o->inode->uid;
-		break;
-	case atGid:
-		*attr = o->inode->gid;
-		break;
-	case atSize:
-		*attr = o->inode->size;
-		break;
-	case atType:
-		*attr = o->type;
-		break;
-	case atCTime:
-		*attr = o->inode->ctime;
-		break;
-	case atATime:
-		*attr = o->inode->atime;
-		break;
-	case atMTime:
-		*attr = o->inode->mtime;
-		break;
-	case atLinks:
-		*attr = o->inode->links_count;
-		break;
+		case atMode:
+			*(int *)attr = o->inode->mode;
+			ret = sizeof(int);
+			break;
+
+		case atStatStruct:
+			stat = (struct stat *)attr;
+			//stat->st_dev = o->port;
+			stat->st_ino = o->id;
+			stat->st_mode = o->inode->mode;
+			stat->st_nlink = o->inode->nlink;
+			stat->st_uid = o->inode->uid;
+			stat->st_gid = o->inode->gid;
+			stat->st_size = o->inode->size;
+			stat->st_atime = o->inode->atime;
+			stat->st_mtime = o->inode->mtime;
+			stat->st_ctime = o->inode->ctime;
+			ret = sizeof(struct stat);
+			break;
 	}
 
 	mutexUnlock(o->lock);
 	object_put(o);
-	return EOK;
+	return ret;
 }
 
 
-static int ext2_create(oid_t *dir, const char *name, oid_t *oid, int type, int mode, oid_t *dev)
+static int ext2_create(ext2_fs_info_t *f, id_t *dirId, const char *name, const size_t len, id_t *resId, int mode, oid_t *dev)
 {
 
 	ext2_object_t *o;
 	ext2_inode_t *inode = NULL;
-	oid_t tdev;
 	int ret;
 
 	if (name == NULL || strlen(name) == 0)
 		return -EINVAL;
 
-	switch (type) {
-	case otDir: /* dir */
-		mode |= EXT2_S_IFDIR;
-		break;
-	case otFile: /* file */
-		mode |= EXT2_S_IFREG;
-		break;
-	case otDev: /* dev */
-		mode = (mode & 0x1ff) | EXT2_S_IFCHR;
-		break;
-	}
-
-	if (ext2_lookup(dir, name, oid, &tdev) > 0) {
-		o = object_get(oid->id);
-
-		if (oid->id == tdev.id && oid->port == tdev.port && o->type == otDev) {
-			object_put(o);
-
-			if (ext2_unlink(dir, name) != EOK)
-				return -EEXIST;
-
-		} else {
-			object_put(o);
-			return -EEXIST;
-		}
-	}
-
-	o = object_create(dir->id, &inode, mode);
+	o = object_create(f, resId, dirId, &inode, mode);
 
 	if (o == NULL) {
 		if (inode == NULL)
@@ -239,17 +168,11 @@ static int ext2_create(oid_t *dir, const char *name, oid_t *oid, int type, int m
 		return -ENOMEM;
 	}
 
-	o->type = type;
-	*oid = o->oid;
-
-	if (o->type == otDev)
-		memcpy(&o->dev, dev, sizeof(oid_t));
-
 	o->inode->ctime = o->inode->mtime = o->inode->atime = time(NULL);
 
-	if ((ret = ext2_link(dir, name, &o->oid)) != EOK) {
+	if ((ret = ext2_link(f, dirId, name, len, resId)) != EOK) {
 		object_put(o);
-		ext2_destroy(&o->oid);
+		ext2_destroy(f, resId);
 		return ret;
 	}
 	object_put(o);
@@ -258,78 +181,77 @@ static int ext2_create(oid_t *dir, const char *name, oid_t *oid, int type, int m
 }
 
 
-static int ext2_destroy(oid_t *oid)
+static int ext2_destroy(ext2_fs_info_t *f, id_t *id)
 {
-	ext2_object_t *o = object_get(oid->id);
+	ext2_object_t *o = object_get(f, id);
 
 	if (o == NULL)
 		return -EINVAL;
 
 	object_sync(o);
-	ext2_truncate(oid, 0);
+	ext2_truncate(f, id, 0);
 	object_destroy(o);
 
 	return EOK;
 }
 
 
-static int ext2_link(oid_t *dir, const char *name, oid_t *oid)
+static int ext2_link(ext2_fs_info_t *f, id_t *dirId, const char *name, const size_t len, id_t *id)
 {
 	ext2_object_t *d, *o;
-	oid_t toid;
 	int res;
 
-	if (dir == NULL || oid == NULL)
+	if (dirId == NULL || id == NULL)
 		return -EINVAL;
 
-	if (dir->id < 2 || oid->id < 2)
+	if (*dirId < 2 || *id < 2)
 		return -EINVAL;
 
-	d = object_get(dir->id);
-	o = object_get(oid->id);
+	d = object_get(f, dirId);
+	o = object_get(f, id);
 
 	if (o == NULL || d == NULL)
 		return -EINVAL;
 
-	if (!(d->inode->mode & EXT2_S_IFDIR)) {
+	if (!(d->inode->mode & S_IFDIR)) {
 		object_put(o);
 		object_put(d);
 		return -ENOTDIR;
 	}
 
-	if (dir_find(d, name, strlen(name), &toid) == EOK) {
+	if (dir_find(d, name, len, id) == EOK) {
 		object_put(o);
 		object_put(d);
 		return -EEXIST;
 	}
 
-	if((o->inode->mode & EXT2_S_IFDIR) && o->inode->links_count) {
+	if((o->inode->mode & S_IFDIR) && o->inode->nlink) {
 		object_put(o);
 		object_put(d);
 		return -EMLINK;
 	}
 
 	mutexLock(d->lock);
-	if ((res = dir_add(d, name, o->inode->mode, oid)) == EOK) {
+	if ((res = dir_add(d, name, len, o->inode->mode, id)) == EOK) {
 
 		mutexUnlock(d->lock);
 
 		mutexLock(o->lock);
-		o->inode->links_count++;
+		o->inode->nlink++;
 		o->inode->uid = 0;
 		o->inode->gid = 0;
 		o->inode->mtime = o->inode->atime = time(NULL);
 		o->dirty = 1;
 
-		if(o->inode->mode & EXT2_S_IFDIR) {
-			dir_add(o, ".", EXT2_S_IFDIR, oid);
-			o->inode->links_count++;
-			dir_add(o, "..", EXT2_S_IFDIR, dir);
+		if(o->inode->mode & S_IFDIR) {
+			dir_add(o, ".", 1, S_IFDIR, id);
+			o->inode->nlink++;
+			dir_add(o, "..", 2, S_IFDIR, dirId);
 			object_sync(o);
 			mutexUnlock(o->lock);
 
 			mutexLock(d->lock);
-			d->inode->links_count++;
+			d->inode->nlink++;
 			d->dirty = 1;
 			object_sync(d);
 			mutexUnlock(d->lock);
@@ -353,24 +275,24 @@ static int ext2_link(oid_t *dir, const char *name, oid_t *oid)
 }
 
 
-static int ext2_unlink(oid_t *dir, const char *name)
+static int ext2_unlink(ext2_fs_info_t *f, id_t *dirId, const char *name, const size_t len)
 {
 	ext2_object_t *d, *o;
-	oid_t toid;
+	id_t id;
 
-	d = object_get(dir->id);
+	d = object_get(f, dirId);
 
 	if (d == NULL)
 		return -EINVAL;
 
-	if (!(d->inode->mode & EXT2_S_IFDIR)) {
+	if (!(d->inode->mode & S_IFDIR)) {
 		object_put(d);
 		return -ENOTDIR;
 	}
 
 	mutexLock(d->lock);
 
-	if (dir_find(d, name, strlen(name), &toid) != EOK) {
+	if (dir_find(d, name, len, &id) != EOK) {
 		mutexUnlock(d->lock);
 		object_put(d);
 		return -ENOENT;
@@ -378,7 +300,7 @@ static int ext2_unlink(oid_t *dir, const char *name)
 
 	mutexUnlock(d->lock);
 
-	o = object_get(toid.id);
+	o = object_get(f, &id);
 
 	if (o == NULL) {
 		dir_remove(d, name);
@@ -392,17 +314,17 @@ static int ext2_unlink(oid_t *dir, const char *name)
 		return -ENOENT;
 	}
 
-	o->inode->links_count--;
-	if (o->inode->mode & EXT2_S_IFDIR) {
-		d->inode->links_count--;
-		o->inode->links_count--;
-		ext2_destroy(&o->oid);
+	o->inode->nlink--;
+	if (o->inode->mode & S_IFDIR) {
+		d->inode->nlink--;
+		o->inode->nlink--;
+		ext2_destroy(f, &id);
 		object_put(d);
 		return EOK;
 	}
 
-	if (!o->inode->links_count)
-		ext2_destroy(&o->oid);
+	if (!o->inode->nlink)
+		ext2_destroy(f, &id);
 	else
 		o->inode->mtime = o->inode->atime = time(NULL);
 
@@ -412,23 +334,24 @@ static int ext2_unlink(oid_t *dir, const char *name)
 
 
 
-static int ext2_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int size)
+static int ext2_readdir(ext2_fs_info_t *f, id_t *dirId, offs_t offs, struct dirent *dent, unsigned int size)
 {
 	ext2_object_t *d;
 	ext2_dir_entry_t *dentry;
+	int err;
 	int coffs = 0;
 
-	d = object_get(dir->id);
+	d = object_get(f, dirId);
 
 	if (d == NULL)
 		return -EINVAL;
 
-	if (!(d->inode->mode & EXT2_S_IFDIR)) {
+	if (!(d->inode->mode & S_IFDIR)) {
 		object_put(d);
 		return -ENOTDIR;
 	}
 
-	if (!d->inode->links_count) {
+	if (!d->inode->nlink) {
 		object_put(d);
 		return -ENOENT;
 	}
@@ -442,7 +365,7 @@ static int ext2_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned i
 
 	mutexLock(d->lock);
 	while (offs < d->inode->size) {
-		ext2_read_locked(dir, offs, (void *)dentry, size);
+		ext2_read(f, dirId, offs, (void *)dentry, size, &err);
 		mutexUnlock(d->lock);
 
 		dent->d_ino = dentry->inode;
@@ -473,153 +396,86 @@ static int ext2_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned i
 }
 
 
-static void ext2_open(oid_t *oid)
+static int ext2_open(ext2_fs_info_t *f, id_t *id)
 {
-	ext2_object_t *o =object_get(oid->id);
-	if (o != NULL)
+	ext2_object_t *o =object_get(f, id);
+	if (o != NULL) {
 		o->inode->atime = time(NULL);
+		return -EOK;
+	}
+	return -EINVAL;
 }
 
 
-static void ext2_close(oid_t *oid)
+static int ext2_close(ext2_fs_info_t *f, id_t *id)
 {
-	ext2_object_t *o = object_get(oid->id);
+	ext2_object_t *o = object_get(f, id);
+
+	if (!o)
+		return -EINVAL;
 
 	mutexLock(o->lock);
 	object_sync(o);
 	mutexUnlock(o->lock);
 	object_put(o);
 	object_put(o);
+
+	return EOK;
 }
 
-int main(void)
+int ext2_message_handler(void *data, msg_t *msg)
 {
-	uint32_t port;
-	oid_t toid, tdev;
-	oid_t root;
-	oid_t sysoid;
-	msg_t msg;
-	void *prog_addr;
-	syspageprog_t prog;
-	int i, progsz;
-	unsigned int rid;
+	int err;
+	ext2_fs_info_t *f = (ext2_fs_info_t *)data;
 
-	ext2 = malloc(sizeof(ext2_info_t));
+	switch (msg->type) {
 
-	printf("ext2: Starting ext2 server %s\n", "");
-	ata_init();
+		case mtLookup:
 
-	if (ext2_init()) {
-		printf("ext2: init error %s\n", "");
-		free(ext2);
-		return 0;
+			err = ext2_lookup(f, &msg->object, msg->i.data, msg->i.size, &msg->o.lookup.id, &msg->o.lookup.mode);
+			if ((err == -ENOENT) && (msg->i.lookup.flags & O_CREAT)) {
+				err = ext2_create(f, &msg->object, msg->i.data, msg->i.size, &msg->o.lookup.id, msg->i.lookup.mode, &msg->i.lookup.dev);
+				if (!err)
+					msg->o.lookup.mode = msg->i.lookup.mode;
+			}
+
+			if (!err)
+				ext2_open(f, &msg->object);
+			break;
+
+		case mtRead:
+			msg->o.io = ext2_read(f, &msg->object, msg->i.io.offs, msg->o.data, msg->o.size, &err);
+			break;
+
+		case mtWrite:
+			msg->o.io = ext2_write(f, &msg->object, msg->i.io.offs, msg->i.data, msg->i.size, &err);
+			break;
+
+		case mtSetAttr:
+			err =ext2_setattr(f, &msg->object, msg->i.attr, *(int *)msg->i.data, NULL, 0);
+			break;
+
+		case mtGetAttr:
+			err = ext2_getattr(f, &msg->object, msg->i.attr, msg->o.data, msg->o.size);
+			break;
+
+		case mtLink:
+			err = ext2_link(f, &msg->object, msg->i.data, msg->i.size, &msg->i.link.id);
+			break;
+
+		case mtUnlink:
+			err = ext2_unlink(f, &msg->object, msg->i.data, msg->i.size);
+			break;
+
+		case mtOpen:
+			err = ext2_open(f, &msg->object);
+			msg->o.open = msg->object;
+			break;
+
+		case mtClose:
+			err = ext2_close(f, &msg->object);
+			break;
 	}
 
-	object_init();
-
-	progsz = syspageprog(NULL, -1);
-	root.id = 2;
-	if (ext2_lookup(&root, "syspage", &sysoid, &tdev) < 0) {
-		ext2_create(&root, "syspage", &sysoid, otDir, 0, 0);
-	}
-
-	for (i = 0; i < progsz; i++) {
-		syspageprog(&prog, i);
-		prog_addr = (void *)mmap(NULL, (prog.size + 0xfff) & ~0xfff, 0x1 | 0x2, 0, OID_PHYSMEM, prog.addr);
-
-		if (ext2_lookup(&sysoid, prog.name, &toid, &tdev) < 0)
-			ext2_create(&sysoid, prog.name, &toid, otFile, 0, 0);
-		else
-			ext2_truncate(&toid, prog.size);
-		ext2_write(&toid, 0, prog_addr, prog.size);
-
-		munmap(prog_addr, (prog.size + 0xfff) & ~0xfff);
-	}
-
-	if (portCreate(&port) < 0) {
-		printf("ext2: creating port failed %s\n", "");
-		free(ext2);
-		return 0;
-	}
-
-	toid.id = 2;
-	if(portRegister(port, "/", &toid) < 0) {
-		printf("ext2: registering port failed %s\n", "");
-		free(ext2);
-		return 0;
-	}
-	ext2->port = port;
-
-
-	for (;;) {
-		/* message handling loop */
-		msgRecv(port, &msg, &rid);
-		switch (msg.type) {
-			case mtOpen:
-				ext2_open(&msg.i.openclose.oid);
-				break;
-
-			case mtClose:
-				ext2_close(&msg.i.openclose.oid);
-				break;
-
-			case mtRead:
-				msg.o.io.err = ext2_read(&msg.i.io.oid, msg.i.io.offs, msg.o.data, msg.o.size);
-				break;
-
-			case mtWrite:
-				msg.o.io.err = ext2_write(&msg.i.io.oid, msg.i.io.offs, msg.i.data, msg.i.size);
-				break;
-
-			case mtTruncate:
-				msg.o.io.err = ext2_truncate(&msg.i.io.oid, msg.i.io.len);
-				break;
-
-			case mtDevCtl:
-				msg.o.io.err = -EINVAL;
-				break;
-
-			case mtCreate:
-				msg.o.create.err = ext2_create(&msg.i.create.dir, msg.i.data, &msg.o.create.oid, msg.i.create.type, msg.i.create.mode, &msg.i.create.dev);
-				break;
-
-			case mtDestroy:
-				msg.o.io.err = ext2_destroy(&msg.i.destroy.oid);
-				break;
-
-			case mtSetAttr:
-				ext2_setattr(&msg.i.attr.oid, msg.i.attr.type, msg.i.attr.val);
-				break;
-
-			case mtGetAttr:
-				ext2_getattr(&msg.i.attr.oid, msg.i.attr.type, &msg.o.attr.val);
-				break;
-
-			case mtLookup:
-				msg.o.lookup.err = ext2_lookup(&msg.i.lookup.dir, msg.i.data, &msg.o.lookup.fil, &msg.o.lookup.dev);
-				break;
-
-			case mtLink:
-				msg.o.io.err = ext2_link(&msg.i.ln.dir, msg.i.data, &msg.i.ln.oid);
-				break;
-
-			case mtUnlink:
-				msg.o.io.err = ext2_unlink(&msg.i.ln.dir, msg.i.data);
-				break;
-
-			case mtReaddir:
-				msg.o.io.err = ext2_readdir(&msg.i.readdir.dir, msg.i.readdir.offs,
-						msg.o.data, msg.o.size);
-				break;
-		}
-		msgRespond(port, &msg, rid);
-	}
-
-	if (ext2) {
-		free(ext2->mbr);
-		free(ext2->sb);
-		free(ext2->gdt);
-		free(ext2);
-	}
-	return 0;
+	return err;
 }

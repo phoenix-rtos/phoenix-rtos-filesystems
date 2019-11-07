@@ -46,8 +46,12 @@ static int object_cmp(rbnode_t *n1, rbnode_t *n2)
 	ext2_object_t *o1 = lib_treeof(ext2_object_t, node, n1);
 	ext2_object_t *o2 = lib_treeof(ext2_object_t, node, n2);
 
-	/* possible overflow */
-	return (o1->oid.id - o2->oid.id);
+	if (o1->id > o2->id)
+		return 1;
+	else if (o1->id < o2->id)
+		return -1;
+
+	return 0;
 }
 
 
@@ -57,7 +61,7 @@ int object_destroy(ext2_object_t *o)
 
 	mutexLock(ext2_objects.ulock);
 
-	t.oid.id = o->oid.id;
+	t.id = o->id;
 
 	if ((o == lib_treeof(ext2_object_t, node, lib_rbFind(&ext2_objects.used, &t.node)))) {
 		ext2_objects.used_cnt--;
@@ -65,11 +69,11 @@ int object_destroy(ext2_object_t *o)
 	}
 
 	mutexLock(ext2_objects.clock);
-	if (ext2_objects.cache[o->oid.id % CACHE_SIZE] == o)
-		ext2_objects.cache[o->oid.id % CACHE_SIZE] = NULL;
+	if (ext2_objects.cache[o->id % CACHE_SIZE] == o)
+		ext2_objects.cache[o->id % CACHE_SIZE] = NULL;
 	mutexUnlock(ext2_objects.clock);
 
-	inode_free(o->oid.id, o->inode);
+	inode_free(o->f, o->id, o->inode);
 	free(o->ind[0].data);
 	free(o->ind[1].data);
 	free(o->ind[2].data);
@@ -98,8 +102,8 @@ int object_remove(ext2_object_t *o)
 	ext2_objects.used_cnt--;
 
 	mutexLock(ext2_objects.clock);
-	r  = ext2_objects.cache[o->oid.id % CACHE_SIZE];
-	ext2_objects.cache[o->oid.id % CACHE_SIZE] = o;
+	r  = ext2_objects.cache[o->id % CACHE_SIZE];
+	ext2_objects.cache[o->id % CACHE_SIZE] = o;
 
 	if (r != NULL && r != o) {
 		object_sync(r);
@@ -117,24 +121,24 @@ int object_remove(ext2_object_t *o)
 	return EOK;
 }
 
-ext2_object_t *object_create(id_t id, ext2_inode_t **inode, int mode)
+ext2_object_t *object_create(ext2_fs_info_t *f, id_t *id, id_t *pid, ext2_inode_t **inode, int mode)
 {
 	ext2_object_t *o, t;
 
 	mutexLock(ext2_objects.ulock);
 
 	if (*inode == NULL) {
-		*inode = malloc(ext2->inode_size);
+		*inode = malloc(f->inode_size);
 
-		id = inode_create(*inode, mode, id);
+		*id = inode_create(f, *inode, mode, *pid);
 
-		if (!id) {
+		if (!*id) {
 			free(*inode);
 			*inode = NULL;
 			return NULL;
 		}
 	}
-	t.oid.id = id;
+	t.id = *id;
 
 	if (ext2_objects.used_cnt >= MAX_FILES) {
 		mutexUnlock(ext2_objects.ulock);
@@ -155,12 +159,8 @@ ext2_object_t *object_create(id_t id, ext2_inode_t **inode, int mode)
 
 	memset(o, 0, sizeof(ext2_object_t));
 	o->refs = 1;
-	o->oid.id = id;
-	o->oid.port = ext2->port;
-	o->dev.id = id;
-	o->dev.port = ext2->port;
+	o->id = *id;
 	o->inode = *inode;
-	o->ino = id;
 	o->dirty = 1;
 	mutexCreate(&o->lock);
 
@@ -173,12 +173,12 @@ ext2_object_t *object_create(id_t id, ext2_inode_t **inode, int mode)
 }
 
 
-ext2_object_t *object_get(unsigned int id)
+ext2_object_t *object_get(ext2_fs_info_t *f, id_t *id)
 {
 	ext2_object_t *o, t;
 	ext2_inode_t *inode;
 
-	t.oid.id = id;
+	t.id = *id;
 
 	mutexLock(ext2_objects.ulock);
 	/* check used/opened inodes tree */
@@ -189,9 +189,9 @@ ext2_object_t *object_get(unsigned int id)
 	} else {
 		/* check recently closed cache */
 		mutexLock(ext2_objects.clock);
-		if ((o = ext2_objects.cache[id % CACHE_SIZE]) != NULL && o->oid.id == id) {
+		if ((o = ext2_objects.cache[*id % CACHE_SIZE]) != NULL && o->id == *id) {
 
-			ext2_objects.cache[id % CACHE_SIZE] = NULL;
+			ext2_objects.cache[*id % CACHE_SIZE] = NULL;
 			o->refs++;
 			lib_rbInsert(&ext2_objects.used, &o->node);
 			ext2_objects.used_cnt++;
@@ -201,22 +201,12 @@ ext2_object_t *object_get(unsigned int id)
 		}
 		mutexUnlock(ext2_objects.clock);
 	}
-	inode = inode_get(id);
+	inode = inode_get(f, *id);
 
 	if (inode != NULL) {
 
 		mutexUnlock(ext2_objects.ulock);
-		o = object_create(id, &inode, inode->mode);
-
-		if (EXT2_S_ISDIR(inode->mode))
-			o->type = otDir;
-		else if (EXT2_S_ISREG(inode->mode))
-			o->type = otFile;
-		else if (EXT2_S_ISCHR(inode->mode))
-			o->type = otDev;
-		else
-			o->type = otUnknown;
-
+		o = object_create(f, id, NULL, &inode, inode->mode);
 		return o;
 	}
 	mutexUnlock(ext2_objects.ulock);
@@ -227,11 +217,11 @@ ext2_object_t *object_get(unsigned int id)
 void object_sync(ext2_object_t *o)
 {
 	if (o->dirty)
-		inode_set(o->ino, o->inode);
+		inode_set(o->f, o->id, o->inode);
 
-	write_block(o->ind[0].bno, o->ind[0].data);
-	write_block(o->ind[1].bno, o->ind[1].data);
-	write_block(o->ind[2].bno, o->ind[2].data);
+	write_block(o->f, o->ind[0].bno, o->ind[0].data);
+	write_block(o->f, o->ind[1].bno, o->ind[1].data);
+	write_block(o->f, o->ind[2].bno, o->ind[2].data);
 	o->dirty = 0;
 }
 
@@ -243,8 +233,6 @@ void object_put(ext2_object_t *o)
 
 	if(!o->refs) {
 		mutexUnlock(ext2_objects.ulock);
-		if (o->type != otDev)
-			object_remove(o);
 		return;
 	}
 	mutexUnlock(ext2_objects.ulock);

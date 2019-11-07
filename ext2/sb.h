@@ -16,18 +16,15 @@
 #ifndef _SB_H_
 #define _SB_H_ /* sb.h */
 
-#define SUPERBLOCK_SIZE 1024
+extern void gdt_sync(ext2_fs_info_t *f, int group);
 
 
-extern void gdt_sync(int group);
+extern int ext2_read_sb(id_t *devId, ext2_fs_info_t *f);
 
 
-extern int ext2_read_sb(uint32_t sect);
+extern int ext2_write_sb(ext2_fs_info_t *f);
 
 
-extern int ext2_write_sb(void);
-
-
-extern int ext2_init(void);
+extern int ext2_mount(id_t *devId, void **fsData);
 
 #endif /* sb.h */
