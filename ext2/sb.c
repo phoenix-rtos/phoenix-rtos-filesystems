@@ -23,6 +23,7 @@
 #include "ext2.h"
 #include "sb.h"
 #include "block.h"
+#include "object.h"
 
 /* ext2 superblock size and offset. */
 #define EXT2_SB_SZ 1024
@@ -104,6 +105,7 @@ void ext2_init_fs(id_t *devId, ext2_fs_info_t *f)
 int ext2_mount(id_t *devId, void **fsData)
 {
 	int ret = -EFAULT;
+	id_t rootId = 2;
 	ext2_fs_info_t *f = malloc(sizeof(ext2_fs_info_t));
 	f->sb = malloc(sizeof(ext2_superblock_t));
 
@@ -117,5 +119,7 @@ int ext2_mount(id_t *devId, void **fsData)
 	}
 
 	ext2_init_fs(devId, f);
+	object_init(f);
+	f->root = object_get(f, &rootId);
 	return ret;
 }

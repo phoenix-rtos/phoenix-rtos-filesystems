@@ -33,6 +33,6 @@ extern ext2_object_t *object_create(ext2_fs_info_t *f, id_t *id, id_t *pid, ext2
 extern int object_destroy(ext2_object_t *o);
 
 
-extern void object_init(void);
+extern int object_init(ext2_fs_info_t *f);
 
 #endif /* object.h */

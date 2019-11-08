@@ -21,7 +21,7 @@
 
 
 /* superblock structure */
-typedef struct _superblock {
+typedef struct {
 	uint32_t   	inodes_count;       /* inodes count */
 	uint32_t   	blocks_count;       /* blocks count */
 	uint32_t   	r_blocks_count;     /* reserved blocks count */
@@ -111,7 +111,7 @@ enum {
 
 
 /* inode structure */
-typedef struct _ext2_inode {
+typedef struct {
 	uint16_t mode;                   /* file mode (type and access rights) */
 	uint16_t uid;                    /* owner id (low 16 bits) */
 	uint32_t size;                   /* file length in bytes */
@@ -166,7 +166,7 @@ typedef struct _ext2_inode {
 } ext2_inode_t;
 
 
-typedef struct _ext2_block {
+typedef struct {
 	uint32_t bno;
 	uint32_t *data;
 } ext2_block_t;
@@ -175,7 +175,7 @@ typedef struct _ext2_block {
 typedef struct _ext2_fs_info ext2_fs_info_t;
 
 
-typedef struct _ext2_object {
+typedef struct {
 	id_t id;
 
 	uint32_t refs;
@@ -208,7 +208,7 @@ enum {
 
 
 /* directory entry structure */
-typedef struct _ext2_dir_entry {
+typedef struct {
 	uint32_t  	inode;      /* inode number */
 	uint16_t   	rec_len;    /* directory entry length */
 	uint8_t   	name_len;   /* name length */
@@ -217,11 +217,24 @@ typedef struct _ext2_dir_entry {
 } ext2_dir_entry_t;
 
 
+#define EXT2_MAX_FILES 512
+#define EXT2_CACHE_SIZE 127
+
+
+typedef struct {
+		handle_t 		ulock;
+		handle_t 		clock;
+		rbtree_t 		used;
+		uint32_t		used_cnt;
+		ext2_object_t 	*cache[EXT2_CACHE_SIZE];
+} ext2_fs_objects_t;
+
 struct _ext2_fs_info {
 	id_t				devId;
 	ext2_group_desc_t 	*gdt;
 	ext2_object_t    	*root;
 	ext2_superblock_t 	*sb;
+	ext2_fs_objects_t	*objects;
 	uint32_t  			block_size;
 	uint32_t     		blocks_count;
 	uint32_t    		blocks_in_group;
