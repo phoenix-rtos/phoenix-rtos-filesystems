@@ -121,5 +121,5 @@ int ext2_mount(id_t *devId, void **fsData)
 	ext2_init_fs(devId, f);
 	object_init(f);
 	f->root = object_get(f, &rootId);
-	return ret;
+	return (int)rootId;
 }

@@ -27,6 +27,7 @@
 #include <sys/threads.h>
 #include <dirent.h>
 #include <phoenix/sysinfo.h>
+#include <phoenix/msg.h>
 
 #include "ext2.h"
 #include "inode.h"
@@ -35,7 +36,6 @@
 #include "dir.h"
 #include "inode.h"
 #include "object.h"
-#include <phoenix/msg.h>
 
 
 static int ext2_destroy(ext2_fs_info_t *f, id_t *id);
@@ -334,14 +334,11 @@ static int ext2_unlink(ext2_fs_info_t *f, id_t *dirId, const char *name, const s
 
 
 
-static int ext2_readdir(ext2_fs_info_t *f, id_t *dirId, offs_t offs, struct dirent *dent, unsigned int size)
+int ext2_readdir(ext2_object_t *d, offs_t offs, struct dirent *dent, unsigned int size)
 {
-	ext2_object_t *d;
 	ext2_dir_entry_t *dentry;
 	int err;
 	int coffs = 0;
-
-	d = object_get(f, dirId);
 
 	if (d == NULL)
 		return -EINVAL;
@@ -363,9 +360,8 @@ static int ext2_readdir(ext2_fs_info_t *f, id_t *dirId, offs_t offs, struct dire
 
 	dentry = malloc(size);
 
-	mutexLock(d->lock);
 	while (offs < d->inode->size) {
-		ext2_read(f, dirId, offs, (void *)dentry, size, &err);
+		ext2_read_unlocked(d->f, &d->id, offs, (void *)dentry, size, &err);
 		mutexUnlock(d->lock);
 
 		dent->d_ino = dentry->inode;
@@ -389,7 +385,6 @@ static int ext2_readdir(ext2_fs_info_t *f, id_t *dirId, offs_t offs, struct dire
 		return 	EOK;
 	}
 	d->inode->atime = time(NULL);
-	mutexUnlock(d->lock);
 
 	free(dentry);
 	return -ENOENT;
@@ -423,7 +418,7 @@ static int ext2_close(ext2_fs_info_t *f, id_t *id)
 	return EOK;
 }
 
-int ext2_message_handler(void *data, msg_t *msg)
+int libext2_handler(void *data, msg_t *msg)
 {
 	int err;
 	ext2_fs_info_t *f = (ext2_fs_info_t *)data;
@@ -478,4 +473,16 @@ int ext2_message_handler(void *data, msg_t *msg)
 	}
 
 	return err;
+}
+
+
+int libext2_mount(id_t *devId, void **fsData)
+{
+	return 2;
+}
+
+
+int libext2_unmount(void *fsData)
+{
+	return 0;
 }

@@ -72,7 +72,6 @@ int object_destroy(ext2_object_t *o)
 
 	return EOK;
 }
-int i = 0;
 
 
 int object_remove(ext2_object_t *o)
@@ -107,6 +106,7 @@ int object_remove(ext2_object_t *o)
 	mutexUnlock(o->f->objects->ulock);
 	return EOK;
 }
+
 
 ext2_object_t *object_create(ext2_fs_info_t *f, id_t *id, id_t *pid, ext2_inode_t **inode, int mode)
 {
@@ -201,6 +201,7 @@ ext2_object_t *object_get(ext2_fs_info_t *f, id_t *id)
 	return o;
 }
 
+
 void object_sync(ext2_object_t *o)
 {
 	if (o->dirty)
@@ -211,6 +212,7 @@ void object_sync(ext2_object_t *o)
 	write_block(o->f, o->ind[2].bno, o->ind[2].data);
 	o->dirty = 0;
 }
+
 
 void object_put(ext2_object_t *o)
 {

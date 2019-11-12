@@ -19,9 +19,10 @@
 #include <errno.h>
 #include <string.h>
 #include <time.h>
+#include <dirent.h>
 #include <sys/file.h>
 #include <sys/threads.h>
-
+#include <phoenix/stat.h>
 #include <atasrv.h>
 
 #include "ext2.h"
@@ -31,6 +32,7 @@
 #include "sb.h"
 #include "inode.h"
 
+extern int ext2_readdir(ext2_object_t *d, offs_t offs, struct dirent *dent, unsigned int size);
 
 /* reads a file */
 static int _ext2_read(ext2_object_t *o, offs_t offs, char *data, size_t len, int *status)
@@ -42,6 +44,13 @@ static int _ext2_read(ext2_object_t *o, offs_t offs, char *data, size_t len, int
 
 	if (o == NULL)
 		return -EINVAL;
+
+	if (S_ISDIR(o->inode->mode)) {
+		return ext2_readdir(o, offs, (struct dirent *)data, len);
+	} else if ((S_ISCHR(o->inode->mode) || S_ISBLK(o->inode->mode)) && len >= sizeof(oid_t)) {
+		memcpy(data, &o->inode->blocks, sizeof(oid_t));
+		return sizeof(oid_t);
+	}
 
 	if (len == 0)
 		return 0;
@@ -97,6 +106,10 @@ int ext2_read(ext2_fs_info_t *f, id_t *id, offs_t offs, char *data, size_t len, 
 {
 	int ret;
 	ext2_object_t *o = object_get(f, id);
+
+	if (o == NULL)
+		return -EINVAL;
+
 	mutexLock(o->lock);
 	ret = _ext2_read(o, offs, data, len, status);
 	mutexUnlock(o->lock);
