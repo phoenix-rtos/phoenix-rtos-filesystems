@@ -565,6 +565,7 @@ int fetch_modules(void)
 	syspageprog_t prog;
 	int i, progsz;
 
+#ifndef NOMMU
 	progsz = syspageprog(NULL, -1);
 	dummyfs_create(&root, "syspage", &sysoid, otDir, 0, NULL);
 
@@ -580,6 +581,8 @@ int fetch_modules(void)
 
 		munmap(prog_addr, (prog.size + 0xfff) & ~0xfff);
 	}
+#endif
+
 	return EOK;
 }
 
