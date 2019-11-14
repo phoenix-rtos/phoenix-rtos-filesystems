@@ -558,6 +558,7 @@ static int dummyfs_close(oid_t *oid)
 
 int fetch_modules(void)
 {
+#ifndef NOMMU
 	oid_t root = {dummyfs_common.port, 0};
 	oid_t toid = { 0 };
 	oid_t sysoid = { 0 };
@@ -565,7 +566,6 @@ int fetch_modules(void)
 	syspageprog_t prog;
 	int i, progsz;
 
-#ifndef NOMMU
 	progsz = syspageprog(NULL, -1);
 	dummyfs_create(&root, "syspage", &sysoid, otDir, 0, NULL);
 
