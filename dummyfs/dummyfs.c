@@ -451,6 +451,10 @@ int dummyfs_destroy(oid_t *oid)
 			dir_destroy(o);
 		else if (o->type == otDev)
 			dev_destroy(&o->dev);
+#ifndef NOMMU
+		else if (o->type == 0xaBadBabe)
+			munmap(o->chunks, (o->size + 0xfff) & ~0xfff);
+#endif
 
 		dummyfs_decsz(sizeof(dummyfs_object_t));
 		free(o);
@@ -558,10 +562,10 @@ static int dummyfs_close(oid_t *oid)
 
 int fetch_modules(void)
 {
-#ifndef NOMMU
 	oid_t root = {dummyfs_common.port, 0};
 	oid_t toid = { 0 };
 	oid_t sysoid = { 0 };
+	dummyfs_object_t *o;
 	void *prog_addr;
 	syspageprog_t prog;
 	int i, progsz;
@@ -575,13 +579,30 @@ int fetch_modules(void)
 		prog_addr = (void *)prog.addr;
 #else
 		prog_addr = (void *)mmap(NULL, (prog.size + 0xfff) & ~0xfff, 0x1 | 0x2, 0, OID_PHYSMEM, prog.addr);
+
+		if (!prog_addr)
+			continue;
 #endif
 		dummyfs_create(&sysoid, prog.name, &toid, otFile, 0, NULL);
-		dummyfs_write(&toid, 0, prog_addr, prog.size);
+		o = object_get(toid.id);
 
-		munmap(prog_addr, (prog.size + 0xfff) & ~0xfff);
-	}
+		if (!o) {
+#ifndef NOMMU
+			munmap(prog_addr, (prog.size + 0xfff) & ~0xfff);
 #endif
+			continue;
+		}
+
+		o->chunks = malloc(sizeof(dummyfs_chunk_t));
+		o->chunks->offs = 0;
+		o->chunks->size = prog.size;
+		o->chunks->used = prog.size;
+		o->chunks->data = (void *)((unsigned)prog_addr & ~0xfff) + (prog.addr & 0xfff);
+		o->chunks->next = o->chunks;
+		o->chunks->prev = o->chunks;
+		o->size = prog.size;
+		o->type = 0xaBadBabe;
+	}
 
 	return EOK;
 }

@@ -187,7 +187,7 @@ int dummyfs_read(oid_t *oid, offs_t offs, char *buff, size_t len)
 	if (o == NULL)
 		return -EINVAL;
 
-	if (o->type != otFile && o->type != otSymlink)
+	if (o->type != otFile && o->type != otSymlink && o->type != 0xaBadBabe)
 		ret = -EINVAL;
 
 	if (buff == NULL)
