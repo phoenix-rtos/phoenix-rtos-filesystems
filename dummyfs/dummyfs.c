@@ -451,11 +451,13 @@ int dummyfs_destroy(oid_t *oid)
 			dir_destroy(o);
 		else if (o->type == otDev)
 			dev_destroy(&o->dev);
-#ifndef NOMMU
-		else if (o->type == 0xaBadBabe)
-			munmap(o->chunks, (o->size + 0xfff) & ~0xfff);
-#endif
 
+		else if (o->type == 0xaBadBabe) {
+#ifndef NOMMU
+			munmap((void *)((unsigned)o->chunks->data & ~0xfff), (o->size + 0xfff) & ~0xfff);
+#endif
+			free(o->chunks);
+		}
 		dummyfs_decsz(sizeof(dummyfs_object_t));
 		free(o);
 	}
