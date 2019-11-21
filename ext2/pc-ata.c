@@ -36,7 +36,7 @@ static pci_id_t ata_pci_tbl[] = {
 
 ata_opt_t ata_defaults = {
 	.force = 0,
-	.use_int = 1,
+	.use_int = 0,
 	.use_dma = 0,
 	.use_multitransfer = 0
 };
@@ -90,13 +90,15 @@ void ata_chInitRegs(struct ata_channel *ac)
 	ac->reg_addr[0x15] = ac->bmide + 7;
 }
 
-#define ATA_WASTE400MS(ac) do { ata_ch_read(ac, ATA_REG_ALTSTATUS); \
-	ata_ch_read(ac, ATA_REG_ALTSTATUS); \
-	ata_ch_read(ac, ATA_REG_ALTSTATUS); \
-	ata_ch_read(ac, ATA_REG_ALTSTATUS); } while(0)
+static void ata_100ns(struct ata_channel *ac) {
+	ac->altstatus = ata_ch_read(ac, ATA_REG_ALTSTATUS);
+}
 
-#define ATA_WASTE100MS(ac) do { ata_ch_read(ac, ATA_REG_ALTSTATUS); } while(0)
-
+static void ata_400ns(struct ata_channel *ac) {
+	int i;
+	for (i = 0; i < 4; i++)
+		ata_100ns(ac);
+}
 
 /*
  * advanced_check = 1 reads ATA_REG_STATUS
@@ -104,12 +106,16 @@ void ata_chInitRegs(struct ata_channel *ac)
  */
 int ata_polling(struct ata_channel *ac, uint8_t advanced_check)
 {
-	ATA_WASTE400MS(ac);
+	ata_400ns(ac);
 
-	while (ata_ch_read(ac, ATA_REG_STATUS) & ATA_SR_BSY);
+	while ((ac->status = ata_ch_read(ac, ATA_REG_STATUS)) & ATA_SR_BSY);
 
 	if (advanced_check) {
-		uint8_t state = ata_ch_read(ac, (advanced_check == 2 ? ATA_REG_ALTSTATUS : ATA_REG_STATUS));
+		uint8_t state = 0;
+		if (advanced_check == 1)
+			state = ac->status = ata_ch_read(ac, ATA_REG_STATUS);
+		else if (advanced_check == 2)
+			state = ac->altstatus = ata_ch_read(ac, ATA_REG_ALTSTATUS);
 
 		if (state & ATA_SR_ERR)
 			return -1; // Error.
@@ -150,7 +156,6 @@ int ata_access(uint8_t direction, struct ata_dev *ad, uint32_t lba, uint8_t nums
 
 	uint8_t lba_mode = 0; /* 0: CHS, 1:LBA28, 2: LBA48 */
 	uint8_t cmd;
-	uint8_t astatus = 0;
 	uint8_t slavebit = ad->drive;
 	uint8_t lba_io[6] = { 0 };
 	uint8_t head, sect;
@@ -161,10 +166,17 @@ int ata_access(uint8_t direction, struct ata_dev *ad, uint32_t lba, uint8_t nums
 	int err = 0;
 
 	ata_ch_write(ac, ATA_REG_CONTROL, ac->no_int << 1);
-
 	ata_ch_write(ac, ATA_REG_BMSTATUS, ATA_BMR_STAT_ERR);
 
-	if (ad->info.capabilities_1 & 0x200)  { // Drive supports LBA?
+	if (lba >= 0x10000000) {
+		/* LBA48: */
+		lba_mode  = 2;
+		lba_io[0] = (lba & 0x000000FF) >> 0;
+		lba_io[1] = (lba & 0x0000FF00) >> 8;
+		lba_io[2] = (lba & 0x00FF0000) >> 16;
+		lba_io[3] = (lba & 0xFF000000) >> 24;
+		head      = 0; // Lower 4-bits of HDDEVSEL are not used here.
+	} else if (ad->info.capabilities_1 & 0x200) {
 		/* LBA28 */
 		lba_mode  = 1;
 		lba_io[0] = (lba & 0x000000FF) >> 0;
@@ -182,7 +194,7 @@ int ata_access(uint8_t direction, struct ata_dev *ad, uint32_t lba, uint8_t nums
 		head      = (lba + 1  - sect) % (16 * 63) / (63); // Head number is written to HDDEVSEL lower 4-bits.
 	}
 
-	while (ata_ch_read(ac, ATA_REG_STATUS) & (ATA_SR_BSY | ATA_SR_DRQ));
+	ata_wait(ac, !ac->no_int);
 
 	//  Select Drive from the controller;
 	if (lba_mode == 0) {
@@ -191,8 +203,12 @@ int ata_access(uint8_t direction, struct ata_dev *ad, uint32_t lba, uint8_t nums
 		ata_ch_write(ac, ATA_REG_HDDEVSEL, 0xE0 | (slavebit << 4) | head); // Drive & LBA
 	}
 
-	while (ata_ch_read(ac, ATA_REG_STATUS) & (ATA_SR_BSY | ATA_SR_DRQ));
-
+	if (lba_mode == 2) {
+		ata_ch_write(ac, ATA_REG_SECCOUNT1, 0);
+		ata_ch_write(ac, ATA_REG_LBA3, lba_io[3]);
+		ata_ch_write(ac, ATA_REG_LBA4, lba_io[4]);
+		ata_ch_write(ac, ATA_REG_LBA5, lba_io[5]);
+	}
 	ata_ch_write(ac, ATA_REG_SECCOUNT0, numsects);
 	ata_ch_write(ac, ATA_REG_LBA0, lba_io[0]);
 	ata_ch_write(ac, ATA_REG_LBA1, lba_io[1]);
@@ -202,47 +218,27 @@ int ata_access(uint8_t direction, struct ata_dev *ad, uint32_t lba, uint8_t nums
 
 	ata_ch_write(ac, ATA_REG_COMMAND, cmd);
 
-	ATA_WASTE400MS(ac);
 	if (direction == 0) {
 		// PIO Read.
-		i = 0;
-		while (i < numsects) {
-			err = ata_wait(ac, !ac->no_int);
-			if (ac->no_int)
-				ac->status = ata_ch_read(ac, ATA_REG_STATUS);
-
-			if (err) break;
-
-			if ((ac->status & (ATA_SR_BSY | ATA_SR_DRQ)) == ATA_SR_DRQ) {
-				for (b = 0; b < words; b++)
-					*(uint16_t*)(buffer + (b * 2)) = inw((void *)0 + bus);
-
-				buffer += (words * 2);
-				i++;
-				ATA_WASTE400MS(ac);
-			}
+		for (i = 0; i < numsects; i++) {
+			if ((err = ata_wait(ac, !ac->no_int)))
+				break;
 
 			if (ac->status & (ATA_SR_BSY | ATA_SR_DF | ATA_SR_ERR))
 				break;
 
 			if (!(ac->status & ATA_SR_DRQ))
 				break;
+
+			for (b = 0; b < words; b++)
+				*(uint16_t*)(buffer + (b * 2)) = inw((void *)0 + bus);
+			buffer += (words * 2);
 		}
 	} else {
-		while ((astatus = ac->status = ata_ch_read(ac, ATA_REG_ALTSTATUS)) & ATA_SR_BSY); // Wait for BSY to be zero.
 		// PIO Write.
-		i = 0;
-
-		while (i < numsects) {
-
-			if ((ac->status & (ATA_SR_BSY | ATA_SR_DRQ)) == ATA_SR_DRQ ) {
-				for (b = 0; b < words; b++)
-					outw((void *)0 + bus, *((uint16_t*)(buffer + (b*2))));
-
-				buffer += (words * 2);
-				i++;
-				ATA_WASTE400MS(ac);
-			}
+		for (i = 0; i < numsects; i++) {
+			if ((err = ata_wait(ac, !ac->no_int)))
+				ata_polling(ac, 1); // Polling.
 
 			if (ac->status & (ATA_SR_BSY | ATA_SR_DF | ATA_SR_ERR))
 				break;
@@ -250,22 +246,18 @@ int ata_access(uint8_t direction, struct ata_dev *ad, uint32_t lba, uint8_t nums
 			if (!(ac->status & ATA_SR_DRQ))
 				break;
 
-			if ((err = ata_wait(ac, !ac->no_int)) != 0)
-				ata_polling(ac, 1); // Polling.
-
-			if (ac->no_int || err)
-				astatus = ac->status = ata_ch_read(ac, ATA_REG_STATUS);
-			else
-				astatus = ac->status;
-
+			for (b = 0; b < words; b++)
+				outw((void *)0 + bus, *((uint16_t*)(buffer + (b*2))));
+			buffer += (words * 2);
 		}
 
-		ata_ch_write(ac, ATA_REG_COMMAND, ATA_CMD_CACHE_FLUSH);
+		ata_ch_write(ac, ATA_REG_COMMAND, ((char []) {
+			ATA_CMD_CACHE_FLUSH,
+			ATA_CMD_CACHE_FLUSH,
+			ATA_CMD_CACHE_FLUSH_EXT}[lba_mode]));
 
-		if (!ac->no_int) {
-			if ((err = ata_wait(ac, 1)) != 0)
-				ata_polling(ac, 1); // Polling.
-		}
+		if ((err = ata_wait(ac, !ac->no_int)))
+			ata_polling(ac, 1); // Polling.
 	}
 
 	return i;
@@ -370,10 +362,10 @@ int ata_init_bus(struct ata_bus *ab)
 	ata_chInitRegs(&(ab->ac[ATA_PRIMARY]));
 	ata_chInitRegs(&(ab->ac[ATA_SECONDARY]));
 
-	if (ab->ac[ATA_PRIMARY].no_int != 0)
+	if (ab->ac[ATA_PRIMARY].no_int)
 		ata_ch_write(&(ab->ac[ATA_PRIMARY]), ATA_REG_CONTROL, 2);
 
-	if (ab->ac[ATA_SECONDARY].no_int != 0)
+	if (ab->ac[ATA_SECONDARY].no_int)
 		ata_ch_write(&(ab->ac[ATA_SECONDARY]), ATA_REG_CONTROL, 2);
 
 	mutexCreate(&(ab->ac[ATA_PRIMARY].irq_spin));
@@ -384,8 +376,6 @@ int ata_init_bus(struct ata_bus *ab)
 
 		condCreate(&(ab->ac[i].waitq));
 
-		//ab->ac[i].bmstatus = ata_ch_read(&(ab->ac[i]), ATA_REG_BMSTATUS) & 0x60;
-
 		for (j = 0; j < 2; j++) {
 			uint8_t err = 0, status = 0;
 
@@ -393,14 +383,14 @@ int ata_init_bus(struct ata_bus *ab)
 			ab->ac[i].devices[j].reserved = 0;
 
 			ata_ch_write(&(ab->ac[i]), ATA_REG_HDDEVSEL, 0xA0 | (j << 4));
-
+			usleep(1000);
 			ata_ch_write(&(ab->ac[i]), ATA_REG_COMMAND, ATA_CMD_IDENTIFY);
-
+			usleep(1000);
+			
 			if ((status = ata_ch_read(&(ab->ac[i]), ATA_REG_STATUS)) == 0)
 				continue;
 
 			while ((status & ATA_SR_BSY) && !(status & ATA_SR_DRQ)) {
-
 				if ((status & ATA_SR_ERR) || (status & ATA_SR_DF)) {
 					err = 1;
 					break;
@@ -418,14 +408,13 @@ int ata_init_bus(struct ata_bus *ab)
 			ab->ac[i].devices[j].type = 0; /* IDE_ATA */
 			ab->ac[i].devices[j].channel = i;
 			ab->ac[i].devices[j].drive = j;
-			ab->ac[i].devices[j].sector_size  = ab->ac[i].devices[j].info.log_sector_size;
-
-			if (!ab->ac[i].devices[j].sector_size)
-				ab->ac[i].devices[j].sector_size = ATA_DEF_SECTOR_SIZE;
-
-			ab->ac[i].devices[j].size = ab->ac[i].devices[j].info.lba28_totalsectors;
-
-			//printf("[%d:%d] %.5f GiB\n", i, j, (double)ab->ac[i].devices[j].size * ab->ac[i].devices[j].sector_size / 1000 / 1000 / 1000);
+			ab->ac[i].devices[j].signature = ab->ac[i].devices[j].info.general_config;
+			ab->ac[i].devices[j].capabilities = ab->ac[i].devices[j].info.capabilities_1;
+			ab->ac[i].devices[j].command_sets = *((uint32_t*)(&(ab->ac[i].devices[j].info.commands1_sup)));
+			ab->ac[i].devices[j].sector_size = (ab->ac[i].devices[j].info.log_sector_size) ?
+				ab->ac[i].devices[j].info.log_sector_size : ATA_DEF_SECTOR_SIZE;
+			ab->ac[i].devices[j].size = (ab->ac[i].devices[j].command_sets & (1 << 26)) ?
+				ab->ac[i].devices[j].info.lba48_totalsectors : ab->ac[i].devices[j].info.lba28_totalsectors;
 		}
 	}
 
