@@ -28,6 +28,7 @@
 #include <dirent.h>
 #include <phoenix/sysinfo.h>
 #include <phoenix/msg.h>
+#include <phoenix/stat.h>
 
 #include "ext2.h"
 #include "inode.h"
@@ -81,7 +82,7 @@ static int ext2_setattr(ext2_fs_info_t *f, id_t *id, int type, int attr, const v
 	switch(type) {
 
 		case atMode:
-			o->inode->mode |= (attr & 0x1FF);
+			o->inode->mode = ((o->inode->mode & S_IFMT) | (attr & ~S_IFMT));
 			break;
 
 		case atUid:
