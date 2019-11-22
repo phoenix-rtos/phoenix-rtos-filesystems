@@ -102,7 +102,7 @@ void ext2_init_fs(id_t *devId, ext2_fs_info_t *f)
 }
 
 
-int ext2_mount(id_t *devId, void **fsData)
+int libext2_mount(id_t *devId, void **fsData)
 {
 	int ret = -EFAULT;
 	id_t rootId = 2;

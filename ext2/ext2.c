@@ -477,12 +477,6 @@ int libext2_handler(void *data, msg_t *msg)
 }
 
 
-int libext2_mount(id_t *devId, void **fsData)
-{
-	return 2;
-}
-
-
 int libext2_unmount(void *fsData)
 {
 	return 0;
