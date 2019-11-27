@@ -179,14 +179,17 @@ typedef struct {
 	id_t id;
 
 	uint32_t refs;
-	uint8_t  dirty;
+	uint8_t  flags;
 
 	rbnode_t node;
 	handle_t lock;
 
 	ext2_inode_t *inode;
 	ext2_fs_info_t *f;
-	ext2_block_t ind[3];
+	union {
+		ext2_block_t ind[3];
+		oid_t mnt;
+	};
 } ext2_object_t;
 
 
@@ -204,6 +207,13 @@ enum {
 	EXT2_FT_SOCK,
 	EXT2_FT_SYMLINK,
 	EXT2_FT_MAX
+};
+
+/* ext2 object flags */
+enum {
+	EXT2_FL_DIRTY = 1,
+	EXT2_FL_MOUNTPOINT = 2,
+	EXT2_FL_MOUNT = 4
 };
 
 
@@ -231,6 +241,7 @@ typedef struct {
 
 struct _ext2_fs_info {
 	id_t				devId;
+	oid_t				parent;
 	ext2_group_desc_t 	*gdt;
 	ext2_object_t    	*root;
 	ext2_superblock_t 	*sb;

@@ -171,7 +171,7 @@ static int _ext2_write(ext2_object_t *o, offs_t offs, const char *data, size_t l
 	else if (offs + len > o->inode->size)
 		o->inode->size += (offs + len) - o->inode->size;
 
-	o->dirty = 1;
+	object_setFlag(o, EXT2_FL_DIRTY);
 
 	o->inode->mtime = o->inode->atime = time(NULL);
 	object_sync(o);
@@ -248,7 +248,7 @@ int ext2_truncate(ext2_fs_info_t *f, id_t *id, size_t size)
 
 	o->inode->size = size;
 
-	o->dirty = 1;
+	object_setFlag(o, EXT2_FL_DIRTY);
 	mutexUnlock(o->lock);
 	object_sync(o);
 	object_put(o);

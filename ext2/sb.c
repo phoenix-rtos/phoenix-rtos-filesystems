@@ -84,8 +84,9 @@ void ext2_init_fs(id_t *devId, ext2_fs_info_t *f)
 	f->inodes_in_group = f->sb->inodes_in_group;
 	f->gdt_size = 1 + (f->sb->blocks_count - 1) / f->sb->blocks_in_group;
 	f->gdt_size = 1 + (f->sb->inodes_count - 1) / f->sb->inodes_in_group;
-	f->gdt =  malloc(f->gdt_size * sizeof(ext2_group_desc_t));
+	f->gdt =  calloc(1, f->gdt_size * sizeof(ext2_group_desc_t));
 	f->first_block = f->sb->first_data_block * f->block_size;
+	f->devId = *devId;
 
 	size = (f->gdt_size * sizeof(ext2_group_desc_t)) / f->block_size;
 
@@ -106,8 +107,8 @@ int libext2_mount(id_t *devId, void **fsData)
 {
 	int ret = -EFAULT;
 	id_t rootId = 2;
-	ext2_fs_info_t *f = malloc(sizeof(ext2_fs_info_t));
-	f->sb = malloc(sizeof(ext2_superblock_t));
+	ext2_fs_info_t *f = calloc(1, sizeof(ext2_fs_info_t));
+	f->sb = calloc(1, EXT2_SB_SZ);
 
 	*fsData = f;
 
@@ -121,5 +122,6 @@ int libext2_mount(id_t *devId, void **fsData)
 	ext2_init_fs(devId, f);
 	object_init(f);
 	f->root = object_get(f, &rootId);
+
 	return (int)rootId;
 }

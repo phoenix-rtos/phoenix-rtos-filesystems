@@ -18,6 +18,7 @@
 
 #include <sys/types.h>
 
+
 extern ext2_object_t *object_get(ext2_fs_info_t *f, id_t *id);
 
 
@@ -34,5 +35,24 @@ extern int object_destroy(ext2_object_t *o);
 
 
 extern int object_init(ext2_fs_info_t *f);
+
+
+__attribute__((always_inline)) inline int object_checkFlag(ext2_object_t *o, uint8_t flag)
+{
+	return o->flags & flag;
+}
+
+
+__attribute__((always_inline)) inline int object_setFlag(ext2_object_t *o, uint8_t flag)
+{
+	return o->flags |= flag;
+}
+
+
+__attribute__((always_inline)) inline int object_clearFlag(ext2_object_t *o, uint8_t flag)
+{
+	return o->flags &= ~flag;
+}
+
 
 #endif /* object.h */

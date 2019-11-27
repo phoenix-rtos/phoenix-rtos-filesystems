@@ -148,8 +148,9 @@ ext2_object_t *object_create(ext2_fs_info_t *f, id_t *id, id_t *pid, ext2_inode_
 	o->refs = 1;
 	o->id = *id;
 	o->inode = *inode;
-	o->dirty = 1;
+	object_setFlag(o, EXT2_FL_DIRTY);
 	mutexCreate(&o->lock);
+	o->f = f;
 
 	lib_rbInsert(&f->objects->used, &o->node);
 	f->objects->used_cnt++;
@@ -204,13 +205,13 @@ ext2_object_t *object_get(ext2_fs_info_t *f, id_t *id)
 
 void object_sync(ext2_object_t *o)
 {
-	if (o->dirty)
+	if (object_checkFlag(o, EXT2_FL_DIRTY))
 		inode_set(o->f, o->id, o->inode);
 
 	write_block(o->f, o->ind[0].bno, o->ind[0].data);
 	write_block(o->f, o->ind[1].bno, o->ind[1].data);
 	write_block(o->f, o->ind[2].bno, o->ind[2].data);
-	o->dirty = 0;
+	object_clearFlag(o, EXT2_FL_DIRTY);
 }
 
 
@@ -220,8 +221,9 @@ void object_put(ext2_object_t *o)
 	if (o != NULL && o->refs)
 		o->refs--;
 
-	if(!o->refs) {
+	if(!o->refs && !object_checkFlag(o, EXT2_FL_MOUNT | EXT2_FL_MOUNTPOINT)) {
 		mutexUnlock(o->f->objects->ulock);
+		object_remove(o);
 		return;
 	}
 	mutexUnlock(o->f->objects->ulock);
@@ -232,14 +234,13 @@ void object_put(ext2_object_t *o)
 
 int object_init(ext2_fs_info_t *f)
 {
-	f->objects = malloc(sizeof(ext2_fs_objects_t));
+	f->objects = calloc(1, sizeof(ext2_fs_objects_t));
 	if(!f->objects)
 		return -ENOMEM;
 
 	lib_rbInit(&f->objects->used, object_cmp, NULL);
 
 	f->objects->used_cnt = 0;
-	memset(&f->objects->cache, 0, EXT2_CACHE_SIZE);
 
 	mutexCreate(&f->objects->ulock);
 	mutexCreate(&f->objects->clock);

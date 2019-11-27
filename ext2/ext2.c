@@ -98,10 +98,21 @@ static int ext2_setattr(ext2_fs_info_t *f, id_t *id, int type, int attr, const v
 			ext2_truncate(f, id, attr);
 			mutexLock(o->lock);
 			break;
+		case atMount:
+			object_setFlag(o, EXT2_FL_MOUNT);
+			object_sync(o);
+			o->mnt = *(oid_t *)data;
+			mutexUnlock(o->lock);
+			object_put(o);
+			return res;
+		case atMountPoint:
+			object_setFlag(o, EXT2_FL_MOUNTPOINT);
+			o->f->parent = *(oid_t *)data;
+			break;
 	}
 
 	o->inode->mtime = o->inode->atime = time(NULL);
-	o->dirty = 1;
+	object_setFlag(o, EXT2_FL_DIRTY);
 	object_sync(o);
 	mutexUnlock(o->lock);
 	object_put(o);
@@ -140,6 +151,12 @@ static int ext2_getattr(ext2_fs_info_t *f, id_t *id, int type, void *attr, size_
 			stat->st_mtime = o->inode->mtime;
 			stat->st_ctime = o->inode->ctime;
 			ret = sizeof(struct stat);
+			break;
+		case atMount:
+			*(oid_t *)attr = o->mnt;
+			break;
+		case atMountPoint:
+			*(oid_t *)attr = o->f->parent;
 			break;
 	}
 
@@ -242,7 +259,7 @@ static int ext2_link(ext2_fs_info_t *f, id_t *dirId, const char *name, const siz
 		o->inode->uid = 0;
 		o->inode->gid = 0;
 		o->inode->mtime = o->inode->atime = time(NULL);
-		o->dirty = 1;
+		object_setFlag(o, EXT2_FL_DIRTY);
 
 		if(o->inode->mode & S_IFDIR) {
 			dir_add(o, ".", 1, S_IFDIR, id);
@@ -253,7 +270,7 @@ static int ext2_link(ext2_fs_info_t *f, id_t *dirId, const char *name, const siz
 
 			mutexLock(d->lock);
 			d->inode->nlink++;
-			d->dirty = 1;
+			object_setFlag(d, EXT2_FL_DIRTY);
 			object_sync(d);
 			mutexUnlock(d->lock);
 
@@ -380,6 +397,8 @@ int ext2_readdir(ext2_object_t *d, offs_t offs, struct dirent *dent, unsigned in
 		dent->d_type = dentry->file_type & EXT2_FT_DIR ? 0 : 1;
 		memcpy(&(dent->d_name[0]), dentry->name, dentry->name_len);
 		dent->d_name[dentry->name_len] = '\0';
+		if (d->id == 2 && !strcmp(dent->d_name, ".."))
+			dent->d_ino = d->f->parent.id;
 
 		free(dentry);
 		object_put(d);

@@ -36,7 +36,7 @@ ext2_inode_t *inode_get(ext2_fs_info_t *f, uint32_t ino)
 	uint32_t block;
 	uint32_t inodes_in_block;
 
-	if (ino < f->root->id)
+	if (f->root && ino < f->root->id)
 		return NULL;
 	if (ino > f->inodes_count)
 		return NULL;
