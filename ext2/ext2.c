@@ -46,7 +46,7 @@ static int ext2_link(ext2_fs_info_t *f, id_t *dirId, const char *name, const siz
 static int ext2_lookup(ext2_fs_info_t *f, id_t *id, const char *name, const size_t len, id_t *resId, mode_t *mode)
 {
 	int err;
-	ext2_object_t *d;
+	ext2_object_t *d, *o;
 
 	if (*id < 2)
 		return -EINVAL;
@@ -61,6 +61,14 @@ static int ext2_lookup(ext2_fs_info_t *f, id_t *id, const char *name, const size
 
 	mutexLock(d->lock);
 	err = dir_find(d, name, len, resId);
+	if (!err) {
+		o = object_get(f, resId);
+		mutexLock(o->lock);
+		*mode = o->inode->mode;
+		if (object_checkFlag(o, EXT2_FL_MOUNT | EXT2_FL_MOUNTPOINT))
+			*mode |= S_IFMT;
+		mutexUnlock(o->lock);
+	}
 	mutexUnlock(d->lock);
 
 	object_put(d);
