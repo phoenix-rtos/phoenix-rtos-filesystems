@@ -137,7 +137,7 @@ static int find_group_file(uint32_t pino)
 
 	group = (pgroup + pino) % ngroups;
 
-	for (i = 0; i < ngroups; i <<= 1) {
+	for (i = 1; i < ngroups; i <<= 1) {
 		group += i;
 		group = group % ngroups;
 		if (ext2->gdt[group].free_inodes_count && ext2->gdt[group].free_blocks_count)
