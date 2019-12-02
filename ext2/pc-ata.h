@@ -48,14 +48,16 @@ enum { ATA_ER_BBK = 0x80, ATA_ER_UNC = 0x40, ATA_ER_MC = 0x20,
 
 /* ATA commands */
 enum { ATA_CMD_READ_PIO = 0x20, ATA_CMD_WRITE_PIO = 0x30,
-	ATA_CMD_CACHE_FLUSH = 0xE7, ATA_CMD_PACKET = 0xA0,
-	ATA_CMD_IDENTIFY_PACKET = 0xA1, ATA_CMD_IDENTIFY = 0xEC };
+	ATA_CMD_CACHE_FLUSH = 0xE7, ATA_CMD_CACHE_FLUSH_EXT = 0xEA,
+	ATA_CMD_PACKET = 0xA0, ATA_CMD_IDENTIFY_PACKET = 0xA1,
+	ATA_CMD_IDENTIFY = 0xEC };
 
 /* ATA register definitions */
 enum { ATA_REG_DATA = 0x00, ATA_REG_ERROR = 0x01, ATA_REG_FEATURES = 0x01,
 	ATA_REG_SECCOUNT0 = 0x02, ATA_REG_LBA0 = 0x03, ATA_REG_LBA1 = 0x04,
 	ATA_REG_LBA2 = 0x05, ATA_REG_HDDEVSEL = 0x06, ATA_REG_COMMAND = 0x07,
-	ATA_REG_STATUS = 0x07 };
+	ATA_REG_STATUS = 0x07, ATA_REG_SECCOUNT1 = 0x08, ATA_REG_LBA3 = 0x09,
+	ATA_REG_LBA4 = 0x0A, ATA_REG_LBA5 = 0x0B };
 
 /* eo. hob */
 enum { ATA_REG_CONTROL = 0x0C, ATA_REG_ALTSTATUS = 0x0C,
@@ -98,17 +100,12 @@ struct ata_dev {
 
 struct ata_channel {
 	uint16_t base;
-	uint16_t ctrl;           // Control Base address.
+	uint16_t ctrl;           // Control Base address
 	uint16_t bmide;          // Bus Master IDE address
 	uint16_t reg_addr[22];
 	unsigned int  irq_reg;
-	uint8_t  no_int;         // No Interrupt;
-
-	uint8_t status;
-	uint8_t altstatus;
-
-	uint8_t bmstatus;
-	uint8_t bmstatus_irq;
+	uint8_t  no_int;         // No Interrupt
+	uint8_t  drive;          // Selected drive
 
 	handle_t irq_spin;
 	volatile uint8_t irq_invoked;
@@ -125,6 +122,7 @@ struct ata_bus {
 	pci_device_t *dev;
 	struct ata_channel ac[2];
 };
+
 
 typedef struct _ata_msg_t {
 	uint16_t bus;
