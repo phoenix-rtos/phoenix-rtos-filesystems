@@ -18,6 +18,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <string.h>
+#include <poll.h>
 #include <sys/msg.h>
 #include <sys/mman.h>
 #include <time.h>
@@ -182,6 +183,9 @@ static int ext2_getattr(oid_t *oid, int type, int *attr)
 		break;
 	case atLinks:
 		*attr = o->inode->links_count;
+		break;
+	case atPollStatus:
+		*attr = POLLIN|POLLRDNORM|POLLOUT|POLLWRNORM;
 		break;
 	}
 
