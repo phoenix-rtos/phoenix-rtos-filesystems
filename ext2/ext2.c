@@ -77,7 +77,7 @@ static int ext2_lookup(ext2_fs_info_t *f, id_t *id, const char *name, const size
 }
 
 
-static int ext2_setattr(ext2_fs_info_t *f, id_t *id, int type, int attr, const void *data, size_t size)
+static int ext2_setattr(ext2_fs_info_t *f, id_t *id, int type, const void *data, size_t size)
 {
 	ext2_object_t *o = object_get(f, id);
 	int res = EOK;
@@ -90,32 +90,32 @@ static int ext2_setattr(ext2_fs_info_t *f, id_t *id, int type, int attr, const v
 	switch(type) {
 
 		case atMode:
-			o->inode->mode = ((o->inode->mode & S_IFMT) | (attr & ~S_IFMT));
+			o->inode->mode = ((o->inode->mode & S_IFMT) | (*(int *)data & ~S_IFMT));
 			break;
 
 		case atUid:
-			o->inode->uid = attr;
+			o->inode->uid = *(int *)data;
 			break;
 
 		case atGid:
-			o->inode->gid = attr;
+			o->inode->gid = *(int *)data;
 			break;
 
 		case atSize:
 			mutexUnlock(o->lock);
-			ext2_truncate(f, id, attr);
+			ext2_truncate(f, id, *(int *)data);
 			mutexLock(o->lock);
 			break;
 		case atMount:
 			object_setFlag(o, EXT2_FL_MOUNT);
 			object_sync(o);
-			o->mnt = *(oid_t *)data;
+			memcpy(&o->mnt, data, sizeof(oid_t));
 			mutexUnlock(o->lock);
 			object_put(o);
 			return res;
 		case atMountPoint:
 			object_setFlag(o, EXT2_FL_MOUNTPOINT);
-			o->f->parent = *(oid_t *)data;
+			memcpy(&o->f->parent, data, sizeof(oid_t));
 			break;
 	}
 
@@ -475,7 +475,7 @@ int libext2_handler(void *data, msg_t *msg)
 			break;
 
 		case mtSetAttr:
-			err =ext2_setattr(f, &msg->object, msg->i.attr, *(int *)msg->i.data, NULL, 0);
+			err =ext2_setattr(f, &msg->object, msg->i.attr, msg->i.data, msg->i.size);
 			break;
 
 		case mtGetAttr:

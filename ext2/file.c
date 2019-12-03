@@ -49,10 +49,10 @@ static int _ext2_read(ext2_object_t *o, offs_t offs, char *data, size_t len, int
 		if (object_checkFlag(o, EXT2_FL_MOUNT) && len >= sizeof(oid_t)) {
 			memcpy(data, &o->mnt, sizeof(oid_t));
 			return sizeof(oid_t);
-		} else if (object_checkFlag(o, EXT2_FL_MOUNTPOINT) && len >= sizeof(oid_t)) {
-			memcpy(data, &o->f->parent, sizeof(oid_t));
-			return sizeof(oid_t);
-		}
+		} //else if (object_checkFlag(o, EXT2_FL_MOUNTPOINT) && len >= sizeof(oid_t)) {
+			//memcpy(data, &o->f->parent, sizeof(oid_t));
+			//return sizeof(oid_t);
+		//}
 		return ext2_readdir(o, offs, (struct dirent *)data, len);
 	}
 	else if ((S_ISCHR(o->inode->mode) || S_ISBLK(o->inode->mode)) && len >= sizeof(oid_t)) {
