@@ -54,8 +54,11 @@ int dir_findId(const dummyfs_object_t *dir, const char *name, const size_t len, 
 
 	if (err == EOK) {
 		*resId = o->id;
-		if (mode)
+		if (mode) {
 			*mode = o->mode;
+			if (OBJ_IS_MOUNT(o) || OBJ_IS_MNTPOINT(o))
+				*mode |= S_IFMNT;
+		}
 	}
 
 	return err;
@@ -159,7 +162,7 @@ int dir_remove(dummyfs_object_t *dir, const char *name, const size_t len)
 		if ((e->len - 1 == len) && !strncmp(e->name, (char *)name, len) && !e->deleted) {
 			dir->size -= e->len;
 			e->deleted = 1;
-			dir->dirty = 1;
+			OBJ_SET_DIRTY(dir);
 			return EOK;
 		}
 		e = e->next;
@@ -192,7 +195,7 @@ void dir_clean(dummyfs_object_t *dir)
 		} else
 			e = e->next;
 	} while (e != dir->entries);
-	dir->dirty = 0;
+	OBJ_CLR_DIRTY(dir);
 }
 
 

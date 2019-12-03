@@ -30,42 +30,46 @@
 struct _dummyfs_object_t;
 
 
-typedef struct _dummyfs_dirent_t {
-	struct _dummyfs_dirent_t *next;
-	struct _dummyfs_dirent_t *prev;
+typedef struct _dummyfs_dirent {
+	struct _dummyfs_dirent *next;
+	struct _dummyfs_dirent *prev;
 
-	struct _dummyfs_object_t *o;
+	struct _dummyfs_object *o;
 	char *name;
 	size_t len;
 	uint8_t deleted;
 } dummyfs_dirent_t;
 
 
-typedef struct _dummyfs_chunk_t {
+typedef struct _dummyfs_chunk {
 	offs_t offs;
-
-	char *data;
-	struct _dummyfs_chunk_t *next;
-	struct _dummyfs_chunk_t *prev;
-
-	size_t size;
-	size_t used;
-} dummyfs_chunk_t;
-
-
-typedef struct _dummyfs_object_t {
-	idnode_t node;
 
 	union {
 		struct {
-			dummyfs_dirent_t *entries;
-			uint8_t dirty;
+			char *data;
+			struct _dummyfs_chunk *next;
+			struct _dummyfs_chunk *prev;
 		};
+	};
+	size_t size;
+	size_t used;
+
+} dummyfs_chunk_t;
+
+
+typedef struct _dummyfs_object {
+	idnode_t node;
+
+	union {
+		dummyfs_dirent_t *entries;
 		dummyfs_chunk_t *chunks;
-		oid_t dev;
 	};
 
 	id_t id;
+	union {
+		oid_t mnt;
+		oid_t dev;
+	};
 
 	time_t atime;
 	time_t mtime;
@@ -79,12 +83,14 @@ typedef struct _dummyfs_object_t {
 	int32_t nlink;
 
 	size_t size;
+	uint8_t flags;
 } dummyfs_object_t;
 
 
-struct _dummyfs_common_t {
+struct dummyfs_common {
 	int portfd;
 	id_t rootId;
+	oid_t parent;
 	handle_t mutex;
 #if  DUMMYFS_SIZE_CHECK == 1
 	size_t size;
@@ -92,7 +98,7 @@ struct _dummyfs_common_t {
 };
 
 
-extern struct _dummyfs_common_t dummyfs_common;
+extern struct dummyfs_common dummyfs_common;
 
 
 static inline int dummyfs_incsz(size_t size) {
@@ -114,5 +120,21 @@ static inline void dummyfs_decsz(size_t size) {
 #endif
 }
 
+
+#define DUMMYFS_FL_DIRTY 0x1
+#define DUMMYFS_FL_MOUNT 0x2
+#define DUMMYFS_FL_MNTPOINT 0x4
+
+#define DUMMYFS_GEN_OBJ_FL_FUNCS(NAME) \
+	__attribute__((always_inline)) inline int OBJ_IS_##NAME(dummyfs_object_t *o) \
+			{ return o->flags & DUMMYFS_FL_##NAME; } \
+	__attribute__((always_inline)) inline int OBJ_SET_##NAME(dummyfs_object_t *o) \
+			{ return o->flags |= DUMMYFS_FL_##NAME; } \
+	__attribute__((always_inline)) inline int OBJ_CLR_##NAME(dummyfs_object_t *o) \
+			{ return o->flags &= ~DUMMYFS_FL_##NAME; }
+
+DUMMYFS_GEN_OBJ_FL_FUNCS(DIRTY)
+DUMMYFS_GEN_OBJ_FL_FUNCS(MOUNT)
+DUMMYFS_GEN_OBJ_FL_FUNCS(MNTPOINT)
 
 #endif

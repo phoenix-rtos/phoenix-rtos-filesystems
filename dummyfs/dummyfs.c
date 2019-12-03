@@ -41,7 +41,7 @@
 	debug(buf); \
 } while (0)
 
-struct _dummyfs_common_t dummyfs_common;
+struct dummyfs_common dummyfs_common;
 
 
 int dummyfs_destroy(id_t *id);
@@ -70,7 +70,7 @@ int dummyfs_lookup(id_t *id, const char *name, const size_t len, id_t *resId, mo
 }
 
 
-int dummyfs_setattr(id_t *id, int type, int attr, const void *data, size_t size)
+int dummyfs_setattr(id_t *id, int type, const void *data, size_t size)
 {
 	dummyfs_object_t *o;
 	int ret = EOK;
@@ -81,20 +81,20 @@ int dummyfs_setattr(id_t *id, int type, int attr, const void *data, size_t size)
 	object_lock(o);
 	switch (type) {
 		case (atUid):
-			o->uid = attr;
+			o->uid = *(int *)data;
 			break;
 
 		case (atGid):
-			o->gid = attr;
+			o->gid = *(int *)data;
 			break;
 
 		case (atMode):
-			o->mode = attr;
+			o->mode = *(int *)data;
 			break;
 
 		case (atSize):
 			object_unlock(o);
-			ret = dummyfs_truncate(id, attr);
+			ret = dummyfs_truncate(id, *(int *)data);
 			object_lock(o);
 			break;
 
@@ -103,8 +103,14 @@ int dummyfs_setattr(id_t *id, int type, int attr, const void *data, size_t size)
 			break;
 
 		case (atDev):
-			/* TODO: add mouting capabilities */
 			ret = -EINVAL;
+			break;
+		case atMount:
+			OBJ_SET_MOUNT(o);
+			memcpy(&o->mnt, data, sizeof(oid_t));
+		case atMountPoint:
+			OBJ_SET_MNTPOINT(o);
+			memcpy(&dummyfs_common.parent, data, sizeof(oid_t));
 			break;
 	}
 
@@ -675,7 +681,7 @@ int main(int argc, char **argv)
 				break;
 
 			case mtSetAttr:
-				err = dummyfs_setattr(&msg.object, msg.i.attr, *(int *)msg.i.data, NULL, 0);
+				err = dummyfs_setattr(&msg.object, msg.i.attr, msg.i.data, msg.i.size);
 				break;
 
 			case mtGetAttr:

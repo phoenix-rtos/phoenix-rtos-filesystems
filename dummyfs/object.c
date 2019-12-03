@@ -133,7 +133,7 @@ void object_put(dummyfs_object_t *o)
 	if (o != NULL && o->refs) {
 		o->refs--;
 
-		if (!o->refs && S_ISDIR(o->mode) && o->dirty) {
+		if (!o->refs && S_ISDIR(o->mode) && OBJ_IS_DIRTY(o)) {
 			object_lock(o);
 			dir_clean(o);
 			object_unlock(o);

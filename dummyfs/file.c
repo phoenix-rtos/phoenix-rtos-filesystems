@@ -197,7 +197,16 @@ static int _dummyfs_read(id_t *id, offs_t offs, char *buff, size_t len)
 		return -EINVAL;
 
 	if (S_ISDIR(o->mode)) {
-		return dummyfs_readdir(id, offs, (struct dirent *)buff, len);
+		if (OBJ_IS_MOUNT(o) && len >= sizeof(oid_t)) {
+			debug("read mount\n");
+			*(oid_t *)buff = o->mnt;
+			return sizeof(oid_t);
+		} else if (OBJ_IS_MNTPOINT(o) && len >= sizeof(oid_t)) {
+			*(oid_t *)buff = dummyfs_common.parent;
+			return sizeof(oid_t);
+		} else {
+			return dummyfs_readdir(id, offs, (struct dirent *)buff, len);
+		}
 	} else if ((S_ISCHR(o->mode) || S_ISBLK(o->mode)) && len >= sizeof(oid_t)) {
 		memcpy(buff, &o->dev, sizeof(oid_t));
 		return sizeof(oid_t);
