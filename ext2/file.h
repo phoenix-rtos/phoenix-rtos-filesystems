@@ -18,16 +18,16 @@
 
 #include <stdint.h>
 
-extern int ext2_read_unlocked(ext2_fs_info_t *f, id_t *id, offs_t offs, char *data, size_t len, int *status);
+extern int ext2_read_internal(ext2_object_t *o, off_t offs, char *data, size_t len, int *status);
 
 
-extern int ext2_read(ext2_fs_info_t *f, id_t *id, offs_t offs, char *data, size_t len, int *status);
+extern int ext2_read(ext2_fs_info_t *f, id_t *id, off_t offs, char *data, size_t len, int *status);
 
 
-extern int ext2_write_unlocked(ext2_fs_info_t *f, id_t *id, offs_t offs, const char *data, size_t len, int *status);
+extern int ext2_write_unlocked(ext2_fs_info_t *f, id_t *id, off_t offs, const char *data, size_t len, int *status);
 
 
-extern int ext2_write(ext2_fs_info_t *f, id_t *id, offs_t offs, const char *data, size_t len, int *status);
+extern int ext2_write(ext2_fs_info_t *f, id_t *id, off_t offs, const char *data, size_t len, int *status);
 
 
 extern int ext2_truncate(ext2_fs_info_t *f, id_t *id, size_t size);

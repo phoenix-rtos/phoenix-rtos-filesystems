@@ -32,10 +32,11 @@
 #include "sb.h"
 #include "inode.h"
 
-extern int ext2_readdir(ext2_object_t *d, offs_t offs, struct dirent *dent, unsigned int size);
+
+extern int ext2_readdir(ext2_object_t *d, off_t offs, struct dirent *dent, unsigned int size);
 
 /* reads a file */
-static int _ext2_read(ext2_object_t *o, offs_t offs, char *data, size_t len, int *status)
+int ext2_read_internal(ext2_object_t *o, off_t offs, char *data, size_t len, int *status)
 {
 	uint32_t read_len, read_sz, current_block, end_block;
 	uint32_t start_block = offs / o->f->block_size;
@@ -45,24 +46,10 @@ static int _ext2_read(ext2_object_t *o, offs_t offs, char *data, size_t len, int
 	if (o == NULL)
 		return -EINVAL;
 
-	if (S_ISDIR(o->inode->mode)) {
-		if (object_checkFlag(o, EXT2_FL_MOUNT) && len >= sizeof(oid_t)) {
-			memcpy(data, &o->mnt, sizeof(oid_t));
-			return sizeof(oid_t);
-		} //else if (object_checkFlag(o, EXT2_FL_MOUNTPOINT) && len >= sizeof(oid_t)) {
-			//memcpy(data, &o->f->parent, sizeof(oid_t));
-			//return sizeof(oid_t);
-		//}
-		return ext2_readdir(o, offs, (struct dirent *)data, len);
-	}
-	else if ((S_ISCHR(o->inode->mode) || S_ISBLK(o->inode->mode)) && len >= sizeof(oid_t)) {
-		memcpy(data, &o->inode->blocks, sizeof(oid_t));
-		return sizeof(oid_t);
-	}
 	/* TODO: symlink special case */
-	else if (!S_ISREG(o->inode->mode)) {
-		return -EINVAL;
-	}
+	//else if (!S_ISREG(o->inode->mode)) {
+	//	return -EINVAL;
+	//}
 
 	if (len == 0)
 		return 0;
@@ -104,26 +91,40 @@ static int _ext2_read(ext2_object_t *o, offs_t offs, char *data, size_t len, int
 }
 
 
-int ext2_read_unlocked(ext2_fs_info_t *f, id_t *id, offs_t offs, char *data, size_t len, int *status)
+int ext2_read(ext2_fs_info_t *f, id_t *id, off_t offs, char *data, size_t len, int *status)
 {
 	int ret;
 	ext2_object_t *o = object_get(f, id);
-	ret = _ext2_read(o, offs, data, len, status);
-	object_put(o);
-	return ret;
-}
 
-
-int ext2_read(ext2_fs_info_t *f, id_t *id, offs_t offs, char *data, size_t len, int *status)
-{
-	int ret;
-	ext2_object_t *o = object_get(f, id);
+	*status = EOK;
 
 	if (o == NULL)
 		return -EINVAL;
 
 	mutexLock(o->lock);
-	ret = _ext2_read(o, offs, data, len, status);
+	if (S_ISDIR(o->inode->mode)) {
+		if (object_checkFlag(o, EXT2_FL_MOUNT) && len >= sizeof(oid_t)) {
+			memcpy(data, &o->mnt, sizeof(oid_t));
+			ret = sizeof(oid_t);
+		}  //else if (object_checkFlag(o, EXT2_FL_MOUNTPOINT) && len >= sizeof(oid_t)) {
+			//memcpy(data, &o->f->parent, sizeof(oid_t));
+			//return sizeof(oid_t);
+		//}
+		else {
+			ret = ext2_readdir(o, offs, (struct dirent *)data, len);
+		}
+	}
+	else if ((S_ISCHR(o->inode->mode) || S_ISBLK(o->inode->mode)) && len >= sizeof(oid_t)) {
+		memcpy(data, &o->inode->blocks, sizeof(oid_t));
+		ret = sizeof(oid_t);
+	}
+	else {
+		ret = ext2_read_internal(o, offs, data, len, status);
+	}
+	if (ret < 0) {
+		*status = ret;
+		ret = 0;
+	}
 	mutexUnlock(o->lock);
 	object_put(o);
 	return ret;
@@ -193,7 +194,7 @@ static int _ext2_write(ext2_object_t *o, offs_t offs, const char *data, size_t l
 }
 
 
-int ext2_write_unlocked(ext2_fs_info_t *f, id_t *id, offs_t offs, const char *data, size_t len, int *status)
+int ext2_write_unlocked(ext2_fs_info_t *f, id_t *id, off_t offs, const char *data, size_t len, int *status)
 {
 	int ret;
 	ext2_object_t *o = object_get(f, id);
@@ -203,7 +204,7 @@ int ext2_write_unlocked(ext2_fs_info_t *f, id_t *id, offs_t offs, const char *da
 }
 
 
-int ext2_write(ext2_fs_info_t *f, id_t *id, offs_t offs, const char *data, size_t len, int *status)
+int ext2_write(ext2_fs_info_t *f, id_t *id, off_t offs, const char *data, size_t len, int *status)
 {
 	int ret;
 	ext2_object_t *o = object_get(f, id);

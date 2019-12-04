@@ -253,8 +253,6 @@ struct _ext2_fs_info {
 	uint32_t     		inodes_count;
 	uint32_t     		inodes_in_group;
 	uint32_t        	gdt_size;
-	uint32_t			first_block;
-	uint32_t     		sb_sect;
 };
 
 

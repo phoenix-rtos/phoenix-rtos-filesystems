@@ -38,7 +38,7 @@ int dir_find(ext2_object_t *d, const char *name, uint32_t len, id_t *resId)
 	data = malloc(d->f->block_size);
 
 	while (offs < d->inode->size) {
-		ext2_read(d->f, &d->id, offs, data, d->f->block_size, &err);
+		ext2_read_internal(d, offs, data, d->f->block_size, &err);
 		offs += d->f->block_size;
 		err = search_block(d->f, data, name, len, resId);
 		if (err == EOK)

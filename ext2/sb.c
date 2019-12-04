@@ -25,6 +25,7 @@
 #include "block.h"
 #include "object.h"
 
+
 /* ext2 superblock size and offset. */
 #define EXT2_SB_SZ 1024
 #define EXT2_SB_OFF EXT2_SB_SZ
@@ -85,17 +86,17 @@ void ext2_init_fs(id_t *devId, ext2_fs_info_t *f)
 	f->gdt_size = 1 + (f->sb->blocks_count - 1) / f->sb->blocks_in_group;
 	f->gdt_size = 1 + (f->sb->inodes_count - 1) / f->sb->inodes_in_group;
 	f->gdt =  calloc(1, f->gdt_size * sizeof(ext2_group_desc_t));
-	f->first_block = f->sb->first_data_block * f->block_size;
 	f->devId = *devId;
 
 	size = (f->gdt_size * sizeof(ext2_group_desc_t)) / f->block_size;
 
-	if (size)
+	if (size) {
 		read_blocks(f, f->sb->first_data_block + 1, (f->gdt_size * sizeof(ext2_group_desc_t)) / f->block_size, f->gdt);
+	}
 	else {
 		buff = malloc(f->block_size);
 		size = (f->gdt_size * sizeof(ext2_group_desc_t));
-		atasrv_read(&f->devId, f->first_block + f->block_size, buff, f->block_size, &err);
+		atasrv_read(&f->devId, (f->sb->first_data_block + 1) * f->block_size, buff, f->block_size, &err);
 		memcpy(f->gdt, buff, size);
 		free(buff);
 	}
@@ -122,6 +123,5 @@ int libext2_mount(id_t *devId, void **fsData)
 	ext2_init_fs(devId, f);
 	object_init(f);
 	f->root = object_get(f, &rootId);
-
 	return (int)rootId;
 }

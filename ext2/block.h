@@ -51,7 +51,7 @@ extern int set_blocks(ext2_object_t *o, uint32_t start_block, uint32_t count, co
 
 static inline uint32_t block_offset(ext2_fs_info_t *f, uint32_t block_no)
 {
-	return f->block_size * (block_no - f->sb->first_data_block);
+	return f->block_size * block_no;
 }
 
 #endif /* block.h */

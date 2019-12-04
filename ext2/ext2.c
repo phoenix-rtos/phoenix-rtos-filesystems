@@ -63,11 +63,13 @@ static int ext2_lookup(ext2_fs_info_t *f, id_t *id, const char *name, const size
 	err = dir_find(d, name, len, resId);
 	if (!err) {
 		o = object_get(f, resId);
-		mutexLock(o->lock);
+		if (o->id != d->id)
+			mutexLock(o->lock);
 		*mode = o->inode->mode;
 		if (object_checkFlag(o, EXT2_FL_MOUNT | EXT2_FL_MOUNTPOINT))
 			*mode |= S_IFMT;
-		mutexUnlock(o->lock);
+		if (o->id != d->id)
+			mutexUnlock(o->lock);
 	}
 	mutexUnlock(d->lock);
 
@@ -114,7 +116,7 @@ static int ext2_setattr(ext2_fs_info_t *f, id_t *id, int type, const void *data,
 			object_put(o);
 			return res;
 		case atMountPoint:
-			object_setFlag(o, EXT2_FL_MOUNTPOINT);
+		//	object_setFlag(o, EXT2_FL_MOUNTPOINT);
 			memcpy(&o->f->parent, data, sizeof(oid_t));
 			break;
 	}
@@ -360,62 +362,53 @@ static int ext2_unlink(ext2_fs_info_t *f, id_t *dirId, const char *name, const s
 
 
 
-int ext2_readdir(ext2_object_t *d, offs_t offs, struct dirent *dent, unsigned int size)
+int ext2_readdir(ext2_object_t *d, off_t offs, struct dirent *dent, size_t size)
 {
 	ext2_dir_entry_t *dentry;
-	int err;
-	int coffs = 0;
+	int err = EOK, ret = -ENOENT;
 
 	if (d == NULL)
 		return -EINVAL;
 
-	if (!(d->inode->mode & S_IFDIR)) {
-		object_put(d);
-		return -ENOTDIR;
-	}
-
-	if (!d->inode->nlink) {
-		object_put(d);
+	if (!d->inode->nlink)
 		return -ENOENT;
-	}
 
-	if (!d->inode->size) {
-		object_put(d);
+	if (!d->inode->size)
 		return -ENOENT;
-	}
+
+	if (size < sizeof(ext2_dir_entry_t))
+		return -EINVAL;
 
 	dentry = malloc(size);
+	memset(dent, 0, size);
+	while (offs < d->inode->size && offs >= 0) {
+		ext2_read_internal(d, offs, (void *)dentry, size, &err);
 
-	while (offs < d->inode->size) {
-		ext2_read_unlocked(d->f, &d->id, offs, (void *)dentry, size, &err);
-		mutexUnlock(d->lock);
+		if (err) {
+			ret = err;
+			break;
+		}
+
+		if (size <= dentry->name_len + sizeof(struct dirent)) {
+			ret = -EINVAL;
+			break;
+		}
 
 		dent->d_ino = dentry->inode;
-		dent->d_reclen = dentry->rec_len + coffs;
+		dent->d_reclen = dentry->rec_len;
 		dent->d_namlen = dentry->name_len;
-		if (dentry->name_len == 0) {
-			offs += dent->d_reclen;
-			coffs += dent->d_reclen;
-			if (dentry->rec_len > 0)
-				continue;
-			else break;
-		} else if (!dentry->rec_len)
-			break;
-
-		dent->d_type = dentry->file_type & EXT2_FT_DIR ? 0 : 1;
+		dent->d_type = dentry->file_type == EXT2_FT_DIR ? 0 : 1;
 		memcpy(&(dent->d_name[0]), dentry->name, dentry->name_len);
-		dent->d_name[dentry->name_len] = '\0';
-		if (d->id == 2 && !strcmp(dent->d_name, ".."))
-			dent->d_ino = d->f->parent.id;
 
-		free(dentry);
-		object_put(d);
-		return 	EOK;
+		if (S_ISMNT(d->inode->mode) && d->id == 2 && !strcmp(dent->d_name, ".."))
+			dent->d_ino = d->f->parent.id;
+		ret = dent->d_reclen;
+		break;
 	}
 	d->inode->atime = time(NULL);
 
 	free(dentry);
-	return -ENOENT;
+	return ret;
 }
 
 
@@ -454,7 +447,6 @@ int libext2_handler(void *data, msg_t *msg)
 	switch (msg->type) {
 
 		case mtLookup:
-
 			err = ext2_lookup(f, &msg->object, msg->i.data, msg->i.size, &msg->o.lookup.id, &msg->o.lookup.mode);
 			if ((err == -ENOENT) && (msg->i.lookup.flags & O_CREAT)) {
 				err = ext2_create(f, &msg->object, msg->i.data, msg->i.size, &msg->o.lookup.id, msg->i.lookup.mode, &msg->i.lookup.dev);
@@ -475,7 +467,7 @@ int libext2_handler(void *data, msg_t *msg)
 			break;
 
 		case mtSetAttr:
-			err =ext2_setattr(f, &msg->object, msg->i.attr, msg->i.data, msg->i.size);
+			err = ext2_setattr(f, &msg->object, msg->i.attr, msg->i.data, msg->i.size);
 			break;
 
 		case mtGetAttr:
