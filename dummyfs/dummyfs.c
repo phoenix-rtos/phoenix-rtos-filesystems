@@ -636,7 +636,7 @@ int main(int argc, char **argv)
 	}
 
 	if (pid > 0)
-		exit(EXIT_SUCCESS);
+		return DUMMYFS_ROOT_ID;
 
 	/* Create a new SID for the child process */
 	sid = setsid();

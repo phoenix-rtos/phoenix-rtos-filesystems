@@ -106,6 +106,8 @@ int object_remove(dummyfs_object_t *o)
 dummyfs_object_t *object_get_unlocked(int id)
 {
 	dummyfs_object_t *o = NULL;
+	if (id == DUMMYFS_FAKE_MOUNT_ID)
+		id = DUMMYFS_ROOT_ID;
 	idnode_t *n = idtree_find(&dummytree, id);
 
 	if (n != NULL)

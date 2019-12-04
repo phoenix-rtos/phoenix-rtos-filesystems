@@ -198,10 +198,9 @@ static int _dummyfs_read(id_t *id, offs_t offs, char *buff, size_t len)
 
 	if (S_ISDIR(o->mode)) {
 		if (OBJ_IS_MOUNT(o) && len >= sizeof(oid_t)) {
-			debug("read mount\n");
 			*(oid_t *)buff = o->mnt;
 			return sizeof(oid_t);
-		} else if (OBJ_IS_MNTPOINT(o) && len >= sizeof(oid_t)) {
+		} else if (*id == DUMMYFS_FAKE_MOUNT_ID && OBJ_IS_MNTPOINT(o) && len >= sizeof(oid_t)) {
 			*(oid_t *)buff = dummyfs_common.parent;
 			return sizeof(oid_t);
 		} else {

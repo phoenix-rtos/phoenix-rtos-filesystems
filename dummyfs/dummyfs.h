@@ -26,6 +26,8 @@
 #define DUMMYFS_SIZE_CHECK 1
 #define DUMMYFS_SIZE_MAX 32 * 1024 * 1024
 
+#define DUMMYFS_ROOT_ID 0
+#define DUMMYFS_FAKE_MOUNT_ID (-1)
 
 struct _dummyfs_object_t;
 
