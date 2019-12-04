@@ -66,8 +66,9 @@ static int ext2_lookup(ext2_fs_info_t *f, id_t *id, const char *name, const size
 		if (o->id != d->id)
 			mutexLock(o->lock);
 		*mode = o->inode->mode;
-		if (object_checkFlag(o, EXT2_FL_MOUNT | EXT2_FL_MOUNTPOINT))
-			*mode |= S_IFMT;
+		if (object_checkFlag(o, EXT2_FL_MOUNT | EXT2_FL_MOUNTPOINT)) {
+			*mode |= S_IFMNT;
+		}
 		if (o->id != d->id)
 			mutexUnlock(o->lock);
 	}
@@ -109,8 +110,8 @@ static int ext2_setattr(ext2_fs_info_t *f, id_t *id, int type, const void *data,
 			mutexLock(o->lock);
 			break;
 		case atMount:
-			object_setFlag(o, EXT2_FL_MOUNT);
 			object_sync(o);
+			object_setFlag(o, EXT2_FL_MOUNT);
 			memcpy(&o->mnt, data, sizeof(oid_t));
 			mutexUnlock(o->lock);
 			object_put(o);
@@ -388,6 +389,9 @@ int ext2_readdir(ext2_object_t *d, off_t offs, struct dirent *dent, size_t size)
 			ret = err;
 			break;
 		}
+
+		if (!dentry->name_len)
+			break;
 
 		if (size <= dentry->name_len + sizeof(struct dirent)) {
 			ret = -EINVAL;

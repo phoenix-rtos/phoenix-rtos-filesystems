@@ -115,7 +115,7 @@ ext2_object_t *object_create(ext2_fs_info_t *f, id_t *id, id_t *pid, ext2_inode_
 	mutexLock(f->objects->ulock);
 
 	if (*inode == NULL) {
-		*inode = malloc(f->inode_size);
+		*inode = calloc(1, f->inode_size);
 
 		*id = inode_create(f, *inode, mode, *pid);
 
@@ -205,13 +205,21 @@ ext2_object_t *object_get(ext2_fs_info_t *f, id_t *id)
 
 void object_sync(ext2_object_t *o)
 {
+
 	if (object_checkFlag(o, EXT2_FL_DIRTY))
 		inode_set(o->f, o->id, o->inode);
 
-	write_block(o->f, o->ind[0].bno, o->ind[0].data);
-	write_block(o->f, o->ind[1].bno, o->ind[1].data);
-	write_block(o->f, o->ind[2].bno, o->ind[2].data);
 	object_clearFlag(o, EXT2_FL_DIRTY);
+
+	if (object_checkFlag(o, EXT2_FL_MOUNT))
+		return;
+
+	if (o->ind[0].data)
+		write_block(o->f, o->ind[0].bno, o->ind[0].data);
+	if (o->ind[0].data)
+		write_block(o->f, o->ind[1].bno, o->ind[1].data);
+	if (o->ind[0].data)
+		write_block(o->f, o->ind[2].bno, o->ind[2].data);
 }
 
 
