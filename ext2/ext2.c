@@ -169,6 +169,10 @@ static int ext2_getattr(ext2_fs_info_t *f, id_t *id, int type, void *attr, size_
 		case atMountPoint:
 			*(oid_t *)attr = o->f->parent;
 			break;
+		case atSize:
+			*(int *)attr = o->inode->size;
+			ret = sizeof(int);
+			break;
 	}
 
 	mutexUnlock(o->lock);
