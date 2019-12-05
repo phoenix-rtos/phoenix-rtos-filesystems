@@ -85,7 +85,10 @@ int object_remove(ext2_object_t *o)
 	}
 
 	lib_rbRemove(&o->f->objects->used, &o->node);
-	o->f->objects->used_cnt--;
+	if (o->f->objects->used_cnt)
+		o->f->objects->used_cnt--;
+	else
+		debug("ext2: GLOBAL OBJECT COUNTER UNDERFLOW\n");
 
 	mutexLock(o->f->objects->clock);
 	r  = o->f->objects->cache[o->id % EXT2_CACHE_SIZE];
@@ -226,6 +229,9 @@ void object_sync(ext2_object_t *o)
 void object_put(ext2_object_t *o)
 {
 	mutexLock(o->f->objects->ulock);
+	if (o != NULL && !o->refs)
+		debug("ext2: OBJECT REF UNDERFLOW\n");
+
 	if (o != NULL && o->refs)
 		o->refs--;
 
