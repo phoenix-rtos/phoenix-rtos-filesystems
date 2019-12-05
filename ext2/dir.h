@@ -26,6 +26,6 @@ extern int dir_find(ext2_object_t *dir, const char *name, uint32_t len, id_t *re
 extern int dir_add(ext2_object_t *dir, const char *name, size_t len, uint16_t type, id_t *id);
 
 
-extern int dir_remove(ext2_object_t *dir, const char *name);
+extern int dir_remove(ext2_object_t *dir, const char *name, size_t len);
 
 #endif /* dir.h */

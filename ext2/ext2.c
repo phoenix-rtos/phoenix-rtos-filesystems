@@ -184,7 +184,7 @@ static int ext2_create(ext2_fs_info_t *f, id_t *dirId, const char *name, const s
 	ext2_inode_t *inode = NULL;
 	int ret;
 
-	if (name == NULL || strlen(name) == 0)
+	if (name == NULL || len == 0)
 		return -EINVAL;
 
 	o = object_create(f, resId, dirId, &inode, mode);
@@ -332,12 +332,12 @@ static int ext2_unlink(ext2_fs_info_t *f, id_t *dirId, const char *name, const s
 	o = object_get(f, &id);
 
 	if (o == NULL) {
-		dir_remove(d, name);
+		dir_remove(d, name, len);
 		object_put(d);
 		return -ENOENT;
 	}
 
-	if (dir_remove(d, name) != EOK) {
+	if (dir_remove(d, name, len) != EOK) {
 		mutexUnlock(d->lock);
 		object_put(o);
 		return -ENOENT;

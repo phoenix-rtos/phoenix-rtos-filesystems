@@ -208,10 +208,19 @@ int ext2_write(ext2_fs_info_t *f, id_t *id, off_t offs, const char *data, size_t
 {
 	int ret;
 	ext2_object_t *o = object_get(f, id);
+
+	*status = 0;
+
 	mutexLock(o->lock);
 	ret = _ext2_write(o, offs, data, len, status);
 	mutexUnlock(o->lock);
 	object_put(o);
+
+	if (ret < 0) {
+		*status = ret;
+		ret = 0;
+	}
+
 	return ret;
 }
 

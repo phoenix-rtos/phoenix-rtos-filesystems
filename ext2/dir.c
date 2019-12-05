@@ -61,7 +61,7 @@ int dir_add(ext2_object_t *d, const char *name, size_t len, uint16_t mode, id_t 
 	/* dir entry size is always rounded to block size
 	 * and we need only last block of entries */
 	data = malloc(d->f->block_size);
-	ext2_read(d->f, &d->id, d->inode->size ? d->inode->size - d->f->block_size : 0, data, d->f->block_size, &err);
+	ext2_read_internal(d, d->inode->size ? d->inode->size - d->f->block_size : 0, data, d->f->block_size, &err);
 
 	while (offs < d->f->block_size) {
 		dentry = data + offs;
@@ -76,7 +76,7 @@ int dir_add(ext2_object_t *d, const char *name, size_t len, uint16_t mode, id_t 
 				dentry->rec_len = 0;
 
 			offs += dentry->rec_len;
-			rec_len = strlen(name) + sizeof(ext2_dir_entry_t);
+			rec_len = len + sizeof(ext2_dir_entry_t);
 
 			rec_len = (rec_len + 3) & ~3;
 
@@ -100,8 +100,8 @@ int dir_add(ext2_object_t *d, const char *name, size_t len, uint16_t mode, id_t 
 	}
 
 	dentry = data + offs;
-	memcpy(dentry->name, name, strlen(name));
-	dentry->name_len = strlen(name);
+	memcpy(dentry->name, name, len);
+	dentry->name_len = len;
 
 	if (mode & S_IFDIR)
 		dentry->file_type = EXT2_FT_DIR;
@@ -111,7 +111,7 @@ int dir_add(ext2_object_t *d, const char *name, size_t len, uint16_t mode, id_t 
 	dentry->rec_len = rec_len;
 	dentry->inode = *id;
 
-	ext2_write(d->f, &d->id, d->inode->size ? d->inode->size - d->f->block_size : 0, data, d->f->block_size, &err);
+	ext2_write_unlocked(d->f, &d->id, d->inode->size ? d->inode->size - d->f->block_size : 0, data, d->f->block_size, &err);
 
 	free(data);
 	return EOK;
@@ -128,12 +128,12 @@ int dir_remove(ext2_object_t *d, const char *name, size_t len)
 	void *data = malloc(d->f->block_size);
 
 	while (offs < d->inode->size) {
-		ext2_read(d->f, &d->id, offs, data, d->f->block_size, &err);
+		ext2_read_internal(d, offs, data, d->f->block_size, &err);
 		block_offs = 0;
 		while (block_offs < d->f->block_size) {
 			dentry = data + block_offs;
 
-			if (strlen(name) == dentry->name_len
+			if (len == dentry->name_len
 				&& !strncmp(name, dentry->name, dentry->name_len)) {
 				found = 1;
 				break;
@@ -178,7 +178,7 @@ int dir_remove(ext2_object_t *d, const char *name, size_t len)
 		((ext2_dir_entry_t *)(data + prev_offs))->rec_len += dentry->rec_len;
 	}
 
-	ext2_write(d->f, &d->id, offs, data, d->f->block_size, &err);
+	ext2_write_unlocked(d->f, &d->id, offs, data, d->f->block_size, &err);
 	free(data);
 	return EOK;
 }
