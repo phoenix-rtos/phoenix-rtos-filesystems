@@ -86,7 +86,7 @@ int read_blocks(uint32_t start_block, uint32_t count, void *data)
 
 	ret = ata_read(block_offset(start_block), data, ext2->block_size * count);
 
-	if (ret == ext2->block_size)
+	if (ret == ext2->block_size * count)
 		return EOK;
 	return ret;
 }
