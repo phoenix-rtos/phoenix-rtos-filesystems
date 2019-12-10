@@ -267,6 +267,9 @@ static int ata_access(uint8_t direction, struct ata_dev *ad, uint32_t lba, uint8
 	// Send the command
 	ata_ch_write(ac, ATA_REG_COMMAND, cmd);
 
+	// Wait if busy
+	ata_polling(ac, 0);
+
 	if (direction == 0) {
 		// PIO Read
 		// Receive an iterrupt after the READ command
