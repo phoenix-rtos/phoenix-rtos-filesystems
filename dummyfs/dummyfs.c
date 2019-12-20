@@ -785,13 +785,18 @@ int main(int argc, char **argv)
 #endif
 	}
 	else {
-		portCreate(&dummyfs_common.port);
 		if (non_fs_namespace) {
+			while (write(1, "", 0) < 0)
+				usleep(1000);
+			portCreate(&dummyfs_common.port);
 			if (portRegister(dummyfs_common.port, mountpt, &root) < 0) {
 				LOG("can't mount as %s\n", mountpt);
 				return -1;
 			}
 			mountpt = NULL;
+		}
+		else {
+			portCreate(&dummyfs_common.port);
 		}
 
 	}
