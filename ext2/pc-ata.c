@@ -440,7 +440,7 @@ static int ata_init_bus(struct ata_bus *ab)
 			ab->ac[i].devices[j].drive = j;
 			ab->ac[i].devices[j].signature = ab->ac[i].devices[j].info.general_config;
 			ab->ac[i].devices[j].capabilities = ab->ac[i].devices[j].info.capabilities_1;
-			ab->ac[i].devices[j].command_sets = *((uint32_t*)(&(ab->ac[i].devices[j].info.commands1_sup)));
+			ab->ac[i].devices[j].command_sets = ((uint32_t)(ab->ac[i].devices[j].info.commands2_sup) << 16) | ab->ac[i].devices[j].info.commands1_sup;
 			ab->ac[i].devices[j].sector_size = (ab->ac[i].devices[j].info.log_sector_size) ?
 				ab->ac[i].devices[j].info.log_sector_size : ATA_DEF_SECTOR_SIZE;
 			ab->ac[i].devices[j].size = (ab->ac[i].devices[j].command_sets & (1 << 26)) ?
