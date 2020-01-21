@@ -26,6 +26,7 @@
 #include <sys/file.h>
 #include <sys/threads.h>
 #include <dirent.h>
+#include <poll.h>
 #include <phoenix/sysinfo.h>
 #include <phoenix/msg.h>
 #include <phoenix/stat.h>
@@ -171,6 +172,10 @@ static int ext2_getattr(ext2_fs_info_t *f, id_t *id, int type, void *attr, size_
 			break;
 		case atSize:
 			*(int *)attr = o->inode->size;
+			ret = sizeof(int);
+			break;
+		case atEvents:
+			*(int *)attr = POLLIN | POLLOUT;
 			ret = sizeof(int);
 			break;
 	}
