@@ -108,9 +108,11 @@ int dummyfs_setattr(id_t *id, int type, const void *data, size_t size)
 		case atMount:
 			OBJ_SET_MOUNT(o);
 			memcpy(&o->mnt, data, sizeof(oid_t));
+			break;
 		case atMountPoint:
 			OBJ_SET_MNTPOINT(o);
 			memcpy(&dummyfs_common.parent, data, sizeof(oid_t));
+			dummyfs_common.rootId = o->id;
 			break;
 	}
 
