@@ -447,7 +447,7 @@ int dummyfs_readdir(id_t *id, offs_t offs, struct dirent *dent, unsigned int siz
 			memcpy(&(dent->d_name[0]), ei->name, ei->len);
 
 			if (OBJ_IS_MNTPOINT(d) && !strcmp(ei->name, ".."))
-				dent->d_ino = o->mnt.id;
+				dent->d_ino = d->mnt.id;
 
 			object_unlock(d);
 			object_put(d);
