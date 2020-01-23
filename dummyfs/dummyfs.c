@@ -35,11 +35,14 @@
 #include "file.h"
 #include "object.h"
 
+//#define LOG(msg, ...)
+
 #define LOG(msg, ...) do { \
 	char buf[128]; \
 	sprintf(buf, __FILE__ ":%d - " msg "\n", __LINE__, ##__VA_ARGS__ ); \
 	debug(buf); \
 } while (0)
+
 
 struct dummyfs_common dummyfs_common;
 
@@ -106,17 +109,25 @@ int dummyfs_setattr(id_t *id, int type, const void *data, size_t size)
 			ret = -EINVAL;
 			break;
 		case atMount:
+			if (OBJ_IS_MOUNT(o) || OBJ_IS_MNTPOINT(o)) {
+				ret = -EBUSY;
+				break;
+			}
 			OBJ_SET_MOUNT(o);
 			memcpy(&o->mnt, data, sizeof(oid_t));
 			break;
 		case atMountPoint:
+			if (OBJ_IS_MOUNT(o) || OBJ_IS_MNTPOINT(o)) {
+				ret = -EBUSY;
+				break;
+			}
 			OBJ_SET_MNTPOINT(o);
-			memcpy(&dummyfs_common.parent, data, sizeof(oid_t));
-			dummyfs_common.rootId = o->id;
+			memcpy(&o->mnt, data, sizeof(oid_t));
 			break;
 	}
 
-	o->mtime = time(NULL);
+	if (!ret)
+		o->mtime = time(NULL);
 
 	object_unlock(o);
 	object_put(o);
@@ -155,6 +166,10 @@ ssize_t dummyfs_getattr(id_t *id, int type, void *attr, size_t maxlen)
 			stat->st_mtime = o->mtime;
 			stat->st_ctime = o->ctime;
 			retval = sizeof(struct stat);
+			break;
+		case atMount:
+		case atMountPoint:
+			*(oid_t *)attr = o->mnt;
 			break;
 	}
 
@@ -430,6 +445,10 @@ int dummyfs_readdir(id_t *id, offs_t offs, struct dirent *dent, unsigned int siz
 			dent->d_namlen = ei->len;
 			dent->d_type = (S_IFMT & ei->o->mode);
 			memcpy(&(dent->d_name[0]), ei->name, ei->len);
+
+			if (OBJ_IS_MNTPOINT(d) && !strcmp(ei->name, ".."))
+				dent->d_ino = o->mnt.id;
+
 			object_unlock(d);
 			object_put(d);
 			return dent->d_reclen;

@@ -56,11 +56,13 @@ int dir_findId(const dummyfs_object_t *dir, const char *name, const size_t len, 
 		*resId = o->id;
 		if (mode) {
 			*mode = o->mode;
-			if (OBJ_IS_MOUNT(o))
-				*mode |= S_IFMNT;
-			else if (OBJ_IS_MNTPOINT(o) && len == strlen("..") && !strncmp(name, "..", len)) {
-				*resId = DUMMYFS_FAKE_MOUNT_ID;
-				*mode |= S_IFMNT;
+
+			if (OBJ_IS_MOUNT(o)) {
+				*mode = S_IFMNT | (o->mode & ~S_IFMT);
+			}
+			else if (OBJ_IS_MNTPOINT((dummyfs_object_t *)dir) && len == 2 && !strncmp(name, "..", len)) {
+				*mode = S_IFMNT | (dir->mode & ~S_IFMT);
+				*resId = dir->id;
 			}
 		}
 	}

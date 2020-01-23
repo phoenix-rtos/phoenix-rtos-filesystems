@@ -39,6 +39,15 @@
 #include "inode.h"
 #include "object.h"
 
+#define TRACE(msg, ...)
+/*
+#define TRACE(msg, ...) do { \
+	char buf[128]; \
+	sprintf(buf, __FILE__ ":%d - " msg "\n", __LINE__, ##__VA_ARGS__ ); \
+	debug(buf); \
+} while (0)
+*/
+
 
 static int ext2_destroy(ext2_fs_info_t *f, id_t *id);
 static int ext2_link(ext2_fs_info_t *f, id_t *dirId, const char *name, const size_t len, id_t *id);
@@ -67,11 +76,17 @@ static int ext2_lookup(ext2_fs_info_t *f, id_t *id, const char *name, const size
 		if (o->id != d->id)
 			mutexLock(o->lock);
 		*mode = o->inode->mode;
-		if (object_checkFlag(o, EXT2_FL_MOUNT | EXT2_FL_MOUNTPOINT)) {
-			*mode |= S_IFMNT;
+		if (object_checkFlag(o, EXT2_FL_MOUNT)) {
+			*mode = S_IFMNT | (o->inode->mode & ~S_IFMT);
 		}
+		else if (object_checkFlag(d, EXT2_FL_MOUNTPOINT) && len == strlen("..") && !strncmp(name, "..", len)) {
+			*resId = d->id;
+			*mode = S_IFMNT | (d->inode->mode & ~S_IFMT);
+		}
+
 		if (o->id != d->id)
 			mutexUnlock(o->lock);
+		object_put(o);
 	}
 	mutexUnlock(d->lock);
 
@@ -118,8 +133,8 @@ static int ext2_setattr(ext2_fs_info_t *f, id_t *id, int type, const void *data,
 			object_put(o);
 			return res;
 		case atMountPoint:
-		//	object_setFlag(o, EXT2_FL_MOUNTPOINT);
-			memcpy(&o->f->parent, data, sizeof(oid_t));
+			object_setFlag(o, EXT2_FL_MOUNTPOINT);
+			memcpy(&o->mnt, data, sizeof(oid_t));
 			break;
 	}
 
@@ -165,10 +180,8 @@ static int ext2_getattr(ext2_fs_info_t *f, id_t *id, int type, void *attr, size_
 			ret = sizeof(struct stat);
 			break;
 		case atMount:
-			*(oid_t *)attr = o->mnt;
-			break;
 		case atMountPoint:
-			*(oid_t *)attr = o->f->parent;
+			*(oid_t *)attr = o->mnt;
 			break;
 		case atSize:
 			*(int *)attr = o->inode->size;
@@ -214,7 +227,7 @@ static int ext2_create(ext2_fs_info_t *f, id_t *dirId, const char *name, const s
 		return ret;
 	}
 	object_put(o);
-
+	TRACE("ino %llu ref %u", o->id, o->refs);
 	return EOK;
 }
 
@@ -303,6 +316,7 @@ static int ext2_link(ext2_fs_info_t *f, id_t *dirId, const char *name, const siz
 		mutexUnlock(o->lock);
 		object_put(o);
 		object_put(d);
+		TRACE("ino %llu ref %u", o->id, o->refs);
 		return res;
 	}
 
@@ -349,6 +363,7 @@ static int ext2_unlink(ext2_fs_info_t *f, id_t *dirId, const char *name, const s
 	if (dir_remove(d, name, len) != EOK) {
 		mutexUnlock(d->lock);
 		object_put(o);
+		object_put(d);
 		return -ENOENT;
 	}
 
@@ -413,8 +428,8 @@ int ext2_readdir(ext2_object_t *d, off_t offs, struct dirent *dent, size_t size)
 		dent->d_type = dentry->file_type == EXT2_FT_DIR ? 0 : 1;
 		memcpy(&(dent->d_name[0]), dentry->name, dentry->name_len);
 
-		if (S_ISMNT(d->inode->mode) && d->id == 2 && !strcmp(dent->d_name, ".."))
-			dent->d_ino = d->f->parent.id;
+		if (object_checkFlag(d, EXT2_FL_MOUNTPOINT) && !strcmp(dent->d_name, ".."))
+			dent->d_ino = d->mnt.id;
 		ret = dent->d_reclen;
 		break;
 	}
@@ -427,10 +442,11 @@ int ext2_readdir(ext2_object_t *d, off_t offs, struct dirent *dent, size_t size)
 
 static int ext2_open(ext2_fs_info_t *f, id_t *id)
 {
-	ext2_object_t *o =object_get(f, id);
+	ext2_object_t *o = object_get(f, id);
 	if (o != NULL) {
+		TRACE("ino %llu ref %u", o->id, o->refs);
 		o->inode->atime = time(NULL);
-		return -EOK;
+		return EOK;
 	}
 	return -EINVAL;
 }
@@ -448,7 +464,7 @@ static int ext2_close(ext2_fs_info_t *f, id_t *id)
 	mutexUnlock(o->lock);
 	object_put(o);
 	object_put(o);
-
+	TRACE("ino %llu ref %u", o->id, o->refs);
 	return EOK;
 }
 
@@ -467,8 +483,10 @@ int libext2_handler(void *data, msg_t *msg)
 					msg->o.lookup.mode = msg->i.lookup.mode;
 			}
 
-			if (!err)
-				ext2_open(f, &msg->object);
+			if (!err) {
+				TRACE("lookup open %llu", msg->o.lookup.id);
+				ext2_open(f, &msg->o.lookup.id);
+			}
 			break;
 
 		case mtRead:
@@ -496,11 +514,13 @@ int libext2_handler(void *data, msg_t *msg)
 			break;
 
 		case mtOpen:
+			TRACE("direct open %llu",msg->object);
 			err = ext2_open(f, &msg->object);
 			msg->o.open = msg->object;
 			break;
 
 		case mtClose:
+			TRACE("direct close %llu", msg->object);
 			err = ext2_close(f, &msg->object);
 			break;
 	}

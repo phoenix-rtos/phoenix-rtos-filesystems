@@ -241,7 +241,6 @@ typedef struct {
 
 struct _ext2_fs_info {
 	id_t				devId;
-	oid_t				parent;
 	ext2_group_desc_t 	*gdt;
 	ext2_object_t    	*root;
 	ext2_superblock_t 	*sb;

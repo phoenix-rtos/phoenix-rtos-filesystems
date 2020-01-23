@@ -228,9 +228,12 @@ void object_sync(ext2_object_t *o)
 
 void object_put(ext2_object_t *o)
 {
+	char buf[64];
 	mutexLock(o->f->objects->ulock);
-	if (o != NULL && !o->refs)
-		debug("ext2: OBJECT REF UNDERFLOW\n");
+	if (o != NULL && !o->refs) {
+		sprintf(buf, "ext2: REF UNDERFLOW %lld\n", o->id);
+		debug(buf);
+	}
 
 	if (o != NULL && o->refs)
 		o->refs--;

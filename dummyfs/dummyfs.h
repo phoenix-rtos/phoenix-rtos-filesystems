@@ -92,7 +92,6 @@ typedef struct _dummyfs_object {
 struct dummyfs_common {
 	int portfd;
 	id_t rootId;
-	oid_t parent;
 	handle_t mutex;
 #if  DUMMYFS_SIZE_CHECK == 1
 	size_t size;
