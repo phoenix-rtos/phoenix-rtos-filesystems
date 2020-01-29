@@ -14,8 +14,8 @@
 #ifndef _METERFS_SPI_H_
 #define _METERFS_SPI_H_
 
+#include <stm32-multi.h>
 
-#include "../../phoenix-rtos-devices/multi/stm32-multi/stm32-multi.h"
 
 
 enum { cmd_wrsr = 0x01, cmd_write, cmd_read, cmd_wrdi, cmd_rdsr, cmd_wren, cmd_hsread = 0x0b, cmd_sector_erase = 0x20,
