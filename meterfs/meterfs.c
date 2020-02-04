@@ -28,7 +28,7 @@
 #include "files.h"
 #include "node.h"
 
-#define TOTAL_SIZE(f)           (((f)->filesz * ((f)->recordsz + sizeof(entry_t))) / (f)->recordsz)
+#define TOTAL_SIZE(f)           ((((f)->filesz / (f)->recordsz) * ((f)->recordsz + sizeof(entry_t))) / (f)->recordsz)
 #define SECTORS(f, sectorsz)    (((TOTAL_SIZE(f) + sectorsz - 1) / sectorsz) + 1)
 
 
@@ -206,6 +206,9 @@ int meterfs_updateFileInfo(fileheader_t *f)
 
 	/* Check if file exist */
 	if (meterfs_getFileInfoName(f->name, &u.t) < 0)
+		return -EINVAL;
+
+	if (!f->recordsz)
 		return -EINVAL;
 
 	/* File can not exceed prealocated sector count */
@@ -515,7 +518,7 @@ int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size
 	if (meterfs_getFileInfoName(name, &hdr) >= 0)
 		return -EEXIST;
 
-	if (recordsz > filesz)
+	if (recordsz > filesz || !recordsz)
 		return -EINVAL;
 
 	strncpy(hdr.name, name, sizeof(hdr.name));
@@ -592,6 +595,9 @@ int meterfs_resizeFile(const char *name, size_t filesz, size_t recordsz)
 
 	if (!hdr.sector || !hdr.sectorcnt)
 		return -EFAULT;
+
+	if (!recordsz)
+		return -EINVAL;
 
 	hdr.filesz = filesz;
 	hdr.recordsz = recordsz;
