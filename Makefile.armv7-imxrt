@@ -7,5 +7,5 @@
 #
 
 include dummyfs/Makefile
-include meterfs/Makefile
-include meterfs/test/Makefile
+#include meterfs/Makefile
+#include meterfs/test/Makefile
