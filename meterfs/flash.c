@@ -21,10 +21,11 @@
 
 
 void (*flash_write)(unsigned int, void *, size_t);
+static int flash_needEWSR;
 
 
 static const unsigned char chips[][3] = { { 0xbf, 0x25, 0x41 }, { 0x1f, 0x47, 0x01 },
-	{ 0xc2, 0x20, 0x16 }, { 0xef, 0x40, 0x15 } };
+	{ 0xc2, 0x20, 0x16 }, { 0xef, 0x40, 0x15 }, { 0x1c, 0x70, 0x15 } };
 
 
 void _flash_waitBusy(void)
@@ -49,7 +50,8 @@ void flash_removeWP(void)
 	unsigned char t = 0;
 
 	spi_write(cmd_wren, 0, spi_cmd, NULL, 0);
-	spi_write(cmd_ewsr, 0, spi_cmd, NULL, 0);
+	if (flash_needEWSR)
+		spi_write(cmd_ewsr, 0, spi_cmd, NULL, 0);
 	spi_write(cmd_wrsr, 0, spi_cmd, &t, 1);
 	_flash_waitBusy();
 }
@@ -148,6 +150,8 @@ void flash_detect(size_t *flashsz, size_t *sectorsz)
 	spi_read(cmd_jedecid, 0, spi_cmd, jedec, 3);
 	spi_powerCtrl(0);
 
+	flash_needEWSR = 0;
+
 	printf("meterfs: JEDEC ID 0x%02x 0x%02x 0x%02x\n", jedec[0], jedec[1], jedec[2]);
 
 	if (memcmp(jedec, chips[0], 3) == 0) {
@@ -155,6 +159,7 @@ void flash_detect(size_t *flashsz, size_t *sectorsz)
 		flash_write = flash_writeAAI;
 		(*flashsz) = 2 * 1024 * 1024;
 		(*sectorsz) = 4 * 1024;
+		flash_needEWSR = 1;
 	}
 	else if (memcmp(jedec, chips[1], 3) == 0) {
 		printf("meterfs: Detected AT25DF321A\n");
@@ -170,6 +175,12 @@ void flash_detect(size_t *flashsz, size_t *sectorsz)
 	}
 	else if (memcmp(jedec, chips[3], 3) == 0) {
 		printf("meterfs: Detected W25Q16JV\n");
+		flash_write = flash_writePage;
+		(*flashsz) = 2 * 1024 * 1024;
+		(*sectorsz) = 4 * 1024;
+	}
+	else if (memcmp(jedec, chips[4], 3) == 0) {
+		printf("meterfs: Detected EN25HQ16\n");
 		flash_write = flash_writePage;
 		(*flashsz) = 2 * 1024 * 1024;
 		(*sectorsz) = 4 * 1024;
