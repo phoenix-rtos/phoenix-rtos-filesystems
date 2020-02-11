@@ -130,11 +130,12 @@ static int ext2_setattr(ext2_fs_info_t *f, id_t *id, int type, const void *data,
 			object_setFlag(o, EXT2_FL_MOUNT);
 			memcpy(&o->mnt, data, sizeof(oid_t));
 			mutexUnlock(o->lock);
-			object_put(o);
 			return res;
 		case atMountPoint:
 			object_setFlag(o, EXT2_FL_MOUNTPOINT);
 			memcpy(&o->mnt, data, sizeof(oid_t));
+			o->refs++;
+			object_get(f, id);
 			break;
 	}
 
@@ -350,14 +351,19 @@ static int ext2_unlink(ext2_fs_info_t *f, id_t *dirId, const char *name, const s
 		return -ENOENT;
 	}
 
-	mutexUnlock(d->lock);
-
 	o = object_get(f, &id);
 
 	if (o == NULL) {
 		dir_remove(d, name, len);
 		object_put(d);
 		return -ENOENT;
+	}
+
+	if (object_checkFlag(o, EXT2_FL_MOUNTPOINT | EXT2_FL_MOUNT)) {
+		mutexUnlock(d->lock);
+		object_put(o);
+		object_put(d);
+		return -EBUSY;
 	}
 
 	if (dir_remove(d, name, len) != EOK) {
@@ -367,20 +373,23 @@ static int ext2_unlink(ext2_fs_info_t *f, id_t *dirId, const char *name, const s
 		return -ENOENT;
 	}
 
+	mutexUnlock(d->lock);
+
+	mutexLock(o->lock);
 	o->inode->nlink--;
 	if (o->inode->mode & S_IFDIR) {
+		/* TODO: check if empty? */
 		d->inode->nlink--;
 		o->inode->nlink--;
-		ext2_destroy(f, &id);
+		object_put(o);
 		object_put(d);
 		return EOK;
 	}
 
-	if (!o->inode->nlink)
-		ext2_destroy(f, &id);
-	else
-		o->inode->mtime = o->inode->atime = time(NULL);
+	o->inode->mtime = o->inode->atime = time(NULL);
+	mutexUnlock(o->lock);
 
+	object_put(o);
 	object_put(d);
 	return EOK;
 }

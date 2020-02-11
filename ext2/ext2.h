@@ -175,7 +175,7 @@ typedef struct {
 typedef struct _ext2_fs_info ext2_fs_info_t;
 
 
-typedef struct {
+typedef struct ext2_object{
 	id_t id;
 
 	uint32_t refs;
@@ -186,6 +186,8 @@ typedef struct {
 
 	ext2_inode_t *inode;
 	ext2_fs_info_t *f;
+	struct ext2_object *next;
+	struct ext2_object *prev;
 	union {
 		ext2_block_t ind[3];
 		oid_t mnt;
@@ -233,10 +235,9 @@ typedef struct {
 
 typedef struct {
 		handle_t 		ulock;
-		handle_t 		clock;
 		rbtree_t 		used;
 		uint32_t		used_cnt;
-		ext2_object_t 	*cache[EXT2_CACHE_SIZE];
+		ext2_object_t 	*lru;
 } ext2_fs_objects_t;
 
 struct _ext2_fs_info {

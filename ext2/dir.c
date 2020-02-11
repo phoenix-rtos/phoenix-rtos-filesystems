@@ -161,9 +161,13 @@ int dir_remove(ext2_object_t *d, const char *name, size_t len)
 				free(data);
 				return EOK;
 			}
-			/* we need a hole*/
-			dentry->rec_len = d->f->block_size;
-			dentry->name_len = 0;
+			/* copy contents from last block and truncate */
+			/* NOTE: not tested extensively */
+			read_block(d->f, get_block_no(d, d->inode->size / d->f->block_size), data);
+			write_block(d->f, get_block_no(d, (offs & ~(d->f->block_size - 1)) / d->f->block_size), data);
+			ext2_truncate(d->f, &d->id, d->inode->size - d->f->block_size);
+			free(data);
+			return EOK;
 		} else {
 			/* move next dentry to the start of the block */
 			dtemp = data + dentry->rec_len;
