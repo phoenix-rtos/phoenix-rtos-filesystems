@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <sys/msg.h>
 #include <sys/list.h>
 #include <sys/file.h>
@@ -44,147 +45,78 @@ inline int jffs2_is_device(jffs2_partition_t *p, oid_t *oid)
 }
 
 
-struct inode *jffs2_srv_get(jffs2_partition_t *p, oid_t *oid)
+static int jffs2_srv_lookup(jffs2_partition_t *p, id_t *id, const char *name, const size_t len, id_t *resId, mode_t *mode)
 {
-	jffs2_dev_t *dev;
-
-	if (jffs2_is_device(p, oid)) {
-		dev = dev_find_oid(p->devs, oid, 0, 0);
-		return jffs2_iget(p->sb, dev->ino);
-	}
-
-	return jffs2_iget(p->sb, oid->id);
-}
-
-
-static int jffs2_srv_lookup(jffs2_partition_t *p, oid_t *dir, const char *name, oid_t *res, oid_t *dev, char *lnk, int lnksz)
-{
-	struct dentry *dentry, *dtemp;
+	struct dentry *dentry, *dtemp = NULL;
 	struct inode *inode = NULL;
-	int len = 0;
-	char *end;
+	int ret = EOK;
 
-	if (dir->id == 0)
-		dir->id = 1;
-
-	if (jffs2_is_device(p, dir)) {
-		TRACE("is device");
+	if (!id || *id < 1)
 		return -EINVAL;
-	}
 
-	res->id = 0;
+	inode = jffs2_iget(p->sb, (unsigned long)*id);
 
-	inode = jffs2_iget(p->sb, dir->id);
-
-	if (IS_ERR(inode)) {
-		TRACE("inode is_err");
-		return -EINVAL;
-	}
+	if (IS_ERR(inode))
+		return PTR_ERR(inode);
 
 	if (!S_ISDIR(inode->i_mode)) {
 		iput(inode);
-		TRACE("notdir");
 		return -ENOTDIR;
 	}
 
 	dentry = malloc(sizeof(struct dentry));
-	res->port = p->port;
 
-	while (name[len] != '\0') {
-		while (name[len] == '/') {
-			len++;
-			continue;
-		}
-		/* check again for path ending */
-		if (name[len] == '\0')
-			break;
+	dentry->d_name.name = calloc(1, len + 1);
+	if (!dentry->d_name.name) {
+		free(dentry);
+		iput(inode);
+		return -ENOMEM;
+	}
 
-		dentry->d_name.name = strdup(name + len);
+	memcpy(dentry->d_name.name, name, len);
+	dentry->d_name.len = len;
 
-		end = strchr(dentry->d_name.name, '/');
-		if (end != NULL)
-			*end = 0;
-
-		if (!strcmp(dentry->d_name.name, ".")) {
-			res->id = inode->i_ino;
-			len++;
-			free(dentry->d_name.name);
-			dentry->d_name.len = 0;
-			continue;
-		} else if (!strcmp(dentry->d_name.name, "..")) {
-			res->id = JFFS2_INODE_INFO(inode)->inocache->pino_nlink;
-			len += 2;
-			free(dentry->d_name.name);
-			dentry->d_name.len = 0;
-			iput(inode);
-			inode = jffs2_iget(p->sb, res->id);
-			continue;
-		}
-
-		dentry->d_name.len = strlen(dentry->d_name.name);
-
-		if (S_ISDIR(inode->i_mode)) {
-			if (dev_find_ino(p->devs, inode->i_ino) == NULL) {
-				inode_lock_shared(inode);
-				dtemp = inode->i_op->lookup(inode, dentry, 0);
-				inode_unlock_shared(inode);
-			} else {
-				res->id = inode->i_ino;
-				res->port = p->port;
-				free(dentry->d_name.name);
-				len--;
-				break;
-			}
-		} else if (S_ISLNK(inode->i_mode)) {
-			res->id = inode->i_ino;
-			res->port = p->port;
-			free(dentry->d_name.name);
-			break;
+	if (!strcmp(dentry->d_name.name, ".")) {
+		*resId = inode->i_ino;
+	}
+	else if (!strcmp(dentry->d_name.name, "..")) {
+		if (S_ISMNT(inode->i_mode)) {
+			*resId = inode->i_ino;
 		} else {
-			free(dentry->d_name.name);
-			free(dentry);
-			iput(inode);
-			return -ENOTDIR;
+			*resId = JFFS2_INODE_INFO(inode)->inocache->pino_nlink;
+			dentry->d_inode = jffs2_iget(p->sb, (unsigned long)*resId);
+			dtemp = dentry;
 		}
+	}
+	else {
+		inode_lock_shared(inode);
+		dtemp = inode->i_op->lookup(inode, dentry, 0);
 
-		if (dtemp == NULL || PTR_ERR(dtemp) == -ENAMETOOLONG) {
-			free(dentry->d_name.name);
-			free(dentry);
-			iput(inode);
-			return dtemp ? -ENAMETOOLONG : -ENOENT;
-		} else
-			res->id = dtemp->d_inode->i_ino;
+		if (dtemp == NULL)
+			ret = -ENOENT;
+		else if (IS_ERR(dtemp))
+			ret = -PTR_ERR(dtemp);
+		else
+			*resId = dtemp->d_inode->i_ino;
+		inode_unlock_shared(inode);
+	}
 
-		len += dentry->d_name.len;
-		free(dentry->d_name.name);
-		dentry->d_name.len = 0;
-
+	if (dtemp) {
 		iput(inode);
 		inode = d_inode(dtemp);
 	}
 
-	if (dev_find_ino(p->devs, res->id) != NULL)
-		memcpy(dev, &(dev_find_ino(p->devs, res->id)->dev), sizeof(oid_t));
-	else
-		memcpy(dev, res, sizeof(oid_t));
+	*mode = inode->i_mode;
 
-	if (lnk != NULL && S_ISLNK(inode->i_mode)) {
-		if (strlen(inode->i_link) < lnksz)
-			lnksz = strlen(inode->i_link);
-		strncpy(lnk, inode->i_link, lnksz);
-	}
-
+	free(dentry->d_name.name);
 	free(dentry);
 	iput(inode);
 
-	if (res->port == p->port && !res->id)
-		return -ENOENT;
-
-	return len;
+	return ret;
 }
 
 
-static int jffs2_srv_setattr(jffs2_partition_t *p, oid_t *oid, int type, int attr, void *data, ssize_t size)
+static int jffs2_srv_setattr(jffs2_partition_t *p, id_t *id, int type, void *data, size_t size)
 {
 	struct iattr iattr;
 	struct inode *inode;
@@ -192,53 +124,58 @@ static int jffs2_srv_setattr(jffs2_partition_t *p, oid_t *oid, int type, int att
 	int ret;
 	struct jffs2_sb_info *c = JFFS2_SB_INFO(p->sb);
 
-	if (!oid->id)
+	if (!id)
 		return -EINVAL;
 
 	if (type != atDev && jffs2_is_readonly(c))
 		return -EROFS;
 
-	inode = jffs2_iget(p->sb, oid->id);
+
+
+	inode = jffs2_iget(p->sb, (unsigned long)*id);
 	if (IS_ERR(inode))
 		return -ENOENT;
 
 	inode_lock(inode);
 	switch (type) {
 
-		case (atMode): /* mode */
+		case atMode: /* mode */
 			iattr.ia_valid = ATTR_MODE;
-			iattr.ia_mode = (inode->i_mode & ~0xffff) | (attr & 0xffff);
+			iattr.ia_mode = (inode->i_mode & ~0xffff) | (*(int *)data & 0xffff);
 			break;
 
-		case (atUid): /* uid */
+		case atUid: /* uid */
 			iattr.ia_valid = ATTR_UID;
-			iattr.ia_uid.val = attr;
+			iattr.ia_uid.val = *(int *)data;
 			break;
 
-		case (atGid): /* gid */
+		case atGid: /* gid */
 			iattr.ia_valid = ATTR_GID;
-			iattr.ia_gid.val = attr;
+			iattr.ia_gid.val = *(int *)data;
 			break;
 
-		case (atSize): /* size */
+		case atSize: /* size */
 			iattr.ia_valid = ATTR_SIZE;
-			iattr.ia_size = attr;
+			iattr.ia_size = *(size_t *)data;
 			break;
 
-		case (atPort): /* port */
-			inode->i_rdev = attr;
-			break;
+		case atMount:
+		case atMountPoint:
+			if (S_ISDIR(inode->i_mode)) {
+				inode->i_mnt = *(oid_t *)data;
+				inode->i_mode = (inode->i_mode & S_IFMT) | S_IFMNT;
+				ihold(inode);
+			}
+			else {
+				ret = -EINVAL;
+			}
 
-		case (atDev):
-			if (data != NULL && size == sizeof(oid_t))
-				dev_find_oid(p->devs, data, inode->i_ino, 1);
 			inode_unlock(inode);
 			iput(inode);
-			return 0;
+			return ret;
 	}
 
 	d_instantiate(&dentry, inode);
-
 
 	ret = inode->i_op->setattr(&dentry, &iattr);
 	inode_unlock(inode);
@@ -248,101 +185,88 @@ static int jffs2_srv_setattr(jffs2_partition_t *p, oid_t *oid, int type, int att
 }
 
 
-static int jffs2_srv_getattr(jffs2_partition_t *p, oid_t *oid, int type, int *attr)
+static int jffs2_srv_getattr(jffs2_partition_t *p, id_t *id, int type, void *data, size_t size)
 {
 	struct inode *inode;
+	struct stat *stat;
+	int ret;
 
-	if (!oid->id)
+	if (!id)
 		return -EINVAL;
 
-	if (attr == NULL)
+	if (data == NULL)
 		return -EINVAL;
 
-	inode = jffs2_iget(p->sb, oid->id);
+	inode = jffs2_iget(p->sb, (unsigned long)*id);
 
 	if (IS_ERR(inode))
 		return -ENOENT;
 
+	ret = sizeof(int);
 	inode_lock_shared(inode);
 	switch (type) {
 
-		case (atMode): /* mode */
-			*attr = inode->i_mode;
+		case atMode: /* mode */
+			*(int *)data = inode->i_mode;
 			break;
 
-		case (atUid): /* uid */
-			*attr = inode->i_uid.val;
+		case atStatStruct:
+			stat = (struct stat *)data;
+			//stat->st_dev = o->port;
+			stat->st_ino = inode->i_ino;
+			stat->st_mode = inode->i_mode;
+			stat->st_nlink = inode->i_nlink;
+			stat->st_uid = inode->i_uid.val;
+			stat->st_gid = inode->i_gid.val;
+			stat->st_size = inode->i_size;
+			stat->st_atime = I_SEC(inode->i_atime);
+			stat->st_mtime = I_SEC(inode->i_mtime);
+			stat->st_ctime = I_SEC(inode->i_ctime);
+			ret = sizeof(struct stat);
 			break;
 
-		case (atGid): /* gid */
-			*attr = inode->i_gid.val;
+		case atSize: /* size */
+			*(size_t *)data = inode->i_size;
 			break;
 
-		case (atSize): /* size */
-			*attr = inode->i_size;
-			break;
-
-		case (atType): /* type */
-			if (S_ISDIR(inode->i_mode))
-				*attr = otDir;
-			else if (S_ISREG(inode->i_mode))
-				*attr = otFile;
-			else if (S_ISCHR(inode->i_mode))
-				*attr = otDev;
-			else
-				*attr = otUnknown;
-			break;
-
-		case (atCTime):
-			*attr = inode->i_ctime.tv_sec;
-			break;
-
-		case (atMTime):
-			*attr = inode->i_mtime.tv_sec;
-			break;
-
-		case (atATime):
-			*attr = inode->i_atime.tv_sec;
-			break;
-
-		case (atLinks):
-			*attr = inode->i_nlink;
-			break;
-		case (atPollStatus):
+		case atEvents:
 			// trivial implementation: assume read/write is always possible
-			*attr = POLLIN|POLLRDNORM|POLLOUT|POLLWRNORM;
+			*(int *)data = POLLIN | POLLOUT;
+			break;
+		case atMount:
+		case atMountPoint:
+			*(oid_t *)data = inode->i_mnt;
+			ret = sizeof(oid_t);
 			break;
 	}
 
 	inode_unlock_shared(inode);
 	iput(inode);
 
-	return EOK;
+	return ret;
 }
 
 
-static int jffs2_srv_link(jffs2_partition_t *p, oid_t *dir, const char *name, oid_t *oid)
+static int jffs2_srv_link(jffs2_partition_t *p, id_t *dirId, const char *name, size_t len, id_t *id)
 {
 	struct inode *idir, *inode, *ivictim = NULL;
 	struct jffs2_inode_info *victim_f = NULL;
 	struct dentry *old, *new;
-	oid_t toid, t;
+	id_t rid;
 	int ret;
+	mode_t mode;
 	struct jffs2_sb_info *c = JFFS2_SB_INFO(p->sb);
 
 	if (jffs2_is_readonly(c))
 		return -EROFS;
 
-	if (!dir->id || !oid->id)
+	if (!dirId || !id)
 		return -EINVAL;
 
-	if (name == NULL || !strlen(name))
+	if (name == NULL || !len)
 		return -EINVAL;
 
-	if (jffs2_is_device(p, dir))
-		return -EINVAL;
-
-	idir = jffs2_iget(p->sb, dir->id);
+	idir = jffs2_iget(p->sb, *dirId);
 
 	if (IS_ERR(idir))
 		return -ENOENT;
@@ -352,17 +276,17 @@ static int jffs2_srv_link(jffs2_partition_t *p, oid_t *dir, const char *name, oi
 		return -EINVAL;
 	}
 
-	if (jffs2_srv_lookup(p, dir, name, &t, &toid, NULL, 0) > 0) {
-		ivictim = jffs2_srv_get(p, &toid);
+	if (jffs2_srv_lookup(p, dirId, name, len, &rid, &mode) == EOK) {
+		ivictim = jffs2_iget(p->sb, (unsigned long)rid);
 
-		if (S_ISDIR(ivictim->i_mode) || (toid.id == oid->id)) {
+		if (ivictim && (S_ISDIR(ivictim->i_mode) || S_ISMNT(ivictim->i_mode) || (rid == *id))) {
 			iput(ivictim);
 			iput(idir);
 			return -EEXIST;
 		}
 	}
 
-	inode = jffs2_srv_get(p, oid);
+	inode = jffs2_iget(p->sb, (unsigned long)*id);
 
 	if (IS_ERR(inode)) {
 		iput(idir);
@@ -381,8 +305,8 @@ static int jffs2_srv_link(jffs2_partition_t *p, oid_t *dir, const char *name, oi
 	ret = idir->i_op->link(old, idir, new);
 	inode_unlock(idir);
 
-	if (ret && S_ISCHR(inode->i_mode))
-		dev_inc(p->devs, oid);
+//	if (ret && S_ISCHR(inode->i_mode))
+//		dev_inc(p->devs, oid);
 
 	iput(idir);
 	iput(inode);
@@ -394,8 +318,8 @@ static int jffs2_srv_link(jffs2_partition_t *p, oid_t *dir, const char *name, oi
 			victim_f->inocache->pino_nlink--;
 		mutex_unlock(&victim_f->sem);
 		drop_nlink(ivictim);
-		iput(ivictim);
 	}
+	iput(ivictim);
 
 	free(old);
 	free(new->d_name.name);
@@ -405,34 +329,35 @@ static int jffs2_srv_link(jffs2_partition_t *p, oid_t *dir, const char *name, oi
 }
 
 
-static int jffs2_srv_unlink(jffs2_partition_t *p, oid_t *dir, const char *name)
+static int jffs2_srv_unlink(jffs2_partition_t *p, id_t *id, const char *name, const size_t len)
 {
 	struct inode *idir, *inode;
 	struct dentry *dentry;
-	oid_t oid, t;
+	id_t rid;
+	mode_t mode;
 	int ret;
 	struct jffs2_sb_info *c = JFFS2_SB_INFO(p->sb);
 
 	if (jffs2_is_readonly(c))
 		return -EROFS;
 
-	if (!dir->id)
+	if (!id)
 		return -EINVAL;
 
-	if (name == NULL || !strlen(name))
+	if (name == NULL || !len)
 		return -EINVAL;
 
-	idir = jffs2_iget(p->sb, dir->id);
+	idir = jffs2_iget(p->sb, *id);
 
 	if (IS_ERR(idir))
 		return -ENOENT;
 
-	if (jffs2_srv_lookup(p, dir, name, &t, &oid, NULL, 0) <= 0) {
+	if (jffs2_srv_lookup(p, id, name, len, &rid, &mode) != EOK) {
 		iput(idir);
 		return -ENOENT;
 	}
 
-	inode = jffs2_srv_get(p, &oid);
+	inode =  jffs2_iget(p->sb, (unsigned long)*id);
 
 	if (IS_ERR(inode)) {
 		iput(idir);
@@ -458,8 +383,8 @@ static int jffs2_srv_unlink(jffs2_partition_t *p, oid_t *dir, const char *name)
 	else
 		ret = idir->i_op->unlink(idir, dentry);
 
-	if (!ret && S_ISCHR(inode->i_mode))
-		dev_dec(p->devs, &oid);
+//	if (!ret && S_ISCHR(inode->i_mode))
+//		dev_dec(p->devs, &oid);
 	inode_unlock(idir);
 
 	iput(idir);
@@ -472,7 +397,7 @@ static int jffs2_srv_unlink(jffs2_partition_t *p, oid_t *dir, const char *name)
 }
 
 
-static int jffs2_srv_create(jffs2_partition_t *p, oid_t *dir, const char *name, size_t namelen, oid_t *oid, int type, int mode, oid_t *dev)
+static int jffs2_srv_create(jffs2_partition_t *p, id_t *dirId, const char *name, const size_t len, id_t *resId, int mode, oid_t *dev)
 {
 	struct inode *idir, *inode;
 	struct dentry *dentry, *dtemp;
@@ -482,13 +407,10 @@ static int jffs2_srv_create(jffs2_partition_t *p, oid_t *dir, const char *name, 
 	if (jffs2_is_readonly(c))
 		return -EROFS;
 
-	if (name == NULL || !strlen(name))
+	if (name == NULL || !len)
 		return -EINVAL;
 
-	if (jffs2_is_device(p, dir))
-		return -EEXIST;
-
-	idir = jffs2_iget(p->sb, dir->id);
+	idir = jffs2_iget(p->sb, *dirId);
 
 	if (IS_ERR(idir))
 		return -ENOENT;
@@ -498,7 +420,7 @@ static int jffs2_srv_create(jffs2_partition_t *p, oid_t *dir, const char *name, 
 		return -ENOTDIR;
 	}
 
-	if (!strcmp(".", name) || !strcmp("..", name)) {
+	if (((len == 1) && !strncmp(".", name, len)) || (len == 2 && !strncmp("..", name, len))) {
 		iput(idir);
 		return -EEXIST;
 	}
@@ -525,30 +447,24 @@ static int jffs2_srv_create(jffs2_partition_t *p, oid_t *dir, const char *name, 
 		return ret;
 	}
 
-	oid->port = p->port;
-
-	switch (type) {
-		case otFile:
-			mode = S_IFREG | S_IRWXU | S_IRWXG | S_IRWXO;
+	switch (mode & S_IFMT) {
+		case S_IFREG:
 			ret = idir->i_op->create(idir, dentry, mode, 0);
 			break;
-		case otDir:
-			mode = S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO;
+		case S_IFDIR:
 			ret = idir->i_op->mkdir(idir, dentry, mode);
 			break;
-		case otDev:
-			mode = S_IFCHR | S_IRWXU | S_IRWXG | S_IRWXO;
+		case S_IFCHR:
 			ret = idir->i_op->mknod(idir, dentry, mode, dev->port);
-			if (!ret)
-				dev_find_oid(p->devs, dev, d_inode(dentry)->i_ino, 1);
+		//	if (!ret)
+		//		dev_find_oid(p->devs, dev, d_inode(dentry)->i_ino, 1);
 			break;
-		case otSymlink:
+		case S_IFLNK:
 			/* empty target check */
-			if (dentry->d_name.len >= (namelen - 1) || !strlen(name + dentry->d_name.len + 1)) {
+			if (dentry->d_name.len >= (len - 1) || !strlen(name + dentry->d_name.len + 1)) {
 				ret = -ENOENT;
 				break;
 			}
-			mode = S_IFLNK | S_IRWXU | S_IRWXG | S_IRWXO;
 			ret = idir->i_op->symlink(idir, dentry, name + dentry->d_name.len + 1);
 			break;
 		default:
@@ -559,7 +475,7 @@ static int jffs2_srv_create(jffs2_partition_t *p, oid_t *dir, const char *name, 
 	iput(idir);
 
 	if (!ret) {
-		oid->id = d_inode(dentry)->i_ino;
+		*resId = d_inode(dentry)->i_ino;
 		iput(d_inode(dentry));
 	}
 
@@ -569,22 +485,16 @@ static int jffs2_srv_create(jffs2_partition_t *p, oid_t *dir, const char *name, 
 }
 
 
-static int jffs2_srv_destroy(oid_t *oid)
-{
-	return 0;
-}
-
-
-static int jffs2_srv_readdir(jffs2_partition_t *p, oid_t *dir, offs_t offs, struct dirent *dent, unsigned int size)
+static int jffs2_srv_readdir(jffs2_partition_t *p, id_t *id, offs_t offs, struct dirent *dent, unsigned int size)
 {
 	struct inode *inode;
 	struct file file;
 	struct dir_context ctx = {dir_print, offs, dent, -1};
 
-	if (!dir->id)
+	if (!id)
 		return -EINVAL;
 
-	inode = jffs2_iget(p->sb, dir->id);
+	inode = jffs2_iget(p->sb, *id);
 
 	if (IS_ERR(inode))
 		return -EINVAL;
@@ -612,42 +522,50 @@ static int jffs2_srv_readdir(jffs2_partition_t *p, oid_t *dir, offs_t offs, stru
 }
 
 
-static int jffs2_srv_open(jffs2_partition_t *p, oid_t *oid)
+static int jffs2_srv_open(jffs2_partition_t *p, id_t *id)
 {
-	if (oid->id)
-		jffs2_iget(p->sb, oid->id);
+	struct inode *inode;
 
+	if (id)
+		inode = jffs2_iget(p->sb, (unsigned long)*id);
+
+	if (IS_ERR(inode))
+		return PTR_ERR(inode);
 	return EOK;
 }
 
 
-static int jffs2_srv_close(jffs2_partition_t *p, oid_t *oid)
+static int jffs2_srv_close(jffs2_partition_t *p, id_t *id)
 {
-	if(!oid->id)
+	struct inode *inode;
+
+	if(!id)
 		return -EINVAL;
 
-	struct inode *inode = ilookup(p->sb, oid->id);
+	inode = ilookup(p->sb, (unsigned long)*id);
 
 	if (inode != NULL) {
 		iput(inode);
 		iput(inode);
+		return EOK;
 	}
-
-	return EOK;
+	return -EINVAL;
 }
 
 
-static int jffs2_srv_read(jffs2_partition_t *p, oid_t *oid, offs_t offs, void *data, unsigned long len)
+static int jffs2_srv_read(jffs2_partition_t *p, id_t *id, offs_t offs, void *data, unsigned long len, int *err)
 {
 	struct inode *inode;
 	struct jffs2_inode_info *f;
 	struct jffs2_sb_info *c;
-	int ret;
+	int ret = 0;
 
-	if (!oid->id)
+	*err = EOK;
+
+	if (!id)
 		return -EINVAL;
 
-	inode = jffs2_iget(p->sb, oid->id);
+	inode = jffs2_iget(p->sb, (unsigned long)*id);
 
 	if (IS_ERR(inode))
 		return -EINVAL;
@@ -655,15 +573,17 @@ static int jffs2_srv_read(jffs2_partition_t *p, oid_t *oid, offs_t offs, void *d
 	inode_lock_shared(inode);
 
 	if(S_ISDIR(inode->i_mode)) {
-		inode_unlock_shared(inode);
-		iput(inode);
-		return -EISDIR;
-	} else if (S_ISCHR(inode->i_mode)) {
-		printf("jffs2: Used wrong oid to read from device\n");
-		inode_unlock_shared(inode);
-		iput(inode);
-		return -EINVAL;
-	} else if (S_ISLNK(inode->i_mode)) {
+		ret = jffs2_srv_readdir(p, id, offs, data, len);
+	}
+	else if (S_ISMNT(inode->i_mode)){
+		memcpy(data, &inode->i_mnt, sizeof(oid_t));
+		ret = sizeof(oid_t);
+	}
+	else if (S_ISCHR(inode->i_mode)) {
+		memcpy(data, &inode->i_dev, sizeof(oid_t));
+		ret = sizeof(oid_t);
+	}
+	else if (S_ISLNK(inode->i_mode)) {
 		ret = strlen(inode->i_link);
 
 		if (len < ret)
@@ -674,22 +594,29 @@ static int jffs2_srv_read(jffs2_partition_t *p, oid_t *oid, offs_t offs, void *d
 		iput(inode);
 		return ret;
 	}
+	else if (S_ISREG(inode->i_mode)) {
 
-	f = JFFS2_INODE_INFO(inode);
-	c = JFFS2_SB_INFO(inode->i_sb);
+		f = JFFS2_INODE_INFO(inode);
+		c = JFFS2_SB_INFO(inode->i_sb);
 
-	if (inode->i_size < offs) {
-		inode_unlock_shared(inode);
-		iput(inode);
-		return 0;
+		if (inode->i_size < offs) {
+			inode_unlock_shared(inode);
+			iput(inode);
+			return 0;
+		}
+
+		mutex_lock(&f->sem);
+		ret = jffs2_read_inode_range(c, f, data, offs, len);
+		mutex_unlock(&f->sem);
 	}
 
-	mutex_lock(&f->sem);
-	ret = jffs2_read_inode_range(c, f, data, offs, len);
-	mutex_unlock(&f->sem);
-
-	if (!ret)
+	if (!ret) {
 		ret = len > inode->i_size - offs ? inode->i_size - offs : len;
+	}
+	else if (ret < 0) {
+		*err = ret;
+		ret = 0;
+	}
 
 	inode_unlock_shared(inode);
 	iput(inode);
@@ -774,7 +701,7 @@ static int jffs2_srv_prepare_write(struct inode *inode, loff_t offs, unsigned lo
 	return 0;
 }
 
-static int jffs2_srv_write(jffs2_partition_t *p, oid_t *oid, offs_t offs, void *data, unsigned long len)
+static int jffs2_srv_write(jffs2_partition_t *p, id_t *id, offs_t offs, void *data, unsigned long len, int *err)
 {
 	struct inode *inode;
 	struct jffs2_inode_info *f;
@@ -787,10 +714,10 @@ static int jffs2_srv_write(jffs2_partition_t *p, oid_t *oid, offs_t offs, void *
 	if (jffs2_is_readonly(c))
 		return -EROFS;
 
-	if (!oid->id)
+	if (!id)
 		return -EINVAL;
 
-	inode = jffs2_iget(p->sb, oid->id);
+	inode = jffs2_iget(p->sb, *id);
 
 	if (IS_ERR(inode)) {
 		return -EINVAL;
@@ -798,7 +725,7 @@ static int jffs2_srv_write(jffs2_partition_t *p, oid_t *oid, offs_t offs, void *
 
 	inode_lock(inode);
 
-	if(S_ISDIR(inode->i_mode)) {
+	if(S_ISDIR(inode->i_mode) || S_ISMNT(inode->i_mode)) {
 		inode_unlock(inode);
 		iput(inode);
 		return -EISDIR;
@@ -841,95 +768,83 @@ static int jffs2_srv_write(jffs2_partition_t *p, oid_t *oid, offs_t offs, void *
 	ret = jffs2_write_inode_range(c, f, ri, data, offs, len, &writelen);
 
 	if (!ret) {
+		*err = EOK;
+		ret = writelen;
+
 		if (offs + writelen > inode->i_size) {
 			inode->i_size = offs + writelen;
 			inode->i_blocks = (inode->i_size + 511) >> 9;
 			inode->i_ctime = inode->i_mtime = ITIME(je32_to_cpu(ri->ctime));
 		}
 	}
+	else {
+		*err = ret;
+		ret = 0;
+	}
 
 	jffs2_free_raw_inode(ri);
 
 	inode_unlock(inode);
 	iput(inode);
-	return ret ? ret : writelen;
-}
-
-
-static int jffs2_srv_truncate(jffs2_partition_t *p, oid_t *oid, unsigned long len)
-{
-	return jffs2_srv_setattr(p, oid, atSize, len, NULL, 0);
+	return ret;
 }
 
 
 int jffs2lib_message_handler(void *partition, msg_t *msg)
 {
+	int err = EOK;
 	jffs2_partition_t *p = partition;
 
 	switch (msg->type) {
 	case mtOpen:
-		msg->o.io.err = jffs2_srv_open(p, &msg->i.openclose.oid);
+		err = jffs2_srv_open(p, &msg->object);
 		break;
 
 	case mtClose:
-		msg->o.io.err = jffs2_srv_close(p, &msg->i.openclose.oid);
+		err = jffs2_srv_close(p, &msg->object);
 		break;
 
 	case mtRead:
-		msg->o.io.err = jffs2_srv_read(p, &msg->i.io.oid, msg->i.io.offs, msg->o.data, msg->o.size);
+		msg->o.io = jffs2_srv_read(p, &msg->object, msg->i.io.offs, msg->o.data, msg->o.size, &err);
 		break;
 
 	case mtWrite:
-		msg->o.io.err = jffs2_srv_write(p, &msg->i.io.oid, msg->i.io.offs, msg->i.data, msg->i.size);
-		break;
-
-	case mtTruncate:
-		msg->o.io.err = jffs2_srv_truncate(p, &msg->i.io.oid, msg->i.io.len);
-		break;
-
-	case mtDevCtl:
-		msg->o.io.err = -EINVAL;
-		break;
-
-	case mtCreate:
-		msg->o.create.err = jffs2_srv_create(p, &msg->i.create.dir, msg->i.data, msg->i.size, &msg->o.create.oid, msg->i.create.type, msg->i.create.mode, &msg->i.create.dev);
-		break;
-
-	case mtDestroy:
-		msg->o.io.err = jffs2_srv_destroy(&msg->i.destroy.oid);
+		msg->o.io = jffs2_srv_write(p, &msg->object, msg->i.io.offs, msg->i.data, msg->i.size, &err);
 		break;
 
 	case mtSetAttr:
-		msg->o.attr.val = jffs2_srv_setattr(p, &msg->i.attr.oid, msg->i.attr.type, msg->i.attr.val, msg->i.data, msg->i.size);
+		err = jffs2_srv_setattr(p, &msg->object, msg->i.attr, msg->i.data, msg->i.size);
 		break;
 
 	case mtGetAttr:
-		jffs2_srv_getattr(p, &msg->i.attr.oid, msg->i.attr.type, &msg->o.attr.val);
+		err = jffs2_srv_getattr(p, &msg->object, msg->i.attr, msg->o.data, msg->o.size);
 		break;
 
 	case mtLookup:
-		msg->o.lookup.err = jffs2_srv_lookup(p, &msg->i.lookup.dir, msg->i.data, &msg->o.lookup.fil, &msg->o.lookup.dev, msg->o.data, msg->o.size);
+		err = jffs2_srv_lookup(p, &msg->object, msg->i.data, msg->i.size, &msg->o.lookup.id, &msg->o.lookup.mode);
+		if ((err == -ENOENT) && (msg->i.lookup.flags & O_CREAT)) {
+			err = jffs2_srv_create(p, &msg->object, msg->i.data, msg->i.size, &msg->o.lookup.id, msg->i.lookup.mode, &msg->i.lookup.dev);
+			if (!err)
+				msg->o.lookup.mode = msg->i.lookup.mode;
+			if (!err)
+				jffs2_srv_open(p, &msg->o.lookup.id);
+		}
 		break;
 
 	case mtLink:
-		msg->o.io.err = jffs2_srv_link(p, &msg->i.ln.dir, msg->i.data, &msg->i.ln.oid);
+		err = jffs2_srv_link(p, &msg->object, msg->i.data, msg->i.size, &msg->i.link.id);
 		break;
 
 	case mtUnlink:
-		msg->o.io.err = jffs2_srv_unlink(p, &msg->i.ln.dir, msg->i.data);
+		err = jffs2_srv_unlink(p, &msg->object, msg->i.data, msg->i.size);
 		break;
 
-	case mtReaddir:
-		msg->o.io.err = jffs2_srv_readdir(p, &msg->i.readdir.dir, msg->i.readdir.offs,
-				msg->o.data, msg->o.size);
-		break;
-
-	case mtSync:
+	case (mtSync & 0xff):
 		p->sb->s_op->sync_fs(p->sb, 0);
 		break;
 	}
 
-	return EOK;
+	return err;
 }
 
 
@@ -966,128 +881,3 @@ int jffs2lib_mount_partition(void *partition)
 
 	return EOK;
 }
-
-
-
-
-
-
-#if 0
-int main(int argc, char **argv)
-{
-	oid_t toid = { 0 };
-	int i = 0, c, pest, argn;
-
-	while(write(0, "", 1) < 0)
-		usleep(500000);
-
-	memset(&jffs2_common, 0, sizeof(jffs2_common));
-
-	printf("jffs2: Starting jffs2 server\n");
-
-	if (init_jffs2_fs() != EOK) {
-		printf("jffs2: Error initialising jffs2\n");
-		return -1;
-	}
-
-	if ((pest = argc / 5) == 0) {
-		jffs2_help();
-		return -1;
-	}
-
-	jffs2_common.partition = malloc(pest * sizeof(jffs2_partition_t));
-
-	while ((c = getopt(argc, argv, "r:p:h")) != -1) {
-
-		switch (c) {
-			case 'r':
-				if (jffs2_common.partition != NULL) {
-					argn = optind - 1;
-					if (argn + 3 <= argc) {
-						jffs2_common.partition[0].start = atoi(argv[argn++]);
-						jffs2_common.partition[0].size = atoi(argv[argn++]);
-						jffs2_common.partition[0].flags = atoi(argv[argn++]);
-						jffs2_common.partition[0].mountpt = "/";
-						jffs2_common.partition[0].root = 1;
-						if (argn < argc) {
-							if (argv[argn][0] == '-')
-								optind += 2;
-							else
-								optind += 3;
-						} else
-							optind += 2;
-
-						jffs2_common.partition_cnt++;
-					}
-				}
-				break;
-
-			case 'p':
-				if (jffs2_common.partition != NULL) {
-					if (jffs2_common.partition_cnt == pest) {
-						pest++;
-						jffs2_common.partition = realloc(jffs2_common.partition, pest * sizeof(jffs2_partition_t));
-					}
-					argn = optind - 1;
-					if (argn + 3 < argc) {
-						jffs2_common.partition[jffs2_common.partition_cnt].start = atoi(argv[argn++]);
-						jffs2_common.partition[jffs2_common.partition_cnt].size = atoi(argv[argn++]);
-						jffs2_common.partition[jffs2_common.partition_cnt].flags = atoi(argv[argn++]);
-						jffs2_common.partition[jffs2_common.partition_cnt].mountpt = argv[argn];
-						optind += 3;
-						jffs2_common.partition[jffs2_common.partition_cnt].root = 0;
-						jffs2_common.partition_cnt++;
-					}
-				}
-				break;
-
-			case 'h':
-			default:
-				jffs2_help();
-				return 0;
-		}
-	}
-
-	if (jffs2_common.partition_cnt == 0) {
-		jffs2_help();
-		return 0;
-	}
-
-	if (jffs2_common.partition[i].root) {
-
-		jffs2_mount_partition(&jffs2_common.partition[i]);
-		if (lookup("/", NULL, &toid) < 0) {
-			printf("jffs2: Rootfs failed to mount\n");
-			return -1;
-		}
-
-		jffs2_common.partition[i].stack = mmap(NULL, 0x1000, PROT_READ | PROT_WRITE, 0, OID_NULL, 0);
-		if (jffs2_common.partition[i].stack == NULL) {
-			printf("jffs2: Failed to allocate stack for jffs2. Partition won't be mounted at %s\n", jffs2_common.partition[i].mountpt);
-			return -1;
-		}
-
-		beginthread(jffs2_run, 3, jffs2_common.partition[i].stack, 0x1000, &jffs2_common.partition[i]);
-		i++;
-	}
-
-	if (lookup("/", NULL, &toid) < 0) {
-		printf("jffs2: No rootfs found\n");
-		return -1;
-	}
-
-	for (; i < jffs2_common.partition_cnt; i++) {
-		jffs2_common.partition[i].stack = mmap(NULL, 0x1000, PROT_READ | PROT_WRITE, 0, OID_NULL, 0);
-		if (jffs2_common.partition[i].stack == NULL) {
-			printf("jffs2: Failed to allocate stack for jffs2. Partition won't be mounted at %s\n", jffs2_common.partition[i].mountpt);
-			continue;
-		}
-
-		beginthread(jffs2_mount_partition, 3, jffs2_common.partition[i].stack, 0x1000, &jffs2_common.partition[i]);
-	}
-
-	delayed_work_starter(system_long_wq);
-
-	return EOK;
-}
-#endif

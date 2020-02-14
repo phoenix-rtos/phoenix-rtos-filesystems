@@ -106,16 +106,16 @@ struct file_operations {
 
 struct address_space {
 	struct inode							*host;		/* owner: inode, block_device */
-	spinlock_t								tree_lock;	/* and lock protecting it */
-	atomic_t								i_mmap_writable;/* count VM_SHARED mappings */
-	struct rb_root							i_mmap;		/* tree of private and shared mappings */
+//	spinlock_t								tree_lock;	/* and lock protecting it */
+//	atomic_t								i_mmap_writable;/* count VM_SHARED mappings */
+//	struct rb_root							i_mmap;		/* tree of private and shared mappings */
 	unsigned long							nrpages;	/* number of total pages */
-	unsigned long							nrexceptional;
+//	unsigned long							nrexceptional;
 	const struct address_space_operations 	*a_ops;	/* methods */
-	unsigned long							flags;		/* error bits/gfp mask */
-	spinlock_t								private_lock;	/* for use by the address_space */
-	struct list_head						private_list;	/* ditto */
-	void									*private_data;	/* ditto */
+//	unsigned long							flags;		/* error bits/gfp mask */
+//	spinlock_t								private_lock;	/* for use by the address_space */
+//	struct list_head						private_list;	/* ditto */
+//	void									*private_data;	/* ditto */
 } __attribute__((aligned(sizeof(long))));
 
 struct inode_operations;
@@ -137,7 +137,11 @@ struct inode {
 	blkcnt_t					i_blocks;
 	dev_t						i_rdev;
 	unsigned long				i_state;
-	struct address_space		i_data;
+	union {
+		struct address_space	i_data;
+		oid_t					i_mnt;
+		oid_t					i_dev;
+	};
 	kuid_t						i_uid;
 	kgid_t						i_gid;
 	struct rcu_head				i_rcu;

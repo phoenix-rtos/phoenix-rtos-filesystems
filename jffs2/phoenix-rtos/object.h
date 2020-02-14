@@ -18,7 +18,7 @@
 
 
 typedef struct _jffs2_object_t {
-	oid_t oid;
+	id_t id;
 	struct inode *inode;
 
 	struct list_head list;

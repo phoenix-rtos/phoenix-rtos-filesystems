@@ -37,7 +37,7 @@ static int object_cmp(rbnode_t *n1, rbnode_t *n2)
 	jffs2_object_t *o2 = lib_treeof(jffs2_object_t, node, n2);
 
 	/* possible overflow */
-	return (o1->oid.id - o2->oid.id);
+	return (o1->id - o2->id);
 }
 
 
@@ -71,7 +71,7 @@ jffs2_object_t *object_create(void *part, int type, struct inode *inode)
 		return NULL;
 	}
 	memset(r, 0, sizeof(jffs2_object_t));
-	r->oid.id = inode->i_ino;
+	r->id = inode->i_ino;
 	r->inode = inode;
 	INIT_LIST_HEAD(&r->list);
 
@@ -125,7 +125,7 @@ jffs2_object_t *object_get(void *part, unsigned int id, int create)
 	jffs2_objects_t *jffs2_objects = ((jffs2_partition_t *)part)->objects;
 	struct inode *inode = NULL;
 
-	t.oid.id = id;
+	t.id = id;
 
 	mutexLock(jffs2_objects->lock);
 	if ((o = lib_treeof(jffs2_object_t, node, lib_rbFind(&jffs2_objects->tree, &t.node))) != NULL) {
@@ -157,7 +157,7 @@ void object_put(void *part, unsigned int id)
 	jffs2_object_t *o, t;
 	struct inode *inode;
 
-	t.oid.id = id;
+	t.id = id;
 	mutexLock(jffs2_objects->lock);
 	if ((o = lib_treeof(jffs2_object_t, node, lib_rbFind(&jffs2_objects->tree, &t.node))) != NULL) {
 

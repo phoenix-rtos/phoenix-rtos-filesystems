@@ -354,8 +354,8 @@ struct dentry *mount_mtd(struct file_system_type *fs_type, int flags,
 
 	mtd = malloc(sizeof(struct mtd_info));
 
-	mtd->data_buf = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_UNCACHED, OID_NULL, 0);
-	mtd->meta_buf = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_UNCACHED, OID_NULL, 0);
+	mtd->data_buf = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_UNCACHED | MAP_ANONYMOUS, -1, 0);
+	mtd->meta_buf = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_UNCACHED | MAP_ANONYMOUS, -1, 0);
 
 	if (mtd->data_buf == NULL || mtd->meta_buf == NULL) {
 		free(mtd);
