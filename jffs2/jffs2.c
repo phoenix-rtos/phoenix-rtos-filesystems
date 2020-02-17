@@ -121,7 +121,7 @@ static int jffs2_srv_setattr(jffs2_partition_t *p, id_t *id, int type, void *dat
 	struct iattr iattr;
 	struct inode *inode;
 	struct dentry dentry;
-	int ret;
+	int ret = EOK;
 	struct jffs2_sb_info *c = JFFS2_SB_INFO(p->sb);
 
 	if (!id)
@@ -167,7 +167,7 @@ static int jffs2_srv_setattr(jffs2_partition_t *p, id_t *id, int type, void *dat
 				ihold(inode);
 			}
 			else {
-				ret = -EINVAL;
+				ret = -ENOTDIR;
 			}
 
 			inode_unlock(inode);
@@ -500,7 +500,7 @@ static int jffs2_srv_readdir(jffs2_partition_t *p, id_t *id, offs_t offs, struct
 		return -EINVAL;
 
 	inode_lock_shared(inode);
-	if (!(S_ISDIR(inode->i_mode))) {
+	if (!(S_ISDIR(inode->i_mode)) && !(S_ISMNT(inode->i_mode))) {
 		inode_unlock_shared(inode);
 		iput(inode);
 		return -ENOTDIR;
@@ -518,7 +518,7 @@ static int jffs2_srv_readdir(jffs2_partition_t *p, id_t *id, offs_t offs, struct
 
 	dent->d_reclen = ctx.pos - offs;
 
-	return ctx.emit;
+	return dent->d_reclen;
 }
 
 
@@ -572,13 +572,13 @@ static int jffs2_srv_read(jffs2_partition_t *p, id_t *id, offs_t offs, void *dat
 
 	inode_lock_shared(inode);
 
-	if(S_ISDIR(inode->i_mode)) {
+	if(S_ISDIR(inode->i_mode) || S_ISMNT(inode->i_mode)) {
 		ret = jffs2_srv_readdir(p, id, offs, data, len);
 	}
-	else if (S_ISMNT(inode->i_mode)){
+/*	else if (S_ISMNT(inode->i_mode)){
 		memcpy(data, &inode->i_mnt, sizeof(oid_t));
 		ret = sizeof(oid_t);
-	}
+	} */
 	else if (S_ISCHR(inode->i_mode)) {
 		memcpy(data, &inode->i_dev, sizeof(oid_t));
 		ret = sizeof(oid_t);
@@ -798,6 +798,8 @@ int jffs2lib_message_handler(void *partition, msg_t *msg)
 	switch (msg->type) {
 	case mtOpen:
 		err = jffs2_srv_open(p, &msg->object);
+		if (!err)
+			msg->o.open = msg->object;
 		break;
 
 	case mtClose:

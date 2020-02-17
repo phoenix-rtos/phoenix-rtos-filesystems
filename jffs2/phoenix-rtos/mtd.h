@@ -18,7 +18,7 @@
 #ifndef _OS_PHOENIX_MTD_H_
 #define _OS_PHOENIX_MTD_H_
 
-#include "../../../devices/storage/imx6ull-flash/flashdrv.h"
+#include "../../../phoenix-rtos-devices/storage/imx6ull-flash/flashdrv.h"
 
 
 #define MTD_ERASE_PENDING		0x01
