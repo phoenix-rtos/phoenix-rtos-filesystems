@@ -365,7 +365,7 @@ void *kmemdup(const void *src, size_t len, unsigned gfp);
 
 unsigned long get_seconds(void);
 
-#define os_to_jffs2_mode(x) (S_ISMNT(x) ? (x & ~S_IFMT) | S_IFDIR : x)
+#define os_to_jffs2_mode(x) (S_ISMNT(x) ? (((x) & ~S_IFMT) | S_IFDIR) : (x))
 #define jffs2_to_os_mode(x) (x)
 
 #define uninitialized_var(x) x = *(&(x))

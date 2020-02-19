@@ -296,8 +296,25 @@ static int jffs2_srv_link(jffs2_partition_t *p, id_t *dirId, const char *name, s
 	old = malloc(sizeof(struct dentry));
 	new = malloc(sizeof(struct dentry));
 
-	new->d_name.name = strdup(name);
-	new->d_name.len = strlen(name);
+	if (!new || !old) {
+		free(new);
+		free(old);
+		iput(inode);
+		iput(idir);
+		return -ENOMEM;
+	}
+
+	new->d_name.name = calloc(1, len + 1);
+	if(!new->d_name.name) {
+		free(new);
+		free(old);
+		iput(inode);
+		iput(idir);
+		return -ENOMEM;
+	}
+
+	memcpy(new->d_name.name, name, len);
+	new->d_name.len = len;
 
 	d_instantiate(old, inode);
 
@@ -371,9 +388,22 @@ static int jffs2_srv_unlink(jffs2_partition_t *p, id_t *id, const char *name, co
 	}
 
 	dentry = malloc(sizeof(struct dentry));
+	if (!dentry) {
+		iput(inode);
+		iput(idir);
+		return -ENOMEM;
+	}
 
-	dentry->d_name.name = strdup(name);
-	dentry->d_name.len = strlen(name);
+	dentry->d_name.name = calloc(1, len + 1);
+	if (!dentry->d_name.name) {
+		free(dentry);
+		iput(inode);
+		iput(idir);
+		return -ENOMEM;
+	}
+
+	memcpy(dentry->d_name.name, name, len);
+	dentry->d_name.len = len;
 
 	d_instantiate(dentry, inode);
 
@@ -426,9 +456,20 @@ static int jffs2_srv_create(jffs2_partition_t *p, id_t *dirId, const char *name,
 	}
 
 	dentry = malloc(sizeof(struct dentry));
-	memset(dentry, 0, sizeof(struct dentry));
-	dentry->d_name.name = strdup(name);
-	dentry->d_name.len = strlen(name);
+	if (!dentry) {
+		iput(idir);
+		return -ENOMEM;
+	}
+
+	dentry->d_name.name = calloc(1, len + 1);
+	if (!dentry->d_name.name) {
+		free(dentry);
+		iput(idir);
+		return -ENOMEM;
+	}
+
+	memcpy(dentry->d_name.name, name, len);
+	dentry->d_name.len = len;
 
 	/* Check if entry already exists */
 	inode_lock(idir);
@@ -549,6 +590,7 @@ static int jffs2_srv_close(jffs2_partition_t *p, id_t *id)
 		iput(inode);
 		return EOK;
 	}
+
 	return -EINVAL;
 }
 
