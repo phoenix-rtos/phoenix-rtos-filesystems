@@ -378,7 +378,7 @@ unsigned long get_seconds(void);
 ({									   \
 	void *stack = mmap(NULL, 0x1000, PROT_WRITE | PROT_READ, MAP_ANONYMOUS, -1, 0); \
 	struct task_struct *__k = malloc(sizeof(struct task_struct));\
-	beginthread(threadfn, 6, stack, 0x1000, data); \
+	beginthread(threadfn, 3, stack, 0x1000, data); \
 	__k->pid = 0x33; \
 	__k; \
 })

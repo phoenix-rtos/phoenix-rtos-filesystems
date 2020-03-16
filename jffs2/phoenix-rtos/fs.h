@@ -147,6 +147,8 @@ struct inode {
 	struct rcu_head				i_rcu;
 	handle_t					i_lock;
 	struct rw_semaphore			i_rwsem;
+
+	oid_t						i_mntpt;
 };
 
 static inline bool dir_emit_dots(struct file *file, struct dir_context *ctx)

@@ -165,7 +165,13 @@ ssize_t dummyfs_getattr(id_t *id, int type, void *attr, size_t maxlen)
 			stat->st_atime = o->atime;
 			stat->st_mtime = o->mtime;
 			stat->st_ctime = o->ctime;
+			if (S_ISCHR(o->mode) || S_ISBLK(o->mode))
+				stat->st_rdev = o->dev.port;
 			retval = sizeof(struct stat);
+			break;
+		case atEvents:
+			*(int *)attr = POLLIN | POLLOUT;
+			retval = sizeof(int);
 			break;
 		case atMount:
 		case atMountPoint:

@@ -75,6 +75,7 @@ struct inode *new_inode(struct super_block *sb)
 		inode->i_count = 1;
 		inode->i_mapping = malloc(sizeof(struct address_space));
 		inode->i_state = I_NEW;
+		memset(&inode->i_mntpt, 0, sizeof(inode->i_mntpt));
 		mutexCreate(&inode->i_lock);
 		init_rwsem(&inode->i_rwsem);
 	}

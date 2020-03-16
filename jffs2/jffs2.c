@@ -159,11 +159,17 @@ static int jffs2_srv_setattr(jffs2_partition_t *p, id_t *id, int type, void *dat
 			iattr.ia_size = *(size_t *)data;
 			break;
 
-		case atMount:
 		case atMountPoint:
+		case atMount:
 			if (S_ISDIR(inode->i_mode)) {
-				inode->i_mnt = *(oid_t *)data;
-				inode->i_mode = (inode->i_mode & S_IFMT) | S_IFMNT;
+				if (type == atMountPoint) {
+					inode->i_mntpt = *(oid_t *)data;
+				}
+				else {
+					inode->i_mnt = *(oid_t *)data;
+					inode->i_mode = (inode->i_mode & ~S_IFMT) | S_IFMNT;
+				}
+
 				ihold(inode);
 			}
 			else {
@@ -214,7 +220,12 @@ static int jffs2_srv_getattr(jffs2_partition_t *p, id_t *id, int type, void *dat
 			stat = (struct stat *)data;
 			//stat->st_dev = o->port;
 			stat->st_ino = inode->i_ino;
-			stat->st_mode = inode->i_mode;
+
+			if (S_ISMNT(inode->i_mode))
+				stat->st_mode = (inode->i_mode & ~S_IFMT) | S_IFDIR;
+			else
+				stat->st_mode = inode->i_mode;
+
 			stat->st_nlink = inode->i_nlink;
 			stat->st_uid = inode->i_uid.val;
 			stat->st_gid = inode->i_gid.val;
@@ -222,6 +233,11 @@ static int jffs2_srv_getattr(jffs2_partition_t *p, id_t *id, int type, void *dat
 			stat->st_atime = I_SEC(inode->i_atime);
 			stat->st_mtime = I_SEC(inode->i_mtime);
 			stat->st_ctime = I_SEC(inode->i_ctime);
+
+			if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode)) {
+				stat->st_rdev = inode->i_dev.port;
+			}
+
 			ret = sizeof(struct stat);
 			break;
 
@@ -335,8 +351,8 @@ static int jffs2_srv_link(jffs2_partition_t *p, id_t *dirId, const char *name, s
 			victim_f->inocache->pino_nlink--;
 		mutex_unlock(&victim_f->sem);
 		drop_nlink(ivictim);
+		iput(ivictim);
 	}
-	iput(ivictim);
 
 	free(old);
 	free(new->d_name.name);
@@ -374,7 +390,7 @@ static int jffs2_srv_unlink(jffs2_partition_t *p, id_t *id, const char *name, co
 		return -ENOENT;
 	}
 
-	inode =  jffs2_iget(p->sb, (unsigned long)*id);
+	inode =  jffs2_iget(p->sb, (unsigned long)rid);
 
 	if (IS_ERR(inode)) {
 		iput(idir);
@@ -408,10 +424,12 @@ static int jffs2_srv_unlink(jffs2_partition_t *p, id_t *id, const char *name, co
 	d_instantiate(dentry, inode);
 
 	inode_lock(idir);
-	if (S_ISDIR(inode->i_mode))
+	if (S_ISDIR(inode->i_mode)) {
 		ret = idir->i_op->rmdir(idir, dentry);
-	else
+	}
+	else {
 		ret = idir->i_op->unlink(idir, dentry);
+	}
 
 //	if (!ret && S_ISCHR(inode->i_mode))
 //		dev_dec(p->devs, &oid);
