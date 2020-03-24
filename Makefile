@@ -29,12 +29,6 @@ ifneq ($(filter clean,$(MAKECMDGOALS)),)
 	$(shell rm -rf $(BUILD_DIR))
 endif
 
-include dummyfs/Makefile
-include jffs2/Makefile
-include ext2/Makefile
-#include meterfs/Makefile
-
-
 T1 := $(filter-out clean all,$(MAKECMDGOALS))
 ifneq ($(T1),)
 	include $(T1)/Makefile
@@ -42,5 +36,5 @@ ifneq ($(T1),)
 $(T1):
 	@echo >/dev/null
 else
-#	include Makefile.$(TARGET_SUBFAMILY)
+    include _targets/Makefile.$(TARGET_FAMILY)-$(TARGET_SUBFAMILY)
 endif

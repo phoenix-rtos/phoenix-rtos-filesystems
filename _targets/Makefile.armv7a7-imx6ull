@@ -1,0 +1,11 @@
+#
+# Makefile for Phoenix-RTOS 3 filesystems
+#
+# iMX6ULL drivers
+#
+# Copyright 2020 Phoenix Systems
+#
+
+include jffs2/Makefile
+include dummyfs/Makefile
+

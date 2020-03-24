@@ -1,0 +1,13 @@
+#
+# Makefile for Phoenix-RTOS 3 filesystems
+#
+# iMX RT drivers
+#
+# Copyright 2020 Phoenix Systems
+#
+
+CFLAGS += -DTARGET_IMXRT -DTARGET_IMXRT1050
+
+include dummyfs/Makefile
+#include meterfs/Makefile
+#include meterfs/test/Makefile

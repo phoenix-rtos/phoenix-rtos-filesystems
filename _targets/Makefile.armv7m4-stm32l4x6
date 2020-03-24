@@ -1,0 +1,12 @@
+#
+# Makefile for Phoenix-RTOS 3 filesystems
+#
+# STM32L4 drivers
+#
+# Copyright 2020 Phoenix Systems
+#
+
+CFLAGS += -DTARGET_STM32 -DTARGET_STM32L4
+
+include meterfs/Makefile
+include meterfs/test/Makefile
