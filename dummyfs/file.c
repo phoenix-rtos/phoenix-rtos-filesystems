@@ -288,8 +288,10 @@ int dummyfs_write(id_t *id, offs_t offs, const char *buff, size_t len, int *stat
 
 	o = object_get(id);
 
-	if (o == NULL)
+	if (o == NULL) {
 		*status = -EINVAL;
+		return 0;
+	}
 
 	if (!S_ISREG(o->mode))
 		*status = -EINVAL;
