@@ -28,6 +28,10 @@
 #define PWEN_POL 1
 #endif
 
+#ifndef INACTIVE_POL
+#define INACTIVE_POL PWEN_POL
+#endif
+
 #ifndef CS_PORT
 #define CS_PORT gpioe
 #endif

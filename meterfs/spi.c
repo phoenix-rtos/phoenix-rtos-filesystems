@@ -76,20 +76,39 @@ void spi_csControl(int state)
 }
 
 
-#if PWEN_POL >= 0
+#if PWENPOL >= 0
 void spi_powerCtrl(int state)
 {
-	keepidle(state);
-
-#if PWEN_POL == 0
-	gpio_pinSet(PWEN_PORT, PWEN_PIN, !state);
-#else
-	gpio_pinSet(PWEN_PORT, PWEN_PIN, state);
-#endif
+	static const int activeState = !!PWEN_POL;
 
 	if (state) {
+		keepidle(1);
+		gpio_pinSet(PWEN_PORT, PWEN_PIN, PWEN_POL);
+		gpio_pinSet(CS_PORT, CS_PIN, 1);
+
+#ifdef WP_PORT
+		gpio_pinSet(WP_PORT, WP_PIN, 1);
+#endif
+
+		gpio_pinConfig(SCK_PORT, SCK_PIN, 2, 5, 1, 0, 0);
+		gpio_pinConfig(MISO_PORT, MISO_PIN, 2, 5, 1, 0, 0);
+		gpio_pinConfig(MOSI_PORT, MOSI_PIN, 2, 5, 1, 0, 0);
+
 		usleep(10000);
 		flash_removeWP();
+	}
+	else {
+		gpio_pinConfig(SCK_PORT, SCK_PIN, 1, 5, 1, 0, 0);
+		gpio_pinConfig(MISO_PORT, MISO_PIN, 1, 5, 1, 0, 0);
+		gpio_pinConfig(MOSI_PORT, MOSI_PIN, 1, 5, 1, 0, 0);
+
+		gpio_pinSet(PWEN_PORT, PWEN_PIN, !PWEN_POL);
+		gpio_pinSet(CS_PORT, CS_PIN, INACTIVE_POL);
+
+	#ifdef WP_PORT
+		gpio_pinSet(WP_PORT, WP_PIN, INACTIVE_POL);
+	#endif
+		keepidle(0);
 	}
 }
 #else
@@ -152,16 +171,15 @@ void spi_init(void)
 {
 	gpio_pinConfig(PWEN_PORT, PWEN_PIN, 1, 0, 1, 0, 0);
 	gpio_pinConfig(CS_PORT, CS_PIN, 1, 0, 1, 0, 0);
-	gpio_pinConfig(SCK_PORT, SCK_PIN, 2, 5, 1, 0, 0);
-	gpio_pinConfig(MISO_PORT, MISO_PIN, 2, 5, 1, 0, 0);
-	gpio_pinConfig(MOSI_PORT, MOSI_PIN, 2, 5, 1, 0, 0);
+
+	gpio_pinSet(SCK_PORT, SCK_PIN, INACTIVE_POL);
+	gpio_pinSet(MISO_PORT, MISO_PIN, INACTIVE_POL);
+	gpio_pinSet(MOSI_PORT, MOSI_PIN, INACTIVE_POL);
 
 #ifdef WP_PORT
 	gpio_pinConfig(WP_PORT, WP_PIN, 1, 0, 0, 0, 0);
-	gpio_pinSet(WP_PORT, WP_PIN, 1);
 #endif
 
-	spi_csControl(0);
 	keepidle(1); /* spi_powerCtrl will do keepidle(0) */
 	spi_powerCtrl(0);
 }
