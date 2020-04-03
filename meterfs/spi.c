@@ -79,8 +79,6 @@ void spi_csControl(int state)
 #if PWENPOL >= 0
 void spi_powerCtrl(int state)
 {
-	static const int activeState = !!PWEN_POL;
-
 	if (state) {
 		keepidle(1);
 		gpio_pinSet(PWEN_PORT, PWEN_PIN, PWEN_POL);
