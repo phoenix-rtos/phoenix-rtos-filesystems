@@ -23,7 +23,6 @@
 #include <sys/file.h>
 #include <sys/threads.h>
 #include <phoenix/stat.h>
-#include <atasrv.h>
 
 #include "ext2.h"
 #include "file.h"
@@ -277,4 +276,3 @@ int ext2_truncate(ext2_fs_info_t *f, id_t *id, size_t size)
 	ext2_write_sb(f);
 	return EOK;
 }
-

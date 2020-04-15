@@ -13,14 +13,13 @@
  * %LICENSE%
  */
 
-#include <stdint.h>
+#include <inttypes.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
 
-#include <atasrv.h>
-
 #include "ext2.h"
+#include "libext2.h"
 #include "sb.h"
 #include "block.h"
 #include "object.h"
@@ -42,11 +41,9 @@ void gdt_sync(ext2_fs_info_t *f, int group)
 
 int ext2_read_sb(id_t *devId, ext2_fs_info_t *f)
 {
-	int ret = 0, err;
+	ssize_t ret;
 
-	ret = atasrv_read(devId, EXT2_SB_OFF, (char *)f->sb, EXT2_SB_SZ, &err);
-
-	if (ret != EXT2_SB_SZ)
+	if ((ret = f->read(devId, EXT2_SB_OFF, (char *)f->sb, EXT2_SB_SZ)) != EXT2_SB_SZ)
 		return -EFAULT;
 
 	if (f->sb->magic != EXT2_MAGIC)
@@ -58,14 +55,10 @@ int ext2_read_sb(id_t *devId, ext2_fs_info_t *f)
 
 int ext2_write_sb(ext2_fs_info_t *f)
 {
-	int ret = 0, err;
+	ssize_t ret;
 
-	ret = atasrv_write(&f->devId, EXT2_SB_OFF, (char *)f->sb, EXT2_SB_SZ, &err);
-
-	if (ret != EXT2_SB_SZ) {
-		printf("ext2: superblock write error %d\n", ret);
+	if ((ret = f->write(&f->devId, EXT2_SB_OFF, (char *)f->sb, EXT2_SB_SZ)) != EXT2_SB_SZ)
 		return -EFAULT;
-	}
 
 	return EOK;
 }
@@ -73,12 +66,12 @@ int ext2_write_sb(ext2_fs_info_t *f)
 
 void ext2_init_fs(id_t *devId, ext2_fs_info_t *f)
 {
-	int size, err;
+	int size;
 	void *buff;
 
 	f->block_size = EXT2_SB_SZ << f->sb->log_block_size;
 	f->blocks_count = f->sb->blocks_count;
-	printf("ext2: Mounting %.2f MiB partition\n", (float)(f->block_size * f->blocks_count)/1024/1024);
+	printf("ext2: Mounting %" PRIu64 "B partition\n", (uint64_t)f->block_size * f->blocks_count);
 	f->blocks_in_group = f->sb->blocks_in_group;
 	f->inode_size = f->sb->inode_size;
 	f->inodes_count = f->sb->inodes_count;
@@ -96,7 +89,7 @@ void ext2_init_fs(id_t *devId, ext2_fs_info_t *f)
 	else {
 		buff = malloc(f->block_size);
 		size = (f->gdt_size * sizeof(ext2_group_desc_t));
-		atasrv_read(&f->devId, (f->sb->first_data_block + 1) * f->block_size, buff, f->block_size, &err);
+		f->read(&f->devId, (f->sb->first_data_block + 1) * f->block_size, buff, f->block_size);
 		memcpy(f->gdt, buff, size);
 		free(buff);
 	}
@@ -104,12 +97,14 @@ void ext2_init_fs(id_t *devId, ext2_fs_info_t *f)
 }
 
 
-int libext2_mount(id_t *devId, void **fsData)
+int libext2_mount(id_t *devId, void **fsData, read_callback dev_read, write_callback dev_write)
 {
 	int ret = -EFAULT;
 	id_t rootId = 2;
 	ext2_fs_info_t *f = calloc(1, sizeof(ext2_fs_info_t));
 	f->sb = calloc(1, EXT2_SB_SZ);
+	f->read = dev_read;
+	f->write = dev_write;
 
 	*fsData = f;
 

@@ -20,8 +20,6 @@
 #include <errno.h>
 #include <sys/msg.h>
 
-#include <atasrv.h>
-
 #include "ext2.h"
 #include "block.h"
 #include "sb.h"
@@ -29,66 +27,62 @@
 
 int write_block(ext2_fs_info_t *f, uint32_t block, const void *data)
 {
-	int ret, err;
+	ssize_t ret;
 
 	if(!block || data == NULL)
 		return EOK;
 
-	ret = atasrv_write(&f->devId, block_offset(f, block), data, f->block_size, &err);
+	if ((ret = f->write(&f->devId, block_offset(f, block), data, f->block_size)) != f->block_size)
+		return (int)ret;
 
-	if (ret == f->block_size && !err)
-		return EOK;
-	return err;
+	return EOK;
 }
 
 
 int write_blocks(ext2_fs_info_t *f, uint32_t start_block, uint32_t count, const void *data)
 {
-	int ret, err;
+	ssize_t ret;
 
 	if(!start_block)
 		return EOK;
 
-	ret = atasrv_write(&f->devId, block_offset(f, start_block), data, f->block_size * count, &err);
+	if ((ret = f->write(&f->devId, block_offset(f, start_block), data, f->block_size * count)) != f->block_size * count)
+		return (int)ret;
 
-	if (ret == f->block_size * count && !err)
-		return EOK;
-	return err;
+	return EOK;
 }
 
 
 int read_block(ext2_fs_info_t *f, uint32_t block, void *data)
 {
-	int ret, err;
+	ssize_t ret;
 
 	if(!block) {
 		memset(data, 0, f->block_size);
 		return EOK;
 	}
 
-	ret = atasrv_read(&f->devId, block_offset(f, block), data, f->block_size, &err);
+	if ((ret = f->read(&f->devId, block_offset(f, block), data, f->block_size)) != (ssize_t)(f->block_size))
+		return (int)ret;
 
-	if (ret == f->block_size && !err)
-		return EOK;
-	return err;
+	return EOK;
 }
 
 
 /* reads from starting block */
 int read_blocks(ext2_fs_info_t *f, uint32_t start_block, uint32_t count, void *data)
 {
-	int ret, err;
+	ssize_t ret;
 
 	if(!start_block) {
 		memset(data, 0, f->block_size * count);
 		return EOK;
 	}
 
-	ret = atasrv_read(&f->devId, block_offset(f, start_block), data, f->block_size * count, &err);
+	if ((ret = f->read(&f->devId, block_offset(f, start_block), data, f->block_size * count)) != f->block_size * count)
+		return (int)ret;
 
-	if (ret == f->block_size * count && !err)
-		return EOK;
-	return err;
+	return EOK;
 }
 
 
