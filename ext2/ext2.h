@@ -16,8 +16,10 @@
 #ifndef _EXT2_H_
 #define _EXT2_H_ /* ext2.h */
 
-#include <sys/rb.h>
 #include <stdint.h>
+
+#include <sys/rb.h>
+#include <sys/types.h>
 
 
 /* superblock structure */
@@ -240,6 +242,11 @@ typedef struct {
 		ext2_object_t 	*lru;
 } ext2_fs_objects_t;
 
+
+typedef ssize_t (*read_callback)(id_t *, offs_t, char *, size_t);
+typedef ssize_t (*write_callback)(id_t *, offs_t, const char *, size_t);
+
+
 struct _ext2_fs_info {
 	id_t				devId;
 	ext2_group_desc_t 	*gdt;
@@ -253,6 +260,8 @@ struct _ext2_fs_info {
 	uint32_t     		inodes_count;
 	uint32_t     		inodes_in_group;
 	uint32_t        	gdt_size;
+	read_callback   	read;
+	write_callback  	write;
 };
 
 

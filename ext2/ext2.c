@@ -32,6 +32,7 @@
 #include <phoenix/stat.h>
 
 #include "ext2.h"
+#include "libext2.h"
 #include "inode.h"
 #include "file.h"
 #include "sb.h"
@@ -395,7 +396,6 @@ static int ext2_unlink(ext2_fs_info_t *f, id_t *dirId, const char *name, const s
 }
 
 
-
 int ext2_readdir(ext2_object_t *d, off_t offs, struct dirent *dent, size_t size)
 {
 	ext2_dir_entry_t *dentry;
@@ -476,6 +476,7 @@ static int ext2_close(ext2_fs_info_t *f, id_t *id)
 	TRACE("ino %llu ref %u", o->id, o->refs);
 	return EOK;
 }
+
 
 int libext2_handler(void *data, msg_t *msg)
 {

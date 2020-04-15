@@ -20,8 +20,6 @@
 #include <errno.h>
 #include <sys/msg.h>
 
-#include "atasrv.h"
-
 #include "ext2.h"
 #include "block.h"
 #include "sb.h"
@@ -34,7 +32,7 @@ int write_block(ext2_fs_info_t *f, uint32_t block, const void *data)
 	if(!block || data == NULL)
 		return EOK;
 
-	if ((ret = atasrv_write(&f->devId, block_offset(f, block), data, f->block_size)) != f->block_size)
+	if ((ret = f->write(&f->devId, block_offset(f, block), data, f->block_size)) != f->block_size)
 		return (int)ret;
 
 	return EOK;
@@ -48,7 +46,7 @@ int write_blocks(ext2_fs_info_t *f, uint32_t start_block, uint32_t count, const 
 	if(!start_block)
 		return EOK;
 
-	if ((ret = atasrv_write(&f->devId, block_offset(f, start_block), data, f->block_size * count)) != f->block_size * count)
+	if ((ret = f->write(&f->devId, block_offset(f, start_block), data, f->block_size * count)) != f->block_size * count)
 		return (int)ret;
 
 	return EOK;
@@ -64,7 +62,7 @@ int read_block(ext2_fs_info_t *f, uint32_t block, void *data)
 		return EOK;
 	}
 
-	if ((ret = atasrv_read(&f->devId, block_offset(f, block), data, f->block_size)) != (ssize_t)(f->block_size))
+	if ((ret = f->read(&f->devId, block_offset(f, block), data, f->block_size)) != (ssize_t)(f->block_size))
 		return (int)ret;
 
 	return EOK;
@@ -81,7 +79,7 @@ int read_blocks(ext2_fs_info_t *f, uint32_t start_block, uint32_t count, void *d
 		return EOK;
 	}
 
-	if ((ret = atasrv_read(&f->devId, block_offset(f, start_block), data, f->block_size * count)) != f->block_size * count)
+	if ((ret = f->read(&f->devId, block_offset(f, start_block), data, f->block_size * count)) != f->block_size * count)
 		return (int)ret;
 
 	return EOK;
