@@ -25,7 +25,7 @@ static int flash_needEWSR;
 
 
 static const unsigned char chips[][3] = { { 0xbf, 0x25, 0x41 }, { 0x1f, 0x47, 0x01 },
-	{ 0xc2, 0x20, 0x16 }, { 0xef, 0x40, 0x15 }, { 0x1c, 0x70, 0x15 } };
+	{ 0xc2, 0x20, 0x16 }, { 0xef, 0x40, 0x15 }, { 0x1c, 0x70, 0x15 }, { 0x1c, 0x70, 0x16 } };
 
 
 void _flash_waitBusy(void)
@@ -180,9 +180,15 @@ void flash_detect(size_t *flashsz, size_t *sectorsz)
 		(*sectorsz) = 4 * 1024;
 	}
 	else if (memcmp(jedec, chips[4], 3) == 0) {
-		printf("meterfs: Detected EN25HQ16\n");
+		printf("meterfs: Detected EN25QH16\n");
 		flash_write = flash_writePage;
 		(*flashsz) = 2 * 1024 * 1024;
+		(*sectorsz) = 4 * 1024;
+	}
+	else if (memcmp(jedec, chips[5], 3) == 0) {
+		printf("meterfs: Detected EN25QH32\n");
+		flash_write = flash_writePage;
+		(*flashsz) = 4 * 1024 * 1024;
 		(*sectorsz) = 4 * 1024;
 	}
 	else {
