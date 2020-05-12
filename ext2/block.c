@@ -1,584 +1,687 @@
 /*
  * Phoenix-RTOS
  *
- * ext2
+ * EXT2 filesystem
  *
- * block.c
+ * Block
  *
- * Copyright 2017 Phoenix Systems
- * Author: Kamil Amanowicz
+ * Copyright 2017, 2020 Phoenix Systems
+ * Author: Kamil Amanowicz, Lukasz Kosinski
  *
  * This file is part of Phoenix-RTOS.
  *
  * %LICENSE%
  */
 
+#include <errno.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
-#include <errno.h>
-#include <sys/msg.h>
 
-#include "ext2.h"
 #include "block.h"
-#include "sb.h"
-#include "pc-ata.h"
 
 
-
-int write_block(uint32_t block, void *data)
+int ext2_read_blocks(ext2_t *fs, uint32_t start, uint32_t blocks, void *data)
 {
-	int ret;
+	ssize_t ret, size = blocks * fs->blocksz;
 
-	if(!block || data == NULL)
-		return EOK;
+	if(!start)
+		memset(data, 0, size);
+	else if ((ret = fs->read(fs->dev, start * fs->blocksz, data, size)) != size)
+		return (int)ret;
 
-	ret = ata_write(block_offset(block), data, ext2->block_size);
-
-	if (ret == ext2->block_size)
-		return EOK;
-	return -EINVAL;
+	return EOK;
 }
 
 
-static inline int write_blocks(uint32_t start_block, uint32_t count, void *data)
+int ext2_write_blocks(ext2_t *fs, uint32_t start, uint32_t blocks, const void *data)
 {
-	int ret;
+	ssize_t ret, size = blocks * fs->blocksz;
 
-	if(!start_block)
-		return EOK;
+	if (start && (ret = fs->write(fs->dev, start * fs->blocksz, data, size)) != size)
+		return (int)ret;
 
-	ret = ata_write(block_offset(start_block), data, ext2->block_size * count);
-
-	if (ret == ext2->block_size * count)
-		return EOK;
-	return -EINVAL;
+	return EOK;
 }
 
 
-int read_block(uint32_t block, void *data)
+static int ext2_create_block(ext2_t *fs, uint32_t ino, uint32_t *res)
 {
-	int ret;
+	void *block_bmp;
+	int err;
+	uint32_t group = (ino - 1) / fs->sb->group_inodes;
+	uint32_t offs, pgroup = group;
 
-	if(!block) {
-		memset(data, 0, ext2->block_size);
-		return EOK;
-	}
+	if ((block_bmp = malloc(fs->blocksz)) == NULL)
+		return -ENOMEM;
 
-	ret = ata_read(block_offset(block), data, ext2->block_size);
-
-	if (ret == ext2->block_size)
-		return EOK;
-	return ret;
-}
-
-
-/* reads from starting block */
-int read_blocks(uint32_t start_block, uint32_t count, void *data)
-{
-	int ret;
-
-	if(!start_block) {
-		memset(data, 0, ext2->block_size * count);
-		return EOK;
-	}
-
-	ret = ata_read(block_offset(start_block), data, ext2->block_size * count);
-
-	if (ret == ext2->block_size * count)
-		return EOK;
-	return ret;
-}
-
-
-/* search block for a given file name */
-int search_block(void *data, const char *name, uint8_t len, oid_t *res)
-{
-	ext2_dir_entry_t *entry;
-	int off = 0;
-
-	while (off < ext2->block_size) {
-		entry = data + off;
-
-		if (entry->rec_len == 0)
-			return -ENOENT;
-		if (len == entry->name_len
-				&& !strncmp(name, entry->name, len)) {
-			res->id = entry->inode;
-			return EOK;
+	do {
+		if ((err = ext2_read_blocks(fs, fs->gdt[group].block_bmp, 1, block_bmp)) < 0) {
+			free(block_bmp);
+			return err;
 		}
-		off += entry->rec_len;
+
+		if (!(offs = ext2_find_zero_bit(block_bmp, fs->sb->group_blocks, 0))) {
+			group = (group + 1) % fs->groups;
+
+			if (group == pgroup) {
+				free(block_bmp);
+				return -ENOSPC;
+			}
+		}
+	} while (!offs);
+
+	ext2_toggle_bit(block_bmp, offs);
+
+	if ((err = ext2_write_blocks(fs, fs->gdt[group].block_bmp, 1, block_bmp)) < 0) {
+		free(block_bmp);
+		return err;
 	}
-	return -ENOENT;
+
+	free(block_bmp);
+	fs->gdt[group].free_blocks--;
+
+	if ((err = ext2_sync_gd(fs, group)) < 0)
+		return err;
+
+	fs->sb->free_blocks--;
+	*res = group * fs->sb->group_blocks + offs;
+
+	return EOK;
 }
 
 
-/* calculates the offs inside indirection blocks, returns depth of the indirection */
-static inline int block_off(long block_no, uint32_t offs[4])
+static int ext2_block_offs(ext2_t *fs, uint32_t block, uint32_t offs[4])
 {
-	int addr = 256 << ext2->sb->log_block_size;
-	int addr_bits = 8 + ext2->sb->log_block_size;
 	int n = 0;
-	long dir_blocks = EXT2_NDIR_BLOCKS;
-	long ind_blocks = addr;
-	long dind_blocks = addr << addr_bits;
-	if (block_no < 0)
-		return -EINVAL;
-	else if (block_no < dir_blocks) {
-		offs[n++] = block_no;
-	} else if ((block_no -= dir_blocks) < ind_blocks) {
-		offs[n++] = block_no;
-		offs[n++] = EXT2_IND_BLOCK;
-	} else if ((block_no -= ind_blocks) < dind_blocks) {
-		offs[n++] = block_no & (addr - 1);
-		offs[n++] = block_no >> addr_bits;
-		offs[n++] = EXT2_DIND_BLOCK;
-	} else if ((block_no -= dind_blocks) >= 0) {
-		offs[n++] = block_no & (addr - 1);
-		offs[n++] = (block_no >> addr_bits) & (addr - 1);
-		offs[n++] = block_no >> (addr_bits * 2);
-		offs[n++] = EXT2_TIND_BLOCK;
+	uint32_t naddr = 256 << fs->sb->log_blocksz;
+	uint32_t bits = 8 + fs->sb->log_blocksz;
+
+	if (block < DIRECT_BLOCKS) {
+		offs[n++] = block;
 	}
+	else if ((block -= DIRECT_BLOCKS) < naddr) {
+		offs[n++] = block;
+		offs[n++] = SINGLE_INDIRECT_BLOCK;
+	}
+	else if ((block -= naddr) < naddr << bits) {
+		offs[n++] = block & (naddr - 1);
+		offs[n++] = block >> bits;
+		offs[n++] = DOUBLE_INDIRECT_BLOCK;
+	}
+	else if ((block -= naddr << bits) >> (2 * bits) < naddr) {
+		offs[n++] = block & (naddr - 1);
+		offs[n++] = (block >> bits) & (naddr - 1);
+		offs[n++] = block >> (2 * bits);
+		offs[n++] = TRIPPLE_INDIRECT_BLOCK;
+	}
+	else {
+		return -EINVAL;
+	}
+
 	return n;
 }
 
 
-static uint32_t new_block(uint32_t ino, ext2_inode_t *inode, uint32_t bno)
+static int ext2_read_ind_block(ext2_t *fs, ext2_obj_t *obj, uint32_t *block, int depth, uint32_t **ind)
 {
-	int group = 0, pgroup = 0;
-	uint32_t off = 0;
-	void *block_bmp = malloc(ext2->block_size);
+	int err;
 
-	if (bno) {
-		group = (bno - 1) / ext2->blocks_in_group;
-		off = ((bno - 1) % ext2->blocks_in_group) + 1;
-	}
-	else
-		group = (ino - 1) / ext2->inodes_in_group;
-
-	pgroup = group;
-	do {
-		read_block(ext2->gdt[group].block_bitmap, block_bmp);
-
-		if (!off)
-			off = find_zero_bit(block_bmp, ext2->blocks_in_group, 0);
-		else {
-			if (!check_bit(block_bmp, off))
-				break;
-			off = find_zero_bit(block_bmp, ext2->blocks_in_group, off);
-		}
-
-		if (off <= 0 || off > ext2->blocks_in_group) {
-			group = (group + 1) % ext2->gdt_size;
-			if (group == pgroup) {
-				free(block_bmp);
-				return 0;
-			}
-		}
-	} while (off <= 0);
-
-	toggle_bit(block_bmp, off);
-	write_block(ext2->gdt[group].block_bitmap, block_bmp);
-	ext2->sb->free_blocks_count--;
-	ext2->gdt[group].free_blocks_count--;
-	gdt_sync(group);
-	free(block_bmp);
-	return group * ext2->blocks_in_group + off;
-}
-
-
-static inline uint32_t *block_read_ind(ext2_object_t *o, uint32_t *bno, int depth)
-{
 	depth -= 2;
-	if (depth < 0 || depth > 2)
-		return NULL;
-	if (!(*bno) || (*bno) != o->ind[depth].bno) {
-		if (o->ind[depth].data == NULL)
-			o->ind[depth].data = malloc(ext2->block_size);
-		else
-			write_block(o->ind[depth].bno, o->ind[depth].data);
 
-		read_block((*bno), o->ind[depth].data);
-		if (!(*bno)) {
-			o->ind[depth].bno = new_block(o->ino, o->inode, 0);
-			*bno = o->ind[depth].bno;
+	if (depth < 0 || depth > 2) {
+		*ind = NULL;
+		return EOK;
+	}
+
+	if (!(*block) || *block != obj->ind[depth].block) {
+		if (obj->ind[depth].data == NULL) {
+			if ((obj->ind[depth].data = (uint32_t *)malloc(fs->blocksz)) == NULL)
+				return -ENOMEM;
 		}
-		else
-			o->ind[depth].bno = *bno;
-	}
-
-	return o->ind[depth].data;
-}
-
-
-inline uint32_t get_block_no(ext2_object_t *o, uint32_t block)
-{
-	uint32_t *tind, *dind, *ind;
-	uint32_t offs[4] = { 0 };
-	uint32_t ret;
-	int depth = block_off(block, offs);
-
-	if (depth == 4)
-		 tind = block_read_ind(o, &o->inode->block[offs[3]], depth);
-	if (depth >= 3) {
-		if (depth == 4)
-			dind = block_read_ind(o, (tind + offs[2]), --depth);
-		else
-			dind = block_read_ind(o, &o->inode->block[offs[2]], depth);
-	}
-	if (depth >= 2) {
-		if (depth == 3)
-			ind = block_read_ind(o, (dind + offs[1]), --depth);
 		else {
-			ind = block_read_ind(o, &o->inode->block[offs[1]], depth);
+			if ((err = ext2_write_blocks(fs, obj->ind[depth].block, 1, obj->ind[depth].data)) < 0)
+				return err;
 		}
+
+		if ((err = ext2_read_blocks(fs, *block, 1, obj->ind[depth].data)) < 0)
+			return err;
+
+		if (!(*block)) {
+			if ((err = ext2_create_block(fs, (uint32_t)obj->ino, &(obj->ind[depth].block))) < 0)
+				return err;
+
+			*block = obj->ind[depth].block;
+		}
+		else
+			obj->ind[depth].block = *block;
 	}
 
-	ret = depth > 1 ? *(ind + offs[0]) : o->inode->block[offs[0]];
-	return ret;
+	*ind = obj->ind[depth].data;
+
+	return EOK;
 }
 
 
-/* gets block of a given number (relative to inode) */
-void get_block(ext2_object_t *o, uint32_t block, void *data)
+static int ext2_get_blockptr(ext2_t *fs, ext2_obj_t *obj, uint32_t block, uint32_t **ptr)
 {
-	uint32_t *tind, *dind, *ind;
+	int err, depth;
+	uint32_t *ind, *dind, *tind;
 	uint32_t offs[4] = { 0 };
-	int depth = block_off(block, offs);
+
+	if ((depth = ext2_block_offs(fs, block, offs)) < 0)
+		return depth;
 
 	if (depth == 4) {
-		tind = block_read_ind(o, &o->inode->block[offs[3]], depth);
+		if ((err = ext2_read_ind_block(fs, obj, &obj->inode->block[offs[3]], depth, &tind)) < 0)
+			return err;
 	}
+
 	if (depth >= 3) {
-		if (depth == 4)
-			dind = block_read_ind(o, (tind + offs[2]), --depth);
-		else
-			dind = block_read_ind(o, &o->inode->block[offs[2]], depth);
+		if (depth == 4) {
+			if ((err = ext2_read_ind_block(fs, obj, tind + offs[2], --depth, &dind)) < 0)
+				return err;
+		}
+		else {
+			if ((err = ext2_read_ind_block(fs, obj, &obj->inode->block[offs[2]], depth, &dind)) < 0)
+				return err;
+		}
 	}
+
 	if (depth >= 2) {
-		if (depth == 3)
-			ind = block_read_ind(o, (dind + offs[1]), --depth);
-		else
-			ind = block_read_ind(o, &o->inode->block[offs[1]], depth);
-	}
-	if (depth > 1)
-		read_block(*(ind + offs[0]), data);
-	else
-		read_block(o->inode->block[offs[0]], data);
-}
-
-void free_block(uint32_t bno)
-{
-	uint32_t group;
-	uint32_t off;
-	void *block_bmp = malloc(ext2->block_size);
-
-	if (bno == 0)
-		return;
-
-	group = (bno - 1) / ext2->blocks_in_group;
-	off = ((bno - 1)  % ext2->blocks_in_group) + 1;
-
-	//printf("free_block %u\n", bno);
-	read_block(ext2->gdt[group].block_bitmap, block_bmp);
-	toggle_bit(block_bmp, off);
-	write_block(ext2->gdt[group].block_bitmap, block_bmp);
-	ext2->sb->free_blocks_count++;
-	ext2->gdt[group].free_blocks_count++;
-	gdt_sync(group);
-
-	free(block_bmp);
-}
-
-
-void free_blocks(uint32_t start, uint32_t count)
-{
-	uint32_t group;
-	uint32_t off;
-	uint32_t left = count;
-	uint32_t current = start;
-	void *block_bmp = malloc(ext2->block_size);
-
-	group = (start - 1) / ext2->blocks_in_group;
-	off = ((start - 1)  % ext2->blocks_in_group) + 1;
-
-	read_block(ext2->gdt[group].block_bitmap, block_bmp);
-
-	while (left) {
-
-		if (current > ext2->blocks_in_group) {
-			write_block(ext2->gdt[group].block_bitmap, block_bmp);
-			group = (current - 1) / ext2->blocks_in_group;
-			off = ((current - 1)  % ext2->blocks_in_group) + 1;
-			read_block(ext2->gdt[group].block_bitmap, block_bmp);
+		if (depth == 3) {
+			if ((err = ext2_read_ind_block(fs, obj, dind + offs[1], --depth, &ind)) < 0)
+				return err;
 		}
-
-		toggle_bit(block_bmp, off + (count - left));
-		ext2->sb->free_blocks_count++;
-		ext2->gdt[group].free_blocks_count++;
-		left--;
-		current++;
+		else {
+			if ((err = ext2_read_ind_block(fs, obj, &obj->inode->block[offs[1]], depth, &ind)) < 0)
+				return err;
+		}
 	}
 
-	write_block(ext2->gdt[group].block_bitmap, block_bmp);
-	ext2_write_sb();
-	gdt_sync(group);
-	free(block_bmp);
+	*ptr = (depth > 1) ? ind + offs[0] : obj->inode->block + offs[0];
+
+	return EOK;
 }
 
 
-int free_inode_blocks(ext2_object_t *o, uint32_t start, uint32_t count)
+int ext2_get_block(ext2_t *fs, ext2_obj_t *obj, uint32_t block, uint32_t *res)
 {
-	uint32_t *tind, *dind, *ind = NULL;
+	uint32_t *ptr;
+	int err;
+
+	if ((err = ext2_get_blockptr(fs, obj, block, &ptr)) < 0)
+		return err;
+
+	*res = *ptr;
+
+	return EOK;
+}
+
+
+int ext2_init_block(ext2_t *fs, ext2_obj_t *obj, uint32_t block, void *data)
+{
+	int err;
+
+	if ((err = ext2_get_block(fs, obj, block, &block)) < 0)
+		return err;
+
+	return ext2_read_blocks(fs, block, 1, data);
+}
+
+
+int ext2_sync_block(ext2_t *fs, ext2_obj_t *obj, uint32_t block, const void *data)
+{
+	uint32_t *ptr;
+	int err;
+
+	if ((err = ext2_get_blockptr(fs, obj, block, &ptr)) < 0)
+		return err;
+
+	if (!(*ptr)) {
+		if ((err = ext2_create_block(fs, (uint32_t)obj->ino, ptr)) < 0)
+			return err;
+
+		obj->inode->blocks += fs->blocksz / fs->sectorsz;
+	}
+
+	if ((err = ext2_write_blocks(fs, *ptr, 1, data)) < 0)
+		return err;
+
+	return EOK;
+}
+
+
+static int ext2_alloc_blocks(ext2_t *fs, ext2_obj_t *obj, uint32_t start, uint32_t goal, uint32_t block, uint32_t *res)
+{
+	void *block_bmp;
+	int err, depth;
+	uint32_t group, pgroup, offset, curr, end;
+	uint32_t *ind, *dind, *tind;
 	uint32_t offs[4] = { 0 };
-	uint32_t current = start;
-	uint32_t left = count;
-	int depth = 0;
-	while (left) {
-		depth = block_off(current, offs);
 
-		if (depth == 4)
-			tind = block_read_ind(o, &o->inode->block[offs[3]], depth);
-		if (depth >= 3) {
-			if (depth == 4)
-				dind = block_read_ind(o, (tind + offs[2]), --depth);
-			else
-				dind = block_read_ind(o, &o->inode->block[offs[2]], depth);
+	if ((block_bmp = malloc(fs->blocksz)) == NULL)
+		return -ENOMEM;
+
+	if (block) {
+		group = (block - 1) / fs->sb->group_blocks;
+		offset = (block - 1) % obj->fs->sb->group_blocks + 1;
+	}
+	else {
+		group = ((uint32_t)obj->ino - 1) / fs->sb->group_inodes;
+		offset = 0;
+	}
+	pgroup = group;
+
+	do {
+		if ((err = ext2_read_blocks(fs, fs->gdt[group].block_bmp, 1, block_bmp)) < 0) {
+			free(block_bmp);
+			return err;
 		}
+
+		if (!offset)
+			offset = ext2_find_zero_bit(block_bmp, fs->sb->group_blocks, 0);
+		else if (!ext2_check_bit(block_bmp, offset))
+			break;
+		else
+			offset = ext2_find_zero_bit(block_bmp, fs->sb->group_blocks, offset);
+
+		if (!offset) {
+			group = (group + 1) % fs->groups;
+
+			if (group == pgroup) {
+				free(block_bmp);
+				return -ENOSPC;
+			}
+		}
+	} while (!offset);
+
+	block = group * fs->sb->group_blocks + offset;
+	ext2_toggle_bit(block_bmp, offset);
+	fs->gdt[group].free_blocks--;
+	fs->sb->free_blocks--;
+	*res = 1;
+
+	while (*res < goal && offset < fs->sb->group_blocks && !ext2_check_bit(block_bmp, ++offset)) {
+		ext2_toggle_bit(block_bmp, offset);
+		fs->gdt[group].free_blocks--;
+		fs->sb->free_blocks--;
+		(*res)++;
+	}
+
+	curr = start;
+	end = start + *res;
+
+	/* Fill inode block array with allocated blocks */
+	while (curr < end) {
+		if ((depth = ext2_block_offs(fs, curr, offs)) < 0) {
+			free(block_bmp);
+			return depth;
+		}
+
+		if (depth == 1) {
+			obj->inode->block[offs[0]] = block++;
+		}
+		else if (depth == 2) {
+			if (!obj->inode->block[offs[1]]) {
+				if ((err = ext2_write_blocks(fs, fs->gdt[group].block_bmp, 1, block_bmp)) < 0) {
+					free(block_bmp);
+					return err;
+				}
+
+				if ((err = ext2_read_ind_block(fs, obj, &obj->inode->block[offs[1]], depth, &ind)) < 0) {
+					free(block_bmp);
+					return err;
+				}
+
+				if ((err = ext2_read_blocks(fs, fs->gdt[group].block_bmp, 1, block_bmp)) < 0) {
+					free(block_bmp);
+					return err;
+				}
+			}
+			else {
+				if ((err = ext2_read_ind_block(fs, obj, &obj->inode->block[offs[1]], depth, &ind)) < 0) {
+					free(block_bmp);
+					return err;
+				}
+			}
+
+			*(ind + offs[0]) = block++;
+		}
+		else if (depth == 3) {
+			if ((err = ext2_write_blocks(fs, fs->gdt[group].block_bmp, 1, block_bmp)) < 0) {
+				free(block_bmp);
+				return err;
+			}
+
+			if ((err = ext2_read_ind_block(fs, obj, &obj->inode->block[offs[2]], depth, &dind)) < 0) {
+				free(block_bmp);
+				return err;
+			}
+
+			if ((err = ext2_read_ind_block(fs, obj, dind + offs[1], --depth, &ind)) < 0) {
+				free(block_bmp);
+				return err;
+			}
+
+			if ((err = ext2_read_blocks(fs, fs->gdt[group].block_bmp, 1, block_bmp)) < 0) {
+				free(block_bmp);
+				return err;
+			}
+
+			*(ind + offs[0]) = block++;
+		}
+		else if (depth == 4) {
+			if ((err = ext2_write_blocks(fs, fs->gdt[group].block_bmp, 1, block_bmp)) < 0) {
+				free(block_bmp);
+				return err;
+			}
+
+			if ((err = ext2_read_ind_block(fs, obj, &obj->inode->block[offs[3]], depth, &tind)) < 0) {
+				free(block_bmp);
+				return err;
+			}
+
+			if ((err = ext2_read_ind_block(fs, obj, tind + offs[2], --depth, &dind)) < 0) {
+				free(block_bmp);
+				return err;
+			}
+
+			if ((err = ext2_read_ind_block(fs, obj, dind + offs[1], --depth, &ind)) < 0) {
+				free(block_bmp);
+				return err;
+			}
+
+			if ((err = ext2_read_blocks(fs, fs->gdt[group].block_bmp, 1, block_bmp)) < 0) {
+				free(block_bmp);
+				return err;
+			}
+
+			*(ind + offs[0]) = block++;
+		}
+
+		curr++;
+	}
+
+	if ((err = ext2_write_blocks(fs, fs->gdt[group].block_bmp, 1, block_bmp)) < 0) {
+		free(block_bmp);
+		return err;
+	}
+
+	free(block_bmp);
+
+	if ((err = ext2_sync_gd(fs, group)) < 0)
+		return err;
+
+	return EOK;
+}
+
+
+int ext2_sync_blocks(ext2_t *fs, ext2_obj_t *obj, uint32_t start, uint32_t blocks, const void *data)
+{
+	int err;
+	uint32_t curr, last = 0;
+	uint32_t cpblock, block = start, cp = start;
+
+	while (block < start + blocks) {
+		if ((err = ext2_get_block(fs, obj, block, &curr)) < 0)
+			return err;
+
+		if (!curr) {
+			if (cp != block) {
+				if ((err = ext2_get_block(fs, obj, cp, &cpblock)) < 0)
+					return err;
+
+				if ((err = ext2_write_blocks(fs, cpblock, block - cp, data + (cp - start) * fs->blocksz)) < 0)
+					return err;
+			}
+			cp = block++;
+
+			while (block < start + blocks) {
+				if ((err = ext2_get_block(fs, obj, block, &cpblock)) < 0)
+					return err;
+				
+				if (!cpblock)
+					block++;
+				else
+					break;
+			}
+
+			/* Alloc and write blocks */
+			while (cp != block) {
+				if ((err = ext2_alloc_blocks(fs, obj, cp, block - cp, last, &last)) < 0)
+					return err;
+
+				if ((err = ext2_get_block(fs, obj, cp, &cpblock)) < 0)
+					return err;
+
+				if ((err = ext2_write_blocks(fs, cpblock, last, data + (cp - start) * fs->blocksz)) < 0)
+					return err;
+
+				cp += last;
+			}
+
+			last = 0;
+		}
+		else if (curr == last + 1 || last == 0) {
+			last = curr;
+			block++;
+		}
+		else {
+			if (cp != block) {
+				if ((err = ext2_get_block(fs, obj, cp, &cpblock)) < 0)
+					return err;
+
+				if ((err = ext2_write_blocks(fs, cpblock, block - cp, data + (cp - start) * fs->blocksz)) < 0)
+					return err;
+			}
+
+			last = 0;
+			cp = block++;
+		}
+	}
+
+	if (cp != block) {
+		if ((err = ext2_get_block(fs, obj, cp, &cpblock)) < 0)
+			return err;
+
+		if ((err = ext2_write_blocks(fs, cpblock, block - cp, data + (cp - start) * fs->blocksz)) < 0)
+			return err;
+	}
+
+	return EOK;
+}
+
+
+static int ext2_destroy_block(ext2_t *fs, uint32_t block)
+{
+	void *block_bmp;
+	int err;
+	uint32_t group = (block - 1) / fs->sb->group_blocks;
+	uint32_t offs = (block - 1) % fs->sb->group_blocks + 1;
+
+	if (!block)
+		return EOK;
+
+	if ((block_bmp = malloc(fs->blocksz)) == NULL)
+		return -ENOMEM;
+
+	if ((err = ext2_read_blocks(fs, fs->gdt[group].block_bmp, 1, block_bmp)) < 0) {
+		free(block_bmp);
+		return err;
+	}
+
+	ext2_toggle_bit(block_bmp, offs);
+
+	if ((err = ext2_write_blocks(fs, fs->gdt[group].block_bmp, 1, block_bmp)) < 0) {
+		free(block_bmp);
+		return err;
+	}
+
+	free(block_bmp);
+	fs->gdt[group].free_blocks++;
+
+	if ((err = ext2_sync_gd(fs, group)) < 0)
+		return err;
+
+	fs->sb->free_blocks++;
+
+	return EOK;
+}
+
+
+int ext2_destroy_blocks(ext2_t *fs, uint32_t start, uint32_t blocks)
+{
+	void *block_bmp;
+	int err;
+	uint32_t group = (start - 1) / fs->sb->group_blocks;
+	uint32_t offs = (start - 1)  % fs->sb->group_blocks + 1;
+	uint32_t left = blocks;
+	uint32_t curr = start;
+
+	if ((block_bmp = malloc(fs->blocksz)) == NULL)
+		return -ENOMEM;
+
+	if ((err = ext2_read_blocks(fs, fs->gdt[group].block_bmp, 1, block_bmp)) < 0) {
+		free(block_bmp);
+		return err;
+	}
+
+	while (left) {
+		if (curr > fs->sb->group_blocks) {
+			if ((err = ext2_write_blocks(fs, fs->gdt[group].block_bmp, 1, block_bmp)) < 0) {
+				free(block_bmp);
+				return err;
+			}
+
+			group = (curr - 1) / fs->sb->group_blocks;
+			offs = (curr - 1) % fs->sb->group_blocks + 1;
+
+			if ((err = ext2_read_blocks(fs, fs->gdt[group].block_bmp, 1, block_bmp)) < 0) {
+				free(block_bmp);
+				return err;
+			}
+		}
+
+		ext2_toggle_bit(block_bmp, offs + (blocks - left));
+
+		fs->gdt[group].free_blocks++;
+		fs->sb->free_blocks++;
+		curr++;
+		left--;
+	}
+
+	if ((err = ext2_write_blocks(fs, fs->gdt[group].block_bmp, 1, block_bmp)) < 0) {
+		free(block_bmp);
+		return err;
+	}
+
+	free(block_bmp);
+
+	if ((err = ext2_sync_gd(fs, group)) < 0)
+		return err;
+
+	if ((err = ext2_sync_sb(fs)) < 0)
+		return err;
+
+	return EOK;
+}
+
+
+int ext2_destroy_iblocks(ext2_t *fs, ext2_obj_t *obj, uint32_t start, uint32_t blocks)
+{
+	int err, depth;
+	uint32_t *ind, *dind, *tind;
+	uint32_t offs[4] = { 0 };
+	uint32_t curr = start;
+	uint32_t left = blocks;
+
+	while (left) {
+		if ((depth = ext2_block_offs(fs, curr, offs)) < 0)
+			return depth;
+
+		if (depth == 4) {
+			if ((err = ext2_read_ind_block(fs, obj, &obj->inode->block[offs[3]], depth, &tind)) < 0)
+				return err;
+		}
+
+		if (depth >= 3) {
+			if (depth == 4) {
+				if ((err = ext2_read_ind_block(fs, obj, tind + offs[2], --depth, &dind)) < 0)
+					return err;
+			}
+			else {
+				if ((err = ext2_read_ind_block(fs, obj, &obj->inode->block[offs[2]], depth, &dind)) < 0)
+					return err;
+			}
+		}
+
 		if (depth >= 2) {
-			if (depth == 3)
-				ind = block_read_ind(o, (dind + offs[1]), --depth);
-			else
-				ind = block_read_ind(o, &o->inode->block[offs[1]], depth);
+			if (depth == 3) {
+				if ((err = ext2_read_ind_block(fs, obj, (dind + offs[1]), --depth, &ind)) < 0)
+					return err;
+			}
+			else {
+				if ((err = ext2_read_ind_block(fs, obj, &obj->inode->block[offs[1]], depth, &ind)) < 0)
+					return err;
+			}
 		}
 
 		if (ind != NULL)
 			*(ind + offs[0]) = 0;
 
 		if (depth == 1) {
-			o->inode->block[offs[0]] = 0;
+			obj->inode->block[offs[0]] = 0;
+		}
+		else if (depth == 2) {
+			if (!offs[0]) {
+				if ((err = ext2_destroy_block(fs, obj->inode->block[offs[1]])) < 0)
+					return err;
 
-		} else if (depth == 2) {
-			if (!offs[0]) {
-				free_block(o->inode->block[offs[1]]);
-				o->inode->block[offs[1]] = 0;
+				obj->inode->block[offs[1]] = 0;
 			}
-		} else if (depth == 3) {
+		}
+		else if (depth == 3) {
 			if (!offs[0]) {
-				free_block(*(dind + offs[1]));
+				if ((err = ext2_destroy_block(fs, *(dind + offs[1]))) < 0)
+					return err;
+
 				*(dind + offs[1]) = 0;
 			}
+
 			if (!offs[1]) {
-				free_block(o->inode->block[offs[2]]);
-				o->inode->block[offs[2]] = 0;
+				if ((err = ext2_destroy_block(fs, obj->inode->block[offs[2]])) < 0)
+					return err;
+
+				obj->inode->block[offs[2]] = 0;
 			}
-		} else if (depth == 4) {
+		}
+		else if (depth == 4) {
 			if (!offs[0]) {
-				free_block(*(dind + offs[1]));
+				if ((err = ext2_destroy_block(fs, *(dind + offs[1]))) < 0)
+					return err;
+
 				*(dind + offs[1]) = 0;
 			}
+
 			if (!offs[1]) {
-				free_block(*(tind + offs[2]));
+				if ((err = ext2_destroy_block(fs, *(tind + offs[2]))) < 0)
+					return err;
+
 				*(tind + offs[2]) = 0;
 			}
+
 			if (!offs[2]) {
-				free_block(o->inode->block[offs[3]]);
-				o->inode->block[offs[3]] = 0;
+				if ((err = ext2_destroy_block(fs, obj->inode->block[offs[3]])) < 0)
+					return err;
+
+				obj->inode->block[offs[3]] = 0;
 			}
 		}
+
+		curr--;
 		left--;
-		current--;
 	}
-
-	return EOK;
-}
-
-/* sets block of a given number (relative to inode) */
-void set_block(ext2_object_t *o, uint32_t block, void *data)
-{
-	uint32_t *tind, *dind, *ind;
-	uint32_t offs[4] = { 0 };
-	int depth = block_off(block, offs);
-
-	if (depth == 4)
-		tind = block_read_ind(o, &o->inode->block[offs[3]], depth);
-
-	if (depth >= 3) {
-		if (depth == 4)
-			dind = block_read_ind(o, (tind + offs[2]), --depth);
-		else
-			dind = block_read_ind(o, &o->inode->block[offs[2]], depth);
-	}
-
-	if (depth >= 2) {
-		if (depth == 3)
-			ind = block_read_ind(o, (dind + offs[1]), --depth);
-		else
-			ind = block_read_ind(o, &o->inode->block[offs[1]], depth);
-	}
-
-	if (depth > 1) {
-		if (!*(ind + offs[0])) {
-			*(ind + offs[0]) = new_block(o->ino, o->inode, 0);
-			o->inode->blocks += ext2->block_size / 512;
-		}
-		write_block(*(ind + offs[0]), data);
-	} else {
-		if(!o->inode->block[offs[0]]) {
-			o->inode->block[offs[0]] = new_block(o->ino, o->inode, 0);
-			o->inode->blocks += ext2->block_size / 512;
-		}
-		write_block(o->inode->block[offs[0]], data);
-	}
-}
-
-
-/* tries to allocate goal number of consecutive blocks */
-uint32_t alloc_blocks(ext2_object_t *o, uint32_t start_block, uint32_t goal, uint32_t bno)
-{
-	uint32_t count = 1;
-	int group = 0, pgroup = 0;
-	uint32_t off = 0;
-	uint32_t offs[4] = { 0 };
-	uint32_t *tind, *dind, *ind;
-	uint32_t end_block, current_block;
-	int depth;
-	void *block_bmp = malloc(ext2->block_size);
-
-	if (bno) {
-		group = (bno - 1) / ext2->blocks_in_group;
-		off = ((bno - 1) % ext2->blocks_in_group) + 1;
-	}
-	else
-		group = (o->ino - 1) / ext2->inodes_in_group;
-
-	pgroup = group;
-	do {
-		read_block(ext2->gdt[group].block_bitmap, block_bmp);
-
-		if (!off)
-			off = find_zero_bit(block_bmp, ext2->blocks_in_group, 0);
-		else {
-			if (!check_bit(block_bmp, off))
-				break;
-			off = find_zero_bit(block_bmp, ext2->blocks_in_group, off);
-		}
-
-		if (off <= 0 || off > ext2->blocks_in_group) {
-			group = (group + 1) % ext2->gdt_size;
-			if (group == pgroup) {
-				free(block_bmp);
-				return 0;
-			}
-		}
-	} while (off <= 0);
-
-	bno = group * ext2->blocks_in_group + off;
-	toggle_bit(block_bmp, off);
-	ext2->sb->free_blocks_count--;
-	while (count < goal && off < ext2->blocks_in_group && !check_bit(block_bmp, ++off)) {
-		toggle_bit(block_bmp, off);
-		ext2->sb->free_blocks_count--;
-		ext2->gdt[group].free_blocks_count--;
-		count++;
-	}
-
-	end_block = start_block + count;
-
-	current_block = start_block;
-
-	/* fill inode block array with allocated blocks */
-	while (current_block < end_block) {
-		depth = block_off(current_block, offs);
-		if (depth == 1)
-			o->inode->block[offs[0]] = bno++;
-		else if (depth == 2) {
-
-			if (!o->inode->block[offs[1]]) {
-				write_block(ext2->gdt[group].block_bitmap, block_bmp);
-				ind = block_read_ind(o, &o->inode->block[offs[1]], depth);
-				read_block(ext2->gdt[group].block_bitmap, block_bmp);
-			} else ind = block_read_ind(o, &o->inode->block[offs[1]], depth);
-
-			*(ind + offs[0]) = bno++;
-		} else if (depth == 3) {
-
-			write_block(ext2->gdt[group].block_bitmap, block_bmp);
-			dind = block_read_ind(o, &o->inode->block[offs[2]], depth);
-			ind = block_read_ind(o, (dind + offs[1]), --depth);
-			read_block(ext2->gdt[group].block_bitmap, block_bmp);
-
-			*(ind + offs[0]) = bno++;
-		} else if (depth == 4) {
-
-			write_block(ext2->gdt[group].block_bitmap, block_bmp);
-			tind = block_read_ind(o, &o->inode->block[offs[3]], depth);
-			dind = block_read_ind(o, (tind + offs[2]), --depth);
-			ind = block_read_ind(o, (dind + offs[1]), --depth);
-			read_block(ext2->gdt[group].block_bitmap, block_bmp);
-
-			*(ind + offs[0]) = bno++;
-		}
-
-		current_block++;
-	}
-
-	write_block(ext2->gdt[group].block_bitmap, block_bmp);
-	gdt_sync(group);
-	free(block_bmp);
-	return count;
-}
-
-int set_blocks(ext2_object_t *o, uint32_t start_block, uint32_t count, void *data)
-{
-	uint32_t block = start_block;
-	uint32_t checkpoint = start_block;
-	uint32_t last, current;
-
-	last = 0;
-
-	while (block < start_block + count) {
-		current = get_block_no(o, block);
-		if (!current) {
-			if (checkpoint != block)
-				write_blocks(get_block_no(o, checkpoint), block - checkpoint,
-						data + ((checkpoint - start_block) * ext2->block_size));
-
-			checkpoint = block;
-			block++;
-			while(block < start_block + count && !get_block_no(o, block))
-				block++;
-
-			/* alloc and write blocks */
-			while (checkpoint != block) {
-				last = alloc_blocks(o, checkpoint, block - checkpoint, last);
-
-				if (!last)
-					return -ENOSPC; //no free blocks on disk
-
-				write_blocks(get_block_no(o, checkpoint), last,
-						data + ((checkpoint - start_block) * ext2->block_size));
-				checkpoint += last;
-			}
-
-			last = 0;
-		} else if (current == last + 1 || last == 0) {
-			last = current;
-			block++;
-		} else {
-			if (checkpoint != block)
-				write_blocks(get_block_no(o, checkpoint), block - checkpoint,
-						data + ((checkpoint - start_block) * ext2->block_size));
-
-			checkpoint = block;
-			last = 0;
-			block++;
-		}
-	}
-	if (checkpoint != block)
-		write_blocks(get_block_no(o, checkpoint), block - checkpoint,
-				data + ((checkpoint - start_block) * ext2->block_size));
 
 	return EOK;
 }

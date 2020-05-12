@@ -18,19 +18,19 @@
 
 #include <stdint.h>
 
-extern int ext2_read(oid_t *oid, offs_t offs, char *data, unsigned int len);
+extern int ext2_read_internal(ext2_obj_t *o, off_t offs, char *data, size_t len);
 
 
-extern int ext2_read_locked(oid_t *oid, offs_t offs, char *data, uint32_t len);
+extern int ext2_read(ext2_t *f, id_t *id, off_t offs, char *data, size_t len);
 
 
-extern int ext2_write(oid_t *oid, offs_t offs, char *data, unsigned int len);
+extern int ext2_write_unlocked(ext2_t *f, id_t *id, off_t offs, const char *data, size_t len);
 
 
-extern int ext2_write_locked(oid_t *oid, offs_t offs, char *data, uint32_t len);
+extern int ext2_write(ext2_t *f, id_t *id, off_t offs, const char *data, size_t len);
 
 
-extern int ext2_truncate(oid_t *oid, unsigned int size);
+extern int ext2_truncate(ext2_t *f, id_t *id, size_t size);
 
 
 #endif /* file.h */

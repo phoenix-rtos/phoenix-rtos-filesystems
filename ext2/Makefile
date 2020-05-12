@@ -4,9 +4,12 @@
 # Copyright 2018 Phoenix Systems
 #
 
-EXT2_OBJS := ext2.o mbr.o inode.o block.o file.o pc-ata.o dir.o object.o sb.o
+EXT2_OBJS := ext2.o inode.o block.o file.o dir.o object.o sb.o
 
-$(PREFIX_PROG)ext2: $(addprefix $(PREFIX_O)ext2/, $(EXT2_OBJS))
-	$(LINK)
+$(PREFIX_A)libext2.a: $(addprefix $(PREFIX_O)ext2/, $(EXT2_OBJS))
+	$(ARCH)
 
-all: $(PREFIX_PROG_STRIPPED)ext2
+$(PREFIX_H)libext2.h: ext2/libext2.h
+	$(HEADER)
+
+all: $(PREFIX_A)libext2.a $(PREFIX_H)libext2.h

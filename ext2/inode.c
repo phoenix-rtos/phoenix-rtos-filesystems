@@ -1,226 +1,244 @@
 /*
  * Phoenix-RTOS
  *
- * ext2
+ * EXT2 filesystem
  *
- * inode.c
+ * Inode
  *
- * Copyright 2017 Phoenix Systems
- * Author: Kamil Amanowicz
+ * Copyright 2017, 2020 Phoenix Systems
+ * Author: Kamil Amanowicz, Lukasz Kosinski
  *
  * This file is part of Phoenix-RTOS.
  *
  * %LICENSE%
  */
 
+#include <errno.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include <stdio.h>
-#include <errno.h>
-#include <unistd.h>
 #include <string.h>
-#include <sys/msg.h>
 
 #include "ext2.h"
-#include "inode.h"
 #include "block.h"
+#include "inode.h"
 #include "sb.h"
+#include "gdt.h"
 
 
-ext2_inode_t *inode_get(uint32_t ino)
+static uint32_t ext2_file_group(ext2_t *fs, uint32_t pino)
 {
-	void *inode_block;
-	ext2_inode_t *inode;
-	uint32_t group;
-	uint32_t block;
-	uint32_t inodes_in_block;
+	uint32_t i;
+	uint32_t pgroup = (pino - 1) / fs->sb->group_inodes;
+	uint32_t group = (pgroup + pino) % fs->groups;
 
-	if (ino < ROOTNODE_NO)
-		return NULL;
-	if (ino > ext2->inodes_count)
-		return NULL;
-
-	inode_block = malloc(ext2->block_size);
-	group = (ino - 1) / ext2->inodes_in_group;
-
-	inodes_in_block = (ext2->block_size / ext2->inode_size);
-	block = ((ino - 1) % ext2->inodes_in_group) / inodes_in_block;
-
-	read_block(ext2->gdt[group].ext2_inode_table + block, inode_block);
-
-	inode = malloc(ext2->inode_size);
-
-	memcpy(inode, inode_block + (((ino - 1) % inodes_in_block) * ext2->inode_size), ext2->inode_size);
-	free(inode_block);
-	return inode;
-}
-
-int inode_put(ext2_inode_t *inode)
-{
-	free(inode);
-	return EOK;
-}
-
-int inode_set(uint32_t ino, ext2_inode_t *inode)
-{
-	void *inode_block;
-	uint32_t group;
-	uint32_t block;
-	uint32_t inodes_in_block;
-
-	if (ino < ROOTNODE_NO)
-		return -EINVAL;
-	if (ino > ext2->inodes_count)
-		return -EINVAL;
-
-	inode_block = malloc(ext2->block_size);
-	group = (ino - 1) / ext2->inodes_in_group;
-
-	inodes_in_block = (ext2->block_size / ext2->inode_size);
-	block = ((ino - 1) % ext2->inodes_in_group) / inodes_in_block;
-
-	read_block(ext2->gdt[group].ext2_inode_table + block, inode_block);
-
-	memcpy(inode_block + (((ino - 1) % inodes_in_block) * ext2->inode_size), inode, ext2->inode_size);
-	write_block(ext2->gdt[group].ext2_inode_table + block, inode_block);
-
-	free(inode_block);
-	return EOK;
-}
-
-static int find_group_dir(uint32_t pino)
-{
-	int i;
-	int pgroup = (pino - 1) / ext2->inodes_in_group;
-	int group = -1;
-	int avefreei = ext2->sb->free_inodes_count / ext2->gdt_size;
-	int avefreeb = ext2->sb->free_blocks_count / ext2->gdt_size;
-
-	if(pino == ROOTNODE_NO)
-		pgroup = rand() % ext2->gdt_size;
-	for (i = 0; i < ext2->gdt_size; i++) {
-		group = (pgroup + i) % ext2->gdt_size;
-		if (ext2->gdt[group].free_inodes_count < avefreei)
-			continue;
-		if (ext2->gdt[group].free_blocks_count < avefreeb)
-			continue;
-	}
-	if(group >= 0)
-		return group;
-
-	do {
-		for(i = 0; i < ext2->gdt_size; i++) {
-			group = (pgroup + i) % ext2->gdt_size;
-			if (ext2->gdt[group].free_inodes_count >= avefreei)
-				return group;
-		}
-
-		if (avefreei)
-			avefreei = 0;
-		else
-			break;
-	} while (!group);
-
-	return group;
-}
-
-
-static int find_group_file(uint32_t pino)
-{
-	int i;
-	int ngroups = ext2->gdt_size;
-	int pgroup = (pino - 1) / ext2->inodes_in_group;
-	int group;
-
-	if (ext2->gdt[pgroup].free_inodes_count && ext2->gdt[pgroup].free_blocks_count)
+	if (fs->gdt[pgroup].free_inodes && fs->gdt[pgroup].free_blocks)
 		return pgroup;
 
-	group = (pgroup + pino) % ngroups;
+	for (i = 1; i < fs->groups; i <<= 1) {
+		group = (group + i) % fs->groups;
 
-	for (i = 1; i < ngroups; i <<= 1) {
-		group += i;
-		group = group % ngroups;
-		if (ext2->gdt[group].free_inodes_count && ext2->gdt[group].free_blocks_count)
+		if (fs->gdt[group].free_inodes && fs->gdt[group].free_blocks)
 			return group;
 	}
 
-	group = pgroup;
+	for (i = 0, group = pgroup; i < fs->groups; i++) {
+		group = (group + 1) % fs->groups;
 
-	for (i = 0; i < ngroups; i++) {
-		group++;
-		group = group % ngroups;
-		if (ext2->gdt[group].free_inodes_count)
+		if (fs->gdt[group].free_inodes)
 			return group;
 	}
 
 	return -1;
 }
 
-uint32_t inode_create(ext2_inode_t *inode, uint32_t mode, uint32_t pino)
-{
-	uint32_t ino;
-	int group;
-	void *inode_bmp;
 
-	if (mode & EXT2_S_IFDIR)
-		group = find_group_dir(pino);
+static uint32_t ext2_dir_group(ext2_t *fs, uint32_t pino)
+{
+	uint32_t i, pgroup, group;
+	uint32_t ifree = fs->sb->free_inodes / fs->groups;
+	uint32_t bfree = fs->sb->free_blocks / fs->groups;
+
+	if (fs->root && pino == (uint32_t)fs->root->ino)
+		pgroup = rand() % fs->groups;
 	else
-		group = find_group_file(pino);
+		pgroup = (pino - 1) / fs->sb->group_inodes;
+
+	for (i = 0; i < fs->groups; i++) {
+		group = (pgroup + i) % fs->groups;
+
+		if (fs->gdt[group].free_inodes < ifree)
+			continue;
+
+		if (fs->gdt[group].free_blocks < bfree)
+			continue;
+
+		return group;
+	}
+
+	for (i = 0; i < fs->groups; i++) {
+		group = (pgroup + i) % fs->groups;
+
+		if (fs->gdt[group].free_inodes < ifree)
+			continue;
+		
+		return group;
+	}
+
+	return -1;
+}
+
+
+uint32_t ext2_create_inode(ext2_t *fs, uint32_t pino, uint16_t mode)
+{
+	void *inode_bmp;
+	uint32_t group;
+	uint32_t ino;
+
+	if (mode & MODE_DIR)
+		group = ext2_dir_group(fs, pino);
+	else
+		group = ext2_file_group(fs, pino);
 
 	if (group == -1)
 		return 0;
 
-	inode_bmp = malloc(ext2->block_size);
+	if ((inode_bmp = malloc(fs->blocksz)) == NULL)
+		return 0;
 
-	read_block(ext2->gdt[group].inode_bitmap, inode_bmp);
-
-	ino = find_zero_bit(inode_bmp, ext2->inodes_in_group, 0);
-
-	if (ino > ext2->inodes_in_group || ino <= 0) {
+	if (ext2_read_blocks(fs, fs->gdt[group].inode_bmp, 1, inode_bmp) < 0) {
 		free(inode_bmp);
 		return 0;
 	}
 
-	toggle_bit(inode_bmp, ino);
+	if (!(ino = ext2_find_zero_bit(inode_bmp, fs->sb->group_inodes, 0))) {
+		free(inode_bmp);
+		return 0;
+	}
 
-	ext2->gdt[group].free_inodes_count--;
-	if (mode & EXT2_S_IFDIR)
-		ext2->gdt[group].used_dirs_count++;
-	ext2->sb->free_inodes_count--;
+	ext2_toggle_bit(inode_bmp, ino);
 
-	memset(inode, 0, ext2->inode_size);
-	inode->mode = mode | EXT2_S_IRUSR | EXT2_S_IWUSR;
+	if (ext2_write_blocks(fs, fs->gdt[group].inode_bmp, 1, inode_bmp) < 0) {
+		free(inode_bmp);
+		return 0;
+	}
 
-	write_block(ext2->gdt[group].inode_bitmap, inode_bmp);
-	gdt_sync(group);
-	ext2_write_sb();
 	free(inode_bmp);
 
-	return group * ext2->inodes_in_group + ino;
+	if (mode & MODE_DIR)
+		fs->gdt[group].dirs++;
+
+	fs->gdt[group].free_inodes--;
+
+	if (ext2_sync_gd(fs, group) < 0)
+		return 0;
+
+	fs->sb->free_inodes--;
+
+	if (ext2_sync_sb(fs) < 0)
+		return 0;
+
+	return group * fs->sb->group_inodes + ino;
 }
 
 
-int inode_free(uint32_t ino, ext2_inode_t *inode)
+int ext2_destroy_inode(ext2_t *fs, uint32_t ino, uint16_t mode)
 {
+	uint32_t group = (ino - 1) / fs->sb->group_inodes;
+	void *inode_bmp;
+	int err;
+	
+	if ((inode_bmp = malloc(fs->blocksz)) == NULL)
+		return -ENOMEM;
 
-	uint32_t group = (ino - 1) / ext2->inodes_in_group;
-	void *inode_bmp = malloc(ext2->block_size);
+	if ((err = ext2_read_blocks(fs, fs->gdt[group].inode_bmp, 1, inode_bmp)) < 0) {
+		free(inode_bmp);
+		return err;
+	}
 
-	if (inode->mode & EXT2_S_IFDIR)
-		ext2->gdt[group].used_dirs_count--;
+	ext2_toggle_bit(inode_bmp, (ino - 1) % fs->sb->group_inodes + 1);
 
-	ext2->gdt[group].free_inodes_count++;
-	ext2->sb->free_inodes_count++;
+	if ((err = ext2_write_blocks(fs, fs->gdt[group].inode_bmp, 1, inode_bmp)) < 0) {
+		free(inode_bmp);
+		return err;
+	}
 
-	ino = (ino - 1) % ext2->inodes_in_group;
+	free(inode_bmp);
 
-	read_block(ext2->gdt[group].inode_bitmap, inode_bmp);
-	toggle_bit(inode_bmp, ino + 1);
-	write_block(ext2->gdt[group].inode_bitmap, inode_bmp);
-	gdt_sync(group);
-	ext2_write_sb();
+	if (mode & MODE_DIR)
+		fs->gdt[group].dirs--;
 
-	free(inode);
+	fs->gdt[group].free_inodes++;
+
+	if ((err = ext2_sync_gd(fs, group)) < 0)
+		return err;
+
+	fs->sb->free_inodes++;
+
+	if ((err = ext2_sync_sb(fs)) < 0)
+		return err;
+
+	return EOK;
+}
+
+
+ext2_inode_t *ext2_init_inode(ext2_t *fs, uint32_t ino)
+{
+	ext2_inode_t *inode;
+	void *iblock;
+	uint32_t group = (ino - 1) / fs->sb->group_inodes;
+	uint32_t inodes = fs->blocksz / fs->sb->inodesz;
+	uint32_t start = fs->gdt[group].inode_tbl + (ino - 1) % fs->sb->group_inodes / inodes;
+
+	if ((fs->root && ino < (uint32_t)fs->root->ino) || ino > fs->sb->inodes)
+		return NULL;
+
+	if ((iblock = malloc(fs->blocksz)) == NULL)
+		return NULL;
+
+	if (ext2_read_blocks(fs, start, 1, iblock) < 0) {
+		free(iblock);
+		return NULL;
+	}
+
+	if ((inode = (ext2_inode_t *)malloc(fs->sb->inodesz)) == NULL) {
+		free(iblock);
+		return NULL;
+	}
+
+	memcpy(inode, iblock + (ino - 1) % inodes * fs->sb->inodesz, fs->sb->inodesz);
+	free(iblock);
+
+	return inode;
+}
+
+
+int ext2_sync_inode(ext2_t *fs, uint32_t ino, ext2_inode_t *inode)
+{
+	void *iblock;
+	int err;
+	uint32_t group = (ino - 1) / fs->sb->group_inodes;
+	uint32_t inodes = fs->blocksz / fs->sb->inodesz;
+	uint32_t start = fs->gdt[group].inode_tbl + (ino - 1) % fs->sb->group_inodes / inodes;
+
+	if ((fs->root && ino < (uint32_t)fs->root->ino) || ino > fs->sb->inodes)
+		return -EINVAL;
+
+	if ((iblock = malloc(fs->blocksz)) == NULL)
+		return -ENOMEM;
+
+	if ((err = ext2_read_blocks(fs, start, 1, iblock)) < 0) {
+		free(iblock);
+		return err;
+	}
+
+	memcpy(iblock + (ino - 1) % inodes * fs->sb->inodesz, inode, fs->sb->inodesz);
+
+	if ((err = ext2_write_blocks(fs, start, 1, iblock)) < 0) {
+		free(iblock);
+		return err;
+	}
+
+	free(iblock);
 
 	return EOK;
 }

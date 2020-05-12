@@ -1,12 +1,12 @@
 /*
  * Phoenix-RTOS
  *
- * ext2
+ * EXT2 filesystem
  *
- * block.h
+ * Block
  *
- * Copyright 2017 Phoenix Systems
- * Author: Kamil Amanowicz
+ * Copyright 2017, 2020 Phoenix Systems
+ * Author: Kamil Amanowicz, Lukasz Kosinski
  *
  * This file is part of Phoenix-RTOS.
  *
@@ -14,44 +14,37 @@
  */
 
 #ifndef _BLOCK_H_
-#define _BLOCK_H_ /* block.h */
+#define _BLOCK_H_
+
 
 #include <stdint.h>
+
 #include "ext2.h"
-
-extern int write_block(uint32_t block, void *data);
-
-
-extern int read_block(uint32_t block, void *data);
+#include "obj.h"
 
 
-extern int read_blocks(uint32_t block, uint32_t count, void *data);
+extern int ext2_read_blocks(ext2_t *info, uint32_t start, uint32_t blocks, void *data);
 
 
-extern int search_block(void *data, const char *name, uint8_t len, oid_t *res);
+extern int ext2_write_blocks(ext2_t *info, uint32_t start, uint32_t blocks, const void *data);
 
 
-extern void free_blocks(uint32_t start, uint32_t count);
+extern int ext2_get_block(ext2_t *fs, ext2_obj_t *obj, uint32_t block, uint32_t *res);
 
 
-extern int free_inode_blocks(ext2_object_t *o, uint32_t block, uint32_t count);
+extern int ext2_init_block(ext2_t *fs, ext2_obj_t *obj, uint32_t block, void *data);
 
 
-extern void get_block(ext2_object_t *o, uint32_t block, void *data);
+extern int ext2_sync_block(ext2_t *fs, ext2_obj_t *obj, uint32_t block, const void *data);
 
 
-extern uint32_t get_block_no(ext2_object_t *o, uint32_t block);
+extern int ext2_sync_blocks(ext2_t *fs, ext2_obj_t *obj, uint32_t start, uint32_t blocks, const void *data);
 
 
-extern void set_block(ext2_object_t *o, uint32_t block, void *data);
+extern int ext2_destroy_blocks(ext2_t *fs, uint32_t start, uint32_t blocks);
 
 
-extern int set_blocks(ext2_object_t *o, uint32_t start_block, uint32_t count, void *data);
+extern int ext2_destroy_iblocks(ext2_t *fs, ext2_obj_t *obj, uint32_t start, uint32_t blocks);
 
 
-static inline uint32_t block_offset(uint32_t block_no)
-{
-	return ext2->first_block + (ext2->block_size * (block_no - ext2->sb->first_data_block));
-}
-
-#endif /* block.h */
+#endif
