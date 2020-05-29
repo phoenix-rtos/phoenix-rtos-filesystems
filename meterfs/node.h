@@ -3,8 +3,8 @@
  *
  * Opened files
  *
- * Copyright 2017, 2018 Phoenix Systems
- * Author: Aleksander Kaminski
+ * Copyright 2017, 2018, 2020 Phoenix Systems
+ * Author: Aleksander Kaminski, Hubert Buczynski
  *
  * This file is part of Phoenix-RTOS.
  *
@@ -15,27 +15,28 @@
 #define _METERFS_OPENED_H_
 
 #include <arch.h>
+#include <sys/rb.h>
 #include "files.h"
 
-int node_add(file_t *file, id_t id);
+int node_add(file_t *file, id_t id, rbtree_t *tree);
 
 
-file_t *node_getByName(const char *name, id_t *id);
+file_t *node_getByName(const char *name, id_t *id, rbtree_t *tree);
 
 
-file_t *node_getById(id_t id);
+file_t *node_getById(id_t id, rbtree_t *tree);
 
 
-int node_put(id_t id);
+int node_put(id_t id, rbtree_t *tree);
 
 
-void node_cleanAll(void);
+void node_cleanAll(rbtree_t *tree);
 
 
-int node_getMaxId(void);
+int node_getMaxId(rbtree_t *tree);
 
 
-void node_init(void);
+void node_init(rbtree_t *tree);
 
 
 #endif

@@ -3,8 +3,8 @@
  *
  * Opened files
  *
- * Copyright 2017, 2018, 2020 Phoenix Systems
- * Author: Aleksander Kaminski, Pawel Pisarczyk, Hubert Buczynski
+ * Copyright 2017, 2018 Phoenix Systems
+ * Author: Aleksander Kaminski, Pawel Pisarczyk
  *
  * This file is part of Phoenix-RTOS.
  *
@@ -29,6 +29,9 @@ typedef struct {
 } node_t;
 
 
+static rbtree_t tree;
+
+
 static int node_cmp(rbnode_t *n1, rbnode_t *n2)
 {
 	node_t *f1 = lib_treeof(node_t, linkage, n1);
@@ -43,7 +46,7 @@ static int node_cmp(rbnode_t *n1, rbnode_t *n2)
 }
 
 
-int node_add(file_t *file, id_t id, rbtree_t *tree)
+int node_add(file_t *file, id_t id)
 {
 	node_t *r;
 
@@ -54,17 +57,17 @@ int node_add(file_t *file, id_t id, rbtree_t *tree)
 	r->id = id;
 	memcpy(&r->file, file, sizeof(file_t));
 
-	lib_rbInsert(tree, &r->linkage);
+	lib_rbInsert(&tree, &r->linkage);
 
 	return EOK;
 }
 
 
-file_t *node_getByName(const char *name, id_t *id, rbtree_t *tree)
+file_t *node_getByName(const char *name, id_t *id)
 {
 	node_t *p;
 
-	p = lib_treeof(node_t, linkage, lib_rbMinimum(tree->root));
+	p = lib_treeof(node_t, linkage, lib_rbMinimum(tree.root));
 
 	while (p != NULL) {
 		if (strncmp(name, p->file.header.name, sizeof(p->file.header.name)) == 0) {
@@ -80,13 +83,13 @@ file_t *node_getByName(const char *name, id_t *id, rbtree_t *tree)
 }
 
 
-file_t *node_getById(id_t id, rbtree_t *tree)
+file_t *node_getById(id_t id)
 {
 	node_t *p, t;
 
 	t.id = id;
 
-	if ((p = lib_treeof(node_t, linkage, lib_rbFind(tree, &t.linkage))) == NULL)
+	if ((p = lib_treeof(node_t, linkage, lib_rbFind(&tree, &t.linkage))) == NULL)
 		return NULL;
 
 	++(p->refs);
@@ -95,17 +98,17 @@ file_t *node_getById(id_t id, rbtree_t *tree)
 }
 
 
-int node_put(id_t id, rbtree_t *tree)
+int node_put(id_t id)
 {
 	node_t *r, t;
 
 	t.id = id;
 
-	if ((r = lib_treeof(node_t, linkage, lib_rbFind(tree, &t.linkage))) == NULL)
+	if ((r = lib_treeof(node_t, linkage, lib_rbFind(&tree, &t.linkage))) == NULL)
 		return -ENOENT;
 
 	if ((--r->refs) <= 0) {
-		lib_rbRemove(tree, &r->linkage);
+		lib_rbRemove(&tree, &r->linkage);
 		free(r);
 	}
 
@@ -113,29 +116,29 @@ int node_put(id_t id, rbtree_t *tree)
 }
 
 
-void node_cleanAll(rbtree_t *tree)
+void node_cleanAll(void)
 {
 	node_t *p;
 
-	while ((p = lib_treeof(node_t, linkage, tree->root)) != NULL) {
-		lib_rbRemove(tree, &p->linkage);
+	while ((p = lib_treeof(node_t, linkage, tree.root)) != NULL) {
+		lib_rbRemove(&tree, &p->linkage);
 		free(p);
 	}
 }
 
 
-int node_getMaxId(rbtree_t *tree)
+int node_getMaxId(void)
 {
 	node_t *p;
 
-	if ((p = lib_treeof(node_t, linkage, lib_rbMaximum(tree->root))) != NULL)
+	if ((p = lib_treeof(node_t, linkage, lib_rbMaximum(tree.root))) != NULL)
 		return p->id;
 	else
 		return 0;
 }
 
 
-void node_init(rbtree_t *tree)
+void node_init(void)
 {
-	lib_rbInit(tree, node_cmp, NULL);
+	lib_rbInit(&tree, node_cmp, NULL);
 }

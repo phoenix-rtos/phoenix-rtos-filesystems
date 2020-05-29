@@ -9,6 +9,6 @@
 CFLAGS += -DTARGET_IMXRT -DTARGET_IMXRT1060
 
 include dummyfs/Makefile
-include libmeterfs/Makefile
+include meterfs/Makefile
 include ptable/Makefile
 
