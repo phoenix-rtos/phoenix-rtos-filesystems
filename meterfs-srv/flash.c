@@ -145,57 +145,64 @@ void flash_writePage(unsigned int addr, void *buff, size_t bufflen)
 void flash_detect(size_t *flashsz, size_t *sectorsz)
 {
 	unsigned char jedec[3];
+	int detected = 0;
 
-	spi_powerCtrl(1);
-	spi_read(cmd_jedecid, 0, spi_cmd, jedec, 3);
-	spi_powerCtrl(0);
+	while (!detected) {
+		spi_powerCtrl(1);
+		spi_read(cmd_jedecid, 0, spi_cmd, jedec, 3);
+		spi_powerCtrl(0);
 
-	flash_needEWSR = 0;
+		flash_needEWSR = 0;
 
-	printf("meterfs: JEDEC ID 0x%02x 0x%02x 0x%02x\n", jedec[0], jedec[1], jedec[2]);
+		printf("meterfs: JEDEC ID 0x%02x 0x%02x 0x%02x\n", jedec[0], jedec[1], jedec[2]);
 
-	if (memcmp(jedec, chips[0], 3) == 0) {
-		printf("meterfs: Detected SST25VF016B\n");
-		flash_write = flash_writeAAI;
-		(*flashsz) = 2 * 1024 * 1024;
-		(*sectorsz) = 4 * 1024;
-		flash_needEWSR = 1;
-	}
-	else if (memcmp(jedec, chips[1], 3) == 0) {
-		printf("meterfs: Detected AT25DF321A\n");
-		flash_write = flash_writePage;
-		(*flashsz) = 4 * 1024 * 1024;
-		(*sectorsz) = 4 * 1024;
-	}
-	else if (memcmp(jedec, chips[2], 3) == 0) {
-		printf("meterfs: Detected MX25L3206E\n");
-		flash_write = flash_writePage;
-		(*flashsz) = 4 * 1024 * 1024;
-		(*sectorsz) = 4 * 1024;
-	}
-	else if (memcmp(jedec, chips[3], 3) == 0) {
-		printf("meterfs: Detected W25Q16JV\n");
-		flash_write = flash_writePage;
-		(*flashsz) = 2 * 1024 * 1024;
-		(*sectorsz) = 4 * 1024;
-	}
-	else if (memcmp(jedec, chips[4], 3) == 0) {
-		printf("meterfs: Detected EN25QH16\n");
-		flash_write = flash_writePage;
-		(*flashsz) = 2 * 1024 * 1024;
-		(*sectorsz) = 4 * 1024;
-	}
-	else if (memcmp(jedec, chips[5], 3) == 0) {
-		printf("meterfs: Detected EN25QH32\n");
-		flash_write = flash_writePage;
-		(*flashsz) = 4 * 1024 * 1024;
-		(*sectorsz) = 4 * 1024;
-	}
-	else {
-		printf("meterfs: Unknown flash memory\n");
-		flash_write = flash_writeSafe;
-		(*flashsz) = 2 * 1024 * 1024;
-		(*sectorsz) = 4 * 1024;
+		if (memcmp(jedec, chips[0], 3) == 0) {
+			printf("meterfs: Detected SST25VF016B\n");
+			flash_write = flash_writeAAI;
+			(*flashsz) = 2 * 1024 * 1024;
+			(*sectorsz) = 4 * 1024;
+			flash_needEWSR = 1;
+			detected = 1;
+		}
+		else if (memcmp(jedec, chips[1], 3) == 0) {
+			printf("meterfs: Detected AT25DF321A\n");
+			flash_write = flash_writePage;
+			(*flashsz) = 4 * 1024 * 1024;
+			(*sectorsz) = 4 * 1024;
+			detected = 1;
+		}
+		else if (memcmp(jedec, chips[2], 3) == 0) {
+			printf("meterfs: Detected MX25L3206E\n");
+			flash_write = flash_writePage;
+			(*flashsz) = 4 * 1024 * 1024;
+			(*sectorsz) = 4 * 1024;
+			detected = 1;
+		}
+		else if (memcmp(jedec, chips[3], 3) == 0) {
+			printf("meterfs: Detected W25Q16JV\n");
+			flash_write = flash_writePage;
+			(*flashsz) = 2 * 1024 * 1024;
+			(*sectorsz) = 4 * 1024;
+			detected = 1;
+		}
+		else if (memcmp(jedec, chips[4], 3) == 0) {
+			printf("meterfs: Detected EN25QH16\n");
+			flash_write = flash_writePage;
+			(*flashsz) = 2 * 1024 * 1024;
+			(*sectorsz) = 4 * 1024;
+			detected = 1;
+		}
+		else if (memcmp(jedec, chips[5], 3) == 0) {
+			printf("meterfs: Detected EN25QH32\n");
+			flash_write = flash_writePage;
+			(*flashsz) = 4 * 1024 * 1024;
+			(*sectorsz) = 4 * 1024;
+			detected = 1;
+		}
+		else {
+			printf("meterfs: JEDEC ID detection failed. Retrying.\n");
+			usleep(250 * 1000);
+		}
 	}
 
 	printf("meterfs: Capacity %u KiB, sector %u\n", (*flashsz) / 1024, *sectorsz);
