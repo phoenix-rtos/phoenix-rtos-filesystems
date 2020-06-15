@@ -61,12 +61,17 @@ typedef struct {
 	uint32_t sectorSize;
 
 	ssize_t (*read)(unsigned int addr, void *buff, size_t bufflen);
+	ssize_t (*write)(unsigned int addr, const void *buff, size_t bufflen);
 } memory_properties_t;
 
 
 
-/* Function allocates pHeaders - pointer to an array of partitions and  writes to pHeadersLen number of partitions. */
+/* Function returns pointer to an array of partitions and writes to pCnt number of partitions. */
 ptable_partition_t *ptable_readPartitions(uint32_t *pCnt, const memory_properties_t *mem);
+
+
+/* Function wrtie pHeaders to memory */
+ssize_t ptable_writePartitions(ptable_partition_t *pHeaders, uint32_t pCnt, const memory_properties_t *mem);
 
 
 #endif

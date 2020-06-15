@@ -21,7 +21,7 @@
 
 static int ptable_checkPartitionType(uint8_t type)
 {
-	int res = EOK;
+	int res = 0;
 
 	switch (type) {
 		case ptable_raw:
@@ -86,7 +86,7 @@ static int ptable_verifyPartition(int id, const ptable_partition_t *pHeaders, co
 			return -EINVAL;
 	}
 
-	return EOK;
+	return 0;
 }
 
 
@@ -107,6 +107,7 @@ ptable_partition_t *ptable_readPartitions(uint32_t *pCnt, const memory_propertie
 
 	/* Read and verify partition table header */
 	ptabAddr = mem->memSize - mem->sectorSize;
+
 	if (mem->read(ptabAddr, (void *)&tHeader, sizeof(ptable_header_t)) != sizeof(ptable_header_t))
 		return NULL;
 
@@ -139,8 +140,48 @@ ptable_partition_t *ptable_readPartitions(uint32_t *pCnt, const memory_propertie
 			return NULL;
 		}
 	}
-
 	*pCnt = tHeader.pCnt;
 
 	return pHeaders;
+}
+
+
+ssize_t ptable_writePartitions(ptable_partition_t *pHeaders, uint32_t pCnt, const memory_properties_t *mem)
+{
+	int i;
+	char *buff;
+	ssize_t res;
+	uint32_t buffSize, offs;
+	ptable_header_t tHeader = {0};
+
+	offs = 0;
+	buffSize = sizeof(ptable_header_t) + pCnt * sizeof(ptable_partition_t) + sizeof(pt_magicBytes);
+
+	if ((buff = (char *)calloc(buffSize, sizeof(char))) == NULL)
+		return -1;
+
+	memset(buff, 0xff, buffSize);
+
+	/* Verify partition attributes */
+	for (i = 0; i < pCnt; ++i) {
+		if (ptable_verifyPartition(i, pHeaders, mem) < 0) {
+			free(buff);
+			return -1;
+		}
+	}
+
+	tHeader.pCnt = pCnt;
+
+	memcpy(buff + offs, &tHeader, sizeof(ptable_header_t));
+	offs += sizeof(ptable_header_t);
+
+	memcpy(buff + offs, pHeaders, tHeader.pCnt * sizeof(ptable_partition_t));
+	offs += tHeader.pCnt * sizeof(ptable_partition_t);
+
+	memcpy(buff + offs, pt_magicBytes, sizeof(pt_magicBytes));
+
+	res = mem->write(mem->memSize - mem->sectorSize, buff, buffSize);
+	free(buff);
+
+	return res;
 }
