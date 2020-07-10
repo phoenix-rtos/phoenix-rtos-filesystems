@@ -1,11 +1,12 @@
 /*
  * Phoenix-RTOS
  *
- * libext2
+ * EXT2 filesystem
  *
+ * Library
  *
- * Copyright 2019 Phoenix Systems
- * Author: Kamil Amanowicz
+ * Copyright 2019, 2020 Phoenix Systems
+ * Author: Kamil Amanowicz, Lukasz Kosinski
  *
  * This file is part of Phoenix-RTOS.
  *
@@ -21,19 +22,23 @@
 #include <sys/types.h>
 
 
-extern int libext2_handler(void *, msg_t *);
+/* Mounts filesystem */
+extern int libext2_mount(oid_t *dev, unsigned int sectorsz, ssize_t (*read)(id_t, offs_t, char *, size_t), ssize_t (*write)(id_t, offs_t, const char *, size_t), void **data);
 
 
-extern int libext2_mount(oid_t *, ssize_t (*)(id_t, offs_t, char *, size_t), ssize_t (*)(id_t, offs_t, const char *, size_t), void **);
+/* Unmounts filesystem */
+extern int libext2_unmount(void *data);
 
 
-extern int libext2_unmount(void *);
+/* Processes filesystem messages */
+extern int libext2_handler(void *data, msg_t *msg);
 
 
 #define LIBEXT2_TYPE    0x83
 #define LIBEXT2_NAME    "ext2"
-#define LIBEXT2_HANDLER libext2_handler
 #define LIBEXT2_MOUNT   libext2_mount
 #define LIBEXT2_UNMOUNT libext2_unmount
+#define LIBEXT2_HANDLER libext2_handler
 
-#endif /* libext2.h */
+
+#endif

@@ -3,7 +3,7 @@
  *
  * EXT2 filesystem
  *
- * Object
+ * Filesystem object
  *
  * Copyright 2017, 2020 Phoenix Systems
  * Author: Kamil Amanowicz, Lukasz Kosinski
@@ -16,7 +16,6 @@
 #ifndef _OBJ_H_
 #define _OBJ_H_
 
-
 #include <stdint.h>
 
 #include <sys/types.h>
@@ -26,80 +25,77 @@
 #include "inode.h"
 
 
-/* ext2 object flags */
+/* Object flags */
 enum {
-	EXT2_FL_DIRTY = 1,
-	EXT2_FL_MOUNTPOINT = 2,
-	EXT2_FL_MOUNT = 4
+	OFLAG_DIRTY      = 0x01,
+	OFLAG_MOUNTPOINT = 0x02,
+	OFLAG_MOUNT      = 0x04
 };
 
 
-typedef struct ext2_obj_t ext2_obj_t;
+struct _ext2_obj_t {
+	id_t id;                 /* Object ID, same as underlying inode number */
+	rbnode_t node;           /* RBTree node */
 
-struct ext2_obj_t {
-	id_t ino;
-	rbnode_t node;
-
-	uint32_t refs;
-	uint8_t flags;
-	ext2_inode_t *inode;
+	/* Object data */
 	union {
 		struct {
-			uint32_t block;
+			uint32_t bno;
 			uint32_t *data;
-		} ind[3];
-		oid_t mnt;
+		} ind[3];            /* Indirect blocks */
+		oid_t mnt;           /* Mounted filesystem */
+		oid_t dev;           /* Device */
 	};
+	uint32_t refs;           /* Reference counter */
+	uint8_t flags;           /* Object flags */
+	ext2_inode_t *inode;     /* Underlying inode */
+	ext2_obj_t *prev, *next; /* Double linked list */
 
-	handle_t lock;
-	ext2_obj_t *prev, *next;
+	/* Synchronization */
+	handle_t lock;           /* Access mutex */
 };
 
 
-typedef struct {
-	rbtree_t used;   /* Objects in use */
-	uint32_t count;  /* Number of objects in use */
-	ext2_obj_t *lru; /* Least Recently Used objects cache */
+struct _ext2_objs_t {
+	rbtree_t used;           /* RBTree of objects in use */
+	uint32_t count;          /* Number of objects in use */
+	ext2_obj_t *lru;         /* Least Recently Used objects cache */
 
 	/* Synchronization */
-	handle_t lock;   /* Objects mutex */
-} ext2_objs_t;
+	handle_t lock;           /* Access mutex */
+};
 
 
-extern int ext2_init_objs(ext2_t *fs);
+/* Creates new object */
+extern int ext2_obj_create(ext2_t *fs, uint32_t pino, ext2_inode_t *inode, uint16_t mode, ext2_obj_t **res);
 
 
-extern ext2_obj_t *object_get(ext2_t *f, id_t *id);
+/* Destroys object */
+extern int ext2_obj_destroy(ext2_t *fs, ext2_obj_t *obj);
 
 
-extern void object_put(ext2_obj_t *o);
+/* Retrives object */
+extern ext2_obj_t *ext2_obj_get(ext2_t *fs, id_t id);
 
 
-extern void object_sync(ext2_obj_t *o);
+/* Synchronizes object (requires object to be locked) */
+extern int _ext2_obj_sync(ext2_t *fs, ext2_obj_t *obj);
 
 
-extern ext2_obj_t *object_create(ext2_t *f, id_t *id, id_t *pid, ext2_inode_t **inode, int mode);
+/* Synchronizes object */
+extern int ext2_obj_sync(ext2_t *fs, ext2_obj_t *obj);
 
 
-extern int object_destroy(ext2_obj_t *o);
+/* Releases object */
+extern void ext2_obj_put(ext2_t *fs, ext2_obj_t *obj);
 
 
-__attribute__((always_inline)) inline int object_checkFlag(ext2_obj_t *o, uint8_t flag)
-{
-	return o->flags & flag;
-}
+/* Destroys filesystem objects */
+extern void ext2_objs_destroy(ext2_t *fs);
 
 
-__attribute__((always_inline)) inline int object_setFlag(ext2_obj_t *o, uint8_t flag)
-{
-	return o->flags |= flag;
-}
-
-
-__attribute__((always_inline)) inline int object_clearFlag(ext2_obj_t *o, uint8_t flag)
-{
-	return o->flags &= ~flag;
-}
+/* Initializes filesystem objects */
+extern int ext2_objs_init(ext2_t *fs);
 
 
 #endif

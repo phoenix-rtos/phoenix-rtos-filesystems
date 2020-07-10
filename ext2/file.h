@@ -1,12 +1,12 @@
 /*
  * Phoenix-RTOS
  *
- * ext2
+ * EXT2 filesystem
  *
- * file.h
+ * File operations
  *
- * Copyright 2017 Phoenix Systems
- * Author: Kamil Amanowicz
+ * Copyright 2017, 2020 Phoenix Systems
+ * Author: Kamil Amanowicz, Lukasz Kosinski
  *
  * This file is part of Phoenix-RTOS.
  *
@@ -14,23 +14,29 @@
  */
 
 #ifndef _FILE_H_
-#define _FILE_H_ /* file.h */
+#define _FILE_H_
 
 #include <stdint.h>
 
-extern int ext2_read_internal(ext2_obj_t *o, off_t offs, char *data, size_t len);
+#include <sys/types.h>
+
+#include "ext2.h"
 
 
-extern int ext2_read(ext2_t *f, id_t *id, off_t offs, char *data, size_t len);
+/* Reads a file (requires object to be locked) */
+extern ssize_t _ext2_file_read(ext2_t *fs, ext2_obj_t *obj, offs_t offs, char *buff, size_t len);
 
 
-extern int ext2_write_unlocked(ext2_t *f, id_t *id, off_t offs, const char *data, size_t len);
+/* Writes a file (requires object to be locked) */ 
+extern ssize_t _ext2_file_write(ext2_t *fs, ext2_obj_t *obj, offs_t offs, const char *buff, size_t len);
 
 
-extern int ext2_write(ext2_t *f, id_t *id, off_t offs, const char *data, size_t len);
+/* Truncates a file (requires object to be locked) */
+extern int _ext2_file_truncate(ext2_t *fs, ext2_obj_t *obj, size_t size);
 
 
-extern int ext2_truncate(ext2_t *f, id_t *id, size_t size);
+/* Truncates and synchronizes a file */
+extern int ext2_file_truncate(ext2_t *fs, ext2_obj_t *obj, size_t size);
 
 
-#endif /* file.h */
+#endif

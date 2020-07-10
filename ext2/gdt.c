@@ -14,7 +14,6 @@
  */
 
 #include <errno.h>
-#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -22,28 +21,104 @@
 #include "gdt.h"
 
 
-int ext2_init_gdt(ext2_t *fs)
+int ext2_gdt_syncone(ext2_t *fs, uint32_t group)
 {
-	ext2_gd_t *gdt;
+	uint32_t blocks = (sizeof(ext2_gd_t) - 1) / fs->blocksz + 1;
+	uint32_t bno = fs->sb->fstBlock + group * sizeof(ext2_gd_t) / fs->blocksz + 1;
 	void *buff;
 	int err;
-	uint32_t groups = (fs->sb->blocks - 1) / fs->sb->group_blocks + 1;
-	uint32_t gdtsz = groups * sizeof(ext2_gd_t);
-	uint32_t start = fs->sb->fst_block + 1;
-	uint32_t blocks = gdtsz / fs->blocksz;
 
-	if ((gdt = (ext2_gd_t *)malloc(gdtsz)) == NULL)
+	if ((buff = malloc(blocks * fs->blocksz)) == NULL)
 		return -ENOMEM;
 
-	if ((err = ext2_read_blocks(fs, start, blocks, gdt)) < 0)
+	if ((err = ext2_block_read(fs, bno, buff, blocks)) < 0) {
+		free(buff);
+		return err;
+	}
+
+	memcpy(buff + group * sizeof(ext2_gd_t) % fs->blocksz, fs->gdt + group, sizeof(ext2_gd_t));
+
+	if ((err = ext2_block_write(fs, bno, buff, blocks)) < 0) {
+		free(buff);
+		return err;
+	}
+
+	free(buff);
+
+	return EOK;
+}
+
+
+int ext2_gdt_sync(ext2_t *fs)
+{
+	uint32_t gdtsz = fs->groups * sizeof(ext2_gd_t);
+	uint32_t blocks = gdtsz / fs->blocksz;
+	uint32_t bno = fs->sb->fstBlock + 1;
+	void *buff;
+	int err;
+
+	if ((err = ext2_block_write(fs, bno, fs->gdt, blocks)) < 0)
 		return err;
 
 	if (gdtsz % fs->blocksz) {
 		if ((buff = malloc(fs->blocksz)) == NULL)
 			return -ENOMEM;
 
-		if ((err = ext2_read_blocks(fs, start + blocks, 1, buff)) < 0)
+		if ((err = ext2_block_read(fs, bno + blocks, buff, 1)) < 0) {
+			free(buff);
 			return err;
+		}
+
+		memcpy(buff, (void *)((uintptr_t)(void *)fs->gdt + blocks * fs->blocksz), gdtsz % fs->blocksz);
+
+		if ((err = ext2_block_write(fs, bno + blocks, buff, 1)) < 0) {
+			free(buff);
+			return err;
+		}
+
+		free(buff);
+	}
+
+	return EOK;
+}
+
+
+void ext2_gdt_destroy(ext2_t *fs)
+{
+	ext2_gdt_sync(fs);
+	free(fs->gdt);
+}
+
+
+int ext2_gdt_init(ext2_t *fs)
+{
+	uint32_t groups = (fs->sb->blocks - 1) / fs->sb->groupBlocks + 1;
+	uint32_t gdtsz = groups * sizeof(ext2_gd_t);
+	uint32_t blocks = gdtsz / fs->blocksz;
+	uint32_t bno = fs->sb->fstBlock + 1;
+	ext2_gd_t *gdt;
+	void *buff;
+	int err;
+
+	if ((gdt = (ext2_gd_t *)malloc(gdtsz)) == NULL)
+		return -ENOMEM;
+
+	if ((err = ext2_block_read(fs, bno, gdt, blocks)) < 0) {
+		free(gdt);
+		return err;
+	}
+
+	if (gdtsz % fs->blocksz) {
+		if ((buff = malloc(fs->blocksz)) == NULL) {
+			free(gdt);
+			return -ENOMEM;
+		}
+
+		if ((err = ext2_block_read(fs, bno + blocks, buff, 1)) < 0) {
+			free(gdt);
+			free(buff);
+			return err;
+		}
 
 		memcpy((void *)((uintptr_t)(void *)gdt + blocks * fs->blocksz), buff, gdtsz % fs->blocksz);
 		free(buff);
@@ -51,58 +126,6 @@ int ext2_init_gdt(ext2_t *fs)
 
 	fs->gdt = gdt;
 	fs->groups = groups;
-
-	return EOK;
-}
-
-
-int ext2_sync_gd(ext2_t *fs, uint32_t group)
-{
-	void *buff;
-	int err;
-	uint32_t start = fs->sb->fst_block + group * sizeof(ext2_gd_t) / fs->blocksz + 1;
-	uint32_t blocks = (sizeof(ext2_gd_t) - 1) / fs->blocksz + 1;
-
-	if ((buff = malloc(blocks * fs->blocksz)) == NULL)
-		return -ENOMEM;
-
-	if ((err = ext2_read_blocks(fs, start, blocks, buff)) < 0)
-		return err;
-
-	memcpy(buff + group * sizeof(ext2_gd_t) % fs->blocksz, fs->gdt + group, sizeof(ext2_gd_t));
-
-	if ((err = ext2_write_blocks(fs, start, blocks, buff)) < 0)
-		return err;
-
-	return EOK;
-}
-
-
-int ext2_sync_gdt(ext2_t *fs)
-{
-	void *buff;
-	int err;
-	uint32_t gdtsz = fs->groups * sizeof(ext2_gd_t);
-	uint32_t start = fs->sb->fst_block + 1;
-	uint32_t blocks = gdtsz / fs->blocksz;
-
-	if ((err = ext2_write_blocks(fs, start, blocks, fs->gdt)) < 0)
-		return err;
-
-	if (gdtsz % fs->blocksz) {
-		if ((buff = malloc(fs->blocksz)) == NULL)
-			return -ENOMEM;
-
-		if ((err = ext2_read_blocks(fs, start + blocks, 1, buff)) < 0)
-			return err;
-
-		memcpy(buff, (void *)((uintptr_t)fs->gdt + blocks * fs->blocksz), gdtsz % fs->blocksz);
-
-		if ((err = ext2_write_blocks(fs, start + blocks, 1, buff)) < 0)
-			return err;
-
-		free(buff);
-	}
 
 	return EOK;
 }

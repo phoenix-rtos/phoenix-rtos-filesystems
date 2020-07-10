@@ -14,41 +14,48 @@
  */
 
 #include <errno.h>
-#include <stdint.h>
 #include <stdlib.h>
 
 #include "sb.h"
 
 
-int ext2_init_sb(ext2_t *fs)
+int ext2_sb_sync(ext2_t *fs)
 {
-	ext2_sb_t *sb;
-	ssize_t ret;
-
-	if ((sb = (ext2_sb_t *)malloc(sizeof(ext2_sb_t))) == NULL)
-		return -ENOMEM;
-
-	if ((ret = fs->read(fs->dev, SB_OFFSET, (char *)sb, sizeof(ext2_sb_t))) != sizeof(ext2_sb_t))
-		return (int)ret;
-
-	if (sb->magic != MAGIC_EXT2)
-		return -ENOENT;
-
-	//TODO: features check
-
-	fs->sb = sb;
-	fs->blocksz = 1024 << sb->log_blocksz;
+	if (fs->write(fs->dev.id, SB_OFFSET, (char *)fs->sb, sizeof(ext2_sb_t)) != sizeof(ext2_sb_t))
+		return -EIO;
 
 	return EOK;
 }
 
 
-int ext2_sync_sb(ext2_t *fs)
+void ext2_sb_destroy(ext2_t *fs)
 {
-	ssize_t ret;
+	ext2_sb_sync(fs);
+	free(fs->sb);
+}
 
-	if ((ret = fs->write(fs->dev, SB_OFFSET, (char *)fs->sb, sizeof(ext2_sb_t))) != sizeof(ext2_sb_t))
-		return (int)ret;
+
+int ext2_sb_init(ext2_t *fs)
+{
+	ext2_sb_t *sb;
+
+	if ((sb = (ext2_sb_t *)malloc(sizeof(ext2_sb_t))) == NULL)
+		return -ENOMEM;
+
+	if (fs->read(fs->dev.id, SB_OFFSET, (char *)sb, sizeof(ext2_sb_t)) != sizeof(ext2_sb_t)) {
+		free(sb);
+		return -EIO;
+	}
+
+	if (sb->magic != MAGIC_EXT2) {
+		free(sb);
+		return -ENOENT;
+	}
+
+	//TODO: features check
+
+	fs->sb = sb;
+	fs->blocksz = 1024 << sb->logBlocksz;
 
 	return EOK;
 }

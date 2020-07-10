@@ -1,10 +1,10 @@
 #
-# Makefile for Phoenix-RTOS ext2 filesystem
+# Makefile for Phoenix-RTOS EXT2 filesystem
 #
-# Copyright 2018 Phoenix Systems
+# Copyright 2018, 2020 Phoenix Systems
 #
 
-EXT2_OBJS := ext2.o inode.o block.o file.o dir.o object.o sb.o
+EXT2_OBJS := block.o dir.o ext2.o file.o gdt.o inode.o libext2.o obj.o sb.o
 
 $(PREFIX_A)libext2.a: $(addprefix $(PREFIX_O)ext2/, $(EXT2_OBJS))
 	$(ARCH)

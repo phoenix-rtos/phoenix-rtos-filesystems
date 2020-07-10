@@ -16,31 +16,37 @@
 #ifndef _GDT_H_
 #define _GDT_H_
 
-
 #include <stdint.h>
 
 #include "ext2.h"
 
 
-typedef struct {
-	uint32_t block_bmp;   /* Blocks bitmap block */
-	uint32_t inode_bmp;   /* Inodes bitmap block */
-	uint32_t inode_tbl;   /* Inodes table block */
-	uint16_t free_blocks; /* Number of free blocks in the group */
-	uint16_t free_inodes; /* Number of free inodes in the group */
-	uint16_t dirs;        /* Number of directories in the group */
+struct _ext2_gd_t {
+	uint32_t blockBmp;    /* Blocks bitmap block */
+	uint32_t inodeBmp;    /* Inodes bitmap block */
+	uint32_t inodeTbl;    /* Inodes table block */
+	uint16_t freeBlocks;  /* Number of free blocks */
+	uint16_t freeInodes;  /* Number of free inodes */
+	uint16_t dirs;        /* Number of directories */
 	uint16_t pad;         /* Padding */
 	uint32_t reserved[3]; /* Reserved */
-} __attribute__ ((packed)) ext2_gd_t;
+} __attribute__ ((packed));
 
 
-extern int ext2_init_gdt(ext2_t *fs);
+/* Synchronizes one group descriptor */
+extern int ext2_gdt_syncone(ext2_t *fs, uint32_t group);
 
 
-extern int ext2_sync_gd(ext2_t *fs, uint32_t group);
+/* Synchronizes GDT */
+extern int ext2_gdt_sync(ext2_t *fs);
 
 
-extern int ext2_sync_gdt(ext2_t *fs);
+/* Destroys GDT */
+extern void ext2_gdt_destroy(ext2_t *fs);
+
+
+/* Initializes GDT */
+extern int ext2_gdt_init(ext2_t *fs);
 
 
 #endif

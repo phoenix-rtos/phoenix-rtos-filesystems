@@ -3,7 +3,7 @@
  *
  * EXT2 filesystem
  *
- * Block
+ * Block operations
  *
  * Copyright 2017, 2020 Phoenix Systems
  * Author: Kamil Amanowicz, Lukasz Kosinski
@@ -16,35 +16,41 @@
 #ifndef _BLOCK_H_
 #define _BLOCK_H_
 
-
 #include <stdint.h>
 
 #include "ext2.h"
-#include "obj.h"
 
 
-extern int ext2_read_blocks(ext2_t *info, uint32_t start, uint32_t blocks, void *data);
+/* Reads blocks */
+extern int ext2_block_read(ext2_t *fs, uint32_t bno, void *buff, uint32_t n);
 
 
-extern int ext2_write_blocks(ext2_t *info, uint32_t start, uint32_t blocks, const void *data);
+/* Writes blocks */
+extern int ext2_block_write(ext2_t *fs, uint32_t bno, const void *buff, uint32_t n);
 
 
-extern int ext2_get_block(ext2_t *fs, ext2_obj_t *obj, uint32_t block, uint32_t *res);
+/* Calculates physical block number (given object inode relative block number) */
+extern int ext2_block_get(ext2_t *fs, ext2_obj_t *obj, uint32_t block, uint32_t **res);
 
 
-extern int ext2_init_block(ext2_t *fs, ext2_obj_t *obj, uint32_t block, void *data);
+/* Initializes block (given object inode relative block number) */
+extern int ext2_block_init(ext2_t *fs, ext2_obj_t *obj, uint32_t block, void *buff);
 
 
-extern int ext2_sync_block(ext2_t *fs, ext2_obj_t *obj, uint32_t block, const void *data);
+/* Synchronizes one block (given object inode relative block number) */
+extern int ext2_block_syncone(ext2_t *fs, ext2_obj_t *obj, uint32_t block, const void *buff);
 
 
-extern int ext2_sync_blocks(ext2_t *fs, ext2_obj_t *obj, uint32_t start, uint32_t blocks, const void *data);
+/* Synchronizes blocks (given object inode relative block number) */
+extern int ext2_block_sync(ext2_t *fs, ext2_obj_t *obj, uint32_t block, const void *buff, uint32_t n);
 
 
-extern int ext2_destroy_blocks(ext2_t *fs, uint32_t start, uint32_t blocks);
+/* Destroys blocks */
+extern int ext2_block_destroy(ext2_t *fs, uint32_t bno, uint32_t n);
 
 
-extern int ext2_destroy_iblocks(ext2_t *fs, ext2_obj_t *obj, uint32_t start, uint32_t blocks);
+/* Destroys inode blocks (given object inode relative block number) */
+extern int ext2_iblock_destroy(ext2_t *fs, ext2_obj_t *obj, uint32_t block, uint32_t n);
 
 
 #endif

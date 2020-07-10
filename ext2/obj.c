@@ -3,7 +3,7 @@
  *
  * EXT2 filesystem
  *
- * Object
+ * Filesystem object
  *
  * Copyright 2017, 2020 Phoenix Systems
  * Author: Kamil Amanowicz, Lukasz Kosinski
@@ -14,12 +14,271 @@
  */
 
 #include <errno.h>
+#include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
+#include <time.h>
 
+#include <sys/list.h>
+#include <sys/stat.h>
+#include <sys/threads.h>
+
+#include "block.h"
 #include "obj.h"
 
 
-static int ext2_objcmp(rbnode_t *node1, rbnode_t *node2)
+/* Releases object resources and removes it from objects in use RBTree */
+static int _ext2_obj_remove(ext2_t *fs, ext2_obj_t *obj)
+{
+	int err;
+
+	if ((err = resourceDestroy(obj->lock)) < 0)
+		return err;
+
+	free(obj->inode);
+	free(obj->ind[0].data);
+	free(obj->ind[1].data);
+	free(obj->ind[2].data);
+
+	lib_rbRemove(&fs->objs->used, &obj->node);
+	fs->objs->count--;
+
+	return EOK;
+}
+
+
+/* Removes object from LRU cache and destroys it */
+static int _ext2_obj_removelru(ext2_t *fs)
+{
+	ext2_obj_t *obj;
+	int err;
+
+	if ((obj = fs->objs->lru) == NULL)
+		return -ENOENT;
+
+	if ((err = ext2_obj_sync(fs, obj)) < 0)
+		return err;
+
+	if ((err = _ext2_obj_remove(fs, obj)) < 0)
+		return err;
+
+	LIST_REMOVE(&fs->objs->lru, obj);
+	free(obj);
+
+	return EOK;
+}
+
+
+/* Creates new object */
+static int _ext2_obj_create(ext2_t *fs, uint32_t pino, ext2_inode_t *inode, uint16_t mode, ext2_obj_t** res)
+{
+	ext2_obj_t *obj;
+	uint32_t ino;
+	int err;
+
+	if (inode == NULL) {
+		if (!(ino = ext2_inode_create(fs, pino, mode)))
+			return -ENOSPC;
+
+		if ((inode = (ext2_inode_t *)malloc(fs->sb->inodesz)) == NULL) {
+			ext2_inode_destroy(fs, ino, mode);
+			return -ENOMEM;
+		}
+
+		memset(inode, 0, fs->sb->inodesz);
+		inode->mode = mode;
+		inode->ctime = inode->mtime = inode->atime = time(NULL);
+	}
+	else {
+		ino = pino;
+	}
+
+	do {
+		if ((fs->objs->count >= MAX_OBJECTS) && ((err = _ext2_obj_removelru(fs)) < 0))
+			break;
+
+		if ((*res = obj = (ext2_obj_t *)malloc(sizeof(ext2_obj_t))) == NULL) {
+			err = -ENOMEM;
+			break;
+		}
+		
+		if ((err = mutexCreate(&obj->lock)) < 0) {
+			free(obj);
+			break;
+		}
+
+		obj->id = ino;
+		obj->refs = 1;
+		obj->flags = OFLAG_DIRTY;
+		obj->inode = inode;
+		obj->prev = NULL;
+		obj->next = NULL;
+
+		lib_rbInsert(&fs->objs->used, &obj->node);
+		fs->objs->count++;
+
+		return EOK;
+	} while (0);
+
+	free(inode);
+	ext2_inode_destroy(fs, ino, mode);
+
+	return err;
+}
+
+
+int ext2_obj_create(ext2_t *fs, uint32_t pino, ext2_inode_t *inode, uint16_t mode, ext2_obj_t **res)
+{
+	int ret;
+
+	mutexLock(fs->objs->lock);
+
+	ret = _ext2_obj_create(fs, pino, inode, mode, res);
+
+	mutexUnlock(fs->objs->lock);
+
+	return ret;
+}
+
+
+static int _ext2_obj_destroy(ext2_t *fs, ext2_obj_t *obj)
+{
+	int err;
+
+	if ((err = ext2_inode_destroy(fs, (uint32_t)obj->id, obj->inode->mode)) < 0)
+		return err;
+
+	if ((err = _ext2_obj_remove(fs, obj)) < 0)
+		return err;
+
+	free(obj);
+
+	return EOK;
+}
+
+
+int ext2_obj_destroy(ext2_t *fs, ext2_obj_t *obj)
+{
+	int ret;
+
+	mutexLock(fs->objs->lock);
+
+	ret = _ext2_obj_destroy(fs, obj);
+
+	mutexUnlock(fs->objs->lock);
+
+	return ret;
+}
+
+
+ext2_obj_t *ext2_obj_get(ext2_t *fs, id_t id)
+{
+	ext2_obj_t *obj, tmp;
+	ext2_inode_t *inode;
+
+	mutexLock(fs->objs->lock);
+
+	do {
+		tmp.id = id;
+		if ((obj = lib_treeof(ext2_obj_t, node, lib_rbFind(&fs->objs->used, &tmp.node))) != NULL) {
+			if (!obj->refs)
+				LIST_REMOVE(&fs->objs->lru, obj);
+
+			obj->refs++;
+			break;
+		}
+
+		if ((inode = ext2_inode_init(fs, (uint32_t)id)) == NULL) {
+			obj = NULL;
+			break;
+		}
+
+		if (_ext2_obj_create(fs, (uint32_t)id, inode, inode->mode, &obj) < 0) {
+			obj = NULL;
+			break;
+		}
+	} while (0);
+
+	mutexUnlock(fs->objs->lock);
+
+	return obj;
+}
+
+
+int _ext2_obj_sync(ext2_t *fs, ext2_obj_t *obj)
+{
+	int err;
+
+	if (obj->flags & OFLAG_DIRTY) {
+		if ((err = ext2_inode_sync(fs, (uint32_t)obj->id, obj->inode)) < 0)
+			return err;
+
+		obj->flags &= ~OFLAG_DIRTY;
+	}
+
+	if (!(obj->flags & OFLAG_MOUNT)) {
+		if ((obj->ind[0].data != NULL) && (err = ext2_block_write(fs, obj->ind[0].bno, obj->ind[0].data, 1)) < 0)
+			return err;
+
+		if ((obj->ind[0].data != NULL) && (err = ext2_block_write(fs, obj->ind[1].bno, obj->ind[1].data, 1)) < 0)
+			return err;
+
+		if ((obj->ind[0].data != NULL) && (err = ext2_block_write(fs, obj->ind[2].bno, obj->ind[2].data, 1)) < 0)
+			return err;
+	}
+
+	return EOK;
+}
+
+
+int ext2_obj_sync(ext2_t *fs, ext2_obj_t *obj)
+{
+	int ret;
+
+	mutexLock(obj->lock);
+
+	ret = _ext2_obj_sync(fs, obj);
+
+	mutexUnlock(obj->lock);
+
+	return ret;
+}
+
+
+void ext2_obj_put(ext2_t *fs, ext2_obj_t *obj)
+{
+	mutexLock(fs->objs->lock);
+
+	if (!(--obj->refs) && !(S_ISCHR(obj->inode->mode) || S_ISBLK(obj->inode->mode))) {
+		if (!obj->inode->links)
+			_ext2_obj_destroy(fs, obj);
+		else
+			LIST_ADD(&fs->objs->lru, obj);
+	}
+
+	mutexUnlock(fs->objs->lock);
+}
+
+
+void ext2_objs_destroy(ext2_t *fs)
+{
+	rbnode_t *node, *next;
+
+	mutexLock(fs->objs->lock);
+
+	for (node = lib_rbMinimum(fs->objs->used.root); node; node = next) {
+		next = lib_rbNext(node);
+		_ext2_obj_destroy(fs, lib_treeof(ext2_obj_t, node, node));
+	}
+
+	mutexUnlock(fs->objs->lock);
+
+	resourceDestroy(fs->objs->lock);
+	free(fs->objs);
+}
+
+
+static int ext2_obj_cmp(rbnode_t *node1, rbnode_t *node2)
 {
 	ext2_obj_t *obj1 = lib_treeof(ext2_obj_t, node, node1);
 	ext2_obj_t *obj2 = lib_treeof(ext2_obj_t, node, node2);
@@ -33,222 +292,7 @@ static int ext2_objcmp(rbnode_t *node1, rbnode_t *node2)
 }
 
 
-static int _ext2_destroy_object(ext2_objs_t *objs, ext2_obj_t *obj)
-{
-	ext2_obj_t t;
-
-	t.id = obj->id;
-
-	if ((obj == lib_treeof(ext2_obj_t, node, lib_rbFind(&obj->fs->objects->used, &t.node)))) {
-		if (obj->fs->objs->count)
-			obj->fs->objs->count--;
-		else
-			debug("ext2: GLOBAL OBJECT COUNTER UNDERFLOW\n");
-		lib_rbRemove(&obj->fs->objects->used, &obj->node);
-	}
-
-	inode_free(obj->fs, obj->id, obj->inode->mode);
-
-	free(obj->inode);
-
-	free(obj->ind[0].data);
-	free(obj->ind[1].data);
-	free(obj->ind[2].data);
-	/*mutex destroy */
-	resourceDestroy(obj->lock);
-	free(obj);
-	return EOK;
-}
-
-
-int object_destroy(ext2_obj_t *obj)
-{
-	if (!obj)
-		return -EINVAL;
-
-	ext2_objs_t *objects = obj->fs->objects;
-
-	mutexLock(objects->lock);
-	_ext2_destroy_object(obj);
-	mutexUnlock(objects->lock);
-
-	return EOK;
-}
-
-
-int object_remove(ext2_obj_t *obj)
-{
-	if (!obj)
-		return EOK;
-
-	lib_rbRemove(&obj->fs->objects->used, &obj->node);
-	if (obj->fs->objs->count)
-		obj->fs->objs->count--;
-	else
-		debug("ext2: GLOBAL OBJECT COUNTER UNDERFLOW\n");
-
-	object_sync(obj);
-
-	free(obj->inode);
-
-	free(obj->ind[0].data);
-	free(obj->ind[1].data);
-	free(obj->ind[2].data);
-	/*mutex destroy */
-	resourceDestroy(obj->lock);
-	free(obj);
-
-	return EOK;
-}
-
-
-ext2_obj_t *object_create(ext2_t *fs, id_t *id, id_t pid, ext2_inode_t **inode, int mode)
-{
-	ext2_obj_t *obj, t;
-
-	mutexLock(fs->objects->lock);
-
-	if (*inode == NULL) {
-		*inode = (ext2_inode_t *)malloc(fs->sb->inodesz);
-		memset(*inode, 0, fs->sb->inodesz);
-		(*inode)->mode = mode;
-		*id = ext2_create_inode(fs, pid, mode);
-
-		if (!*id) {
-			free(*inode);
-			*inode = NULL;
-			return NULL;
-		}
-	}
-	t.id = *id;
-
-	if ((obj = lib_treeof(ext2_obj_t, node, lib_rbFind(&fs->objects->used, &t.node))) != NULL) {
-		obj->refs++;
-		mutexUnlock(fs->objects->lock);
-		return obj;
-	}
-
-	if (fs->objs->count >= EXT2_MAX_FILES) {
-		// TODO: free somebody from lru
-		if (!fs->objects->lru) {
-			debug("ext2: max files reached, lru is empty no space to free\n");
-			/* TODO: fix inode possible leak */
-			inode_free(obj->fs, *id, *inode->mode);
-			free(*inode);
-			return NULL;
-		}
-		obj = fs->objects->lru;
-		LIST_REMOVE(&fs->objects->lru, obj);
-		object_remove(obj);
-		debug("ext2 max files reached removing\n");
-	}
-
-	obj = (ext2_obj_t *)malloc(sizeof(ext2_obj_t));
-	if (obj == NULL) {
-		mutexUnlock(fs->objects->lock);
-		return NULL;
-	}
-
-	memset(obj, 0, sizeof(ext2_obj_t));
-	obj->refs = 1;
-	obj->id = *id;
-	obj->inode = *inode;
-	object_setFlag(obj, EXT2_FL_DIRTY);
-	mutexCreate(&obj->lock);
-	obj->fs = fs;
-
-	obj->next = NULL;
-	obj->prev = NULL;
-	lib_rbInsert(&fs->objects->used, &obj->node);
-	fs->objs->count++;
-
-	mutexUnlock(fs->objects->lock);
-
-	return obj;
-}
-
-
-ext2_obj_t *object_get(ext2_t *fs, id_t *id)
-{
-	ext2_obj_t *obj, t;
-	ext2_inode_t *inode = NULL;
-
-	t.id = *id;
-
-	mutexLock(fs->objects->lock);
-	/* check used/opened inodes tree */
-	if ((obj = lib_treeof(ext2_obj_t, node, lib_rbFind(&fs->objects->used, &t.node))) != NULL) {
-		if (!obj->refs)
-			LIST_REMOVE(&fs->objects->lru, obj);
-		obj->refs++;
-		mutexUnlock(fs->objects->lock);
-		return obj;
-	}
-	inode = inode_get(fs, *id);
-
-	if (inode != NULL) {
-
-		mutexUnlock(fs->objects->lock);
-		obj = object_create(fs, id, NULL, &inode, inode->mode);
-		return obj;
-	}
-	mutexUnlock(fs->objects->lock);
-
-	return obj;
-}
-
-
-void object_sync(ext2_obj_t *obj)
-{
-
-	if (object_checkFlag(obj, EXT2_FL_DIRTY))
-		inode_set(obj->fs, obj->id, obj->inode);
-
-	object_clearFlag(obj, EXT2_FL_DIRTY);
-
-	if (object_checkFlag(obj, EXT2_FL_MOUNT))
-		return;
-
-	if (obj->ind[0].data)
-		write_block(obj->fs, obj->ind[0].bno, obj->ind[0].data);
-	if (obj->ind[0].data)
-		write_block(obj->fs, obj->ind[1].bno, obj->ind[1].data);
-	if (obj->ind[0].data)
-		write_block(obj->fs, obj->ind[2].bno, obj->ind[2].data);
-}
-
-
-void object_put(ext2_obj_t *obj)
-{
-	char buf[64];
-
-	if (!obj)
-		return;
-
-	mutexLock(obj->fs->objects->lock);
-	if (obj->refs)
-		obj->refs--;
-	else {
-		sprintf(buf, "ext2: REF UNDERFLOW %lld\n", obj->id);
-		debug(buf);
-	}
-
-	if(!obj->inode->nlink && !obj->refs) {
-		_ext2_destroy_object(obj);
-		mutexUnlock(obj->fs->objects->lock);
-		return;
-	}
-
-	if (!obj->refs)
-		LIST_ADD(&obj->fs->objects->lru, obj);
-
-	mutexUnlock(obj->fs->objects->lock);
-
-	return;
-}
-
-
-int ext2_init_objs(ext2_t *fs)
+int ext2_objs_init(ext2_t *fs)
 {
 	ext2_objs_t *objs;
 	int err;
@@ -256,12 +300,14 @@ int ext2_init_objs(ext2_t *fs)
 	if ((objs = (ext2_objs_t *)malloc(sizeof(ext2_objs_t))) == NULL)
 		return -ENOMEM;
 
-	if ((err = mutexCreate(&objs->lock)) < 0)
+	if ((err = mutexCreate(&objs->lock)) < 0) {
+		free(objs);
 		return err;
+	}
 
-	lib_rbInit(&objs->used, ext2_objcmp, NULL);
 	objs->count = 0;
 	objs->lru = NULL;
+	lib_rbInit(&objs->used, ext2_obj_cmp, NULL);
 
 	fs->objs = objs;
 

@@ -16,7 +16,6 @@
 #ifndef _SB_H_
 #define _SB_H_
 
-
 #include <stdint.h>
 
 #include "ext2.h"
@@ -26,7 +25,7 @@
 #define SB_OFFSET 1024
 
 
-/* Filesystem magic identifier */
+/* Filesystem magic identifiers */
 enum {
 	MAGIC_EXT2 = 0xEF53 /* EXT2 filesystem */
 };
@@ -88,9 +87,9 @@ enum {
 
 /* Miscellaneous flags */
 enum {
-	MISC_SIGNED_HASH     = 0x01, /* Signed directory hash in use */
-	MISC_UNSIGNED_HASH   = 0x02, /* Unsigned directory hash in use */
-	MISC_TEST            = 0x04  /* Development code testing */
+	MISC_SIGNED_HASH     = 0x01,     /* Signed directory hash in use */
+	MISC_UNSIGNED_HASH   = 0x02,     /* Unsigned directory hash in use */
+	MISC_TEST            = 0x04      /* Development code testing */
 };
 
 
@@ -162,116 +161,122 @@ enum {
 	ROCOMPAT_REPLICA       = 0x0800, /* Replicas support */
 	ROCOMPAT_READONLY      = 0x1000, /* Read-only filesystem image */
 	ROCOMPAT_PROJECT       = 0x2000, /* Filesystem tracks project quotas */
-	ROCOMPAT_VERITY        = 0x8000, /* Verity inodes support */
+	ROCOMPAT_VERITY        = 0x8000  /* Verity inodes support */
 };
 
 
-typedef struct {
+struct _ext2_sb_t {
 	/* REV_ORIGINAL */
-	uint32_t inodes;              /* Number of inodes */
-	uint32_t blocks;              /* Number of blocks */
-	uint32_t res_blocks;          /* Number of reserved blocks */
-	uint32_t free_blocks;         /* Number of free blocks */
-	uint32_t free_inodes;         /* Number of free inodes */
-	uint32_t fst_block;           /* First data block */
-	uint32_t log_blocksz;         /* Block size (shift left 1024) */
-	uint32_t log_fragsz;          /* Fragment size (shift left 1024) */
-	uint32_t group_blocks;        /* Number of blocks in group */
-	uint32_t group_frags;         /* Number of fragments in group */
-	uint32_t group_inodes;        /* Number of inodes in group */
-	uint32_t mount_time;          /* Last mount time */
-	uint32_t write_time;          /* Last write time */
-	uint16_t mounts;              /* Number of mounts since last full check */
-	uint16_t max_mounts;          /* Max number of mounts before full check */
-	uint16_t magic;               /* Filesystem magic identifier */
-	uint16_t state;               /* Filesystem state (1: STATE_VALID, 2: STATE_ERROR) */
-	uint16_t on_error;            /* On error action (1: ERROR_CONTINUE, 2: ERROR_RO, 3: ERROR_PANIC) */
-	uint16_t rev_minor;           /* Minor revision level */
-	uint32_t check_time;          /* Last check time */
-	uint32_t check_interval;      /* Interval between checks */
-	uint32_t creator_os;          /* Identifier of the OS that created the filesystem */
-	uint32_t rev_major;           /* Major revision level (0: REV_GOOD_OLD, 1: REV_DYNAMIC) */
-	uint16_t res_uid;             /* Default user id for reserved blocks */
-	uint16_t res_gid;             /* Default group id for reserved blocks */
+	uint32_t inodes;            /* Number of inodes */
+	uint32_t blocks;            /* Number of blocks */
+	uint32_t resBlocks;         /* Number of reserved blocks */
+	uint32_t freeBlocks;        /* Number of free blocks */
+	uint32_t freeInodes;        /* Number of free inodes */
+	uint32_t fstBlock;          /* First data block */
+	uint32_t logBlocksz;        /* Block size (shift left 1024) */
+	uint32_t logFragsz;         /* Fragment size (shift left 1024) */
+	uint32_t groupBlocks;       /* Number of blocks in group */
+	uint32_t groupFrags;        /* Number of fragments in group */
+	uint32_t groupInodes;       /* Number of inodes in group */
+	uint32_t mountTime;         /* Last mount time */
+	uint32_t writeTime;         /* Last write time */
+	uint16_t mounts;            /* Number of mounts since last full check */
+	uint16_t maxMounts;         /* Max number of mounts before full check */
+	uint16_t magic;             /* Filesystem magic identifier */
+	uint16_t state;             /* Filesystem state (1: STATE_VALID, 2: STATE_ERROR) */
+	uint16_t onError;           /* On error action (1: ERROR_CONTINUE, 2: ERROR_RO, 3: ERROR_PANIC) */
+	uint16_t revMinor;          /* Minor revision level */
+	uint32_t checkTime;         /* Last check time */
+	uint32_t checkInterval;     /* Interval between checks */
+	uint32_t creatorOS;         /* Identifier of the OS that created the filesystem */
+	uint32_t revMajor;          /* Major revision level (0: REV_GOOD_OLD, 1: REV_DYNAMIC) */
+	uint16_t resUID;            /* Default User ID for reserved blocks */
+	uint16_t resGID;            /* Default Group ID for reserved blocks */
 
 	/* REV_DYNAMIC */
-	uint32_t fst_inode;           /* First standard inode */
-	uint16_t inodesz;             /* Inode size */
-	uint16_t block_group;         /* This superblock block group number */
-	uint32_t feature_compat;      /* Compatible features mask */
-	uint32_t feature_incompat;    /* Incompatible features mask */
-	uint32_t feature_rocompat;    /* Read-only compatible features mask */
-	uint8_t uuid[16];             /* Volume ID */
-	char name[16];                /* Volume name */
-	char path[64];                /* Last mount path */
-	uint32_t bmp_algo;            /* Compression algorithm */
+	uint32_t fstInode;          /* First standard inode */
+	uint16_t inodesz;           /* Inode size */
+	uint16_t blockGroup;        /* This superblock block group number */
+	uint32_t featureCompat;     /* Compatible features mask */
+	uint32_t featureIncompat;   /* Incompatible features mask */
+	uint32_t featureRocompat;   /* Read-only compatible features mask */
+	uint8_t uuid[16];           /* Volume ID */
+	char name[16];              /* Volume name */
+	char path[64];              /* Last mount path */
+	uint32_t bmpAlgo;           /* Compression algorithm */
 
 	/* Performance hints */
-	uint8_t prealloc_blocks;      /* Number of blocks to preallocate for files */
-	uint8_t prealloc_dir_blocks;  /* Number of blocks to preallocate for directories */
-	uint16_t res_gdt_blocks;      /* Number of reserved GDT entries for future filesystem growth */
+	uint8_t preallocBlocks;     /* Number of blocks to preallocate for files */
+	uint8_t preallocDirBlocks;  /* Number of blocks to preallocate for directories */
+	uint16_t resGdtBlocks;      /* Number of reserved GDT entries for future filesystem growth */
 
 	/* Journalling support */
-	uint8_t journal_uuid[16];     /* Journal superblock ID */
-	uint32_t journal_inode;       /* Journal file inode */
-	uint32_t journal_dev;         /* Device number of journal file */
-	uint32_t last_orphan;         /* Head of list of inodes to delete */
-	uint32_t hash_seed[4];        /* HTree hash seed */
-	uint8_t hash_algo;            /* Hash algorith to use for directory hashes */
-	uint8_t journal_backup;       /* 0 or 1: journal_blocks contain backup copy of the journal inodes */
-	uint16_t descsz;              /* Size of group descriptor */
-	uint32_t def_mount_opts;      /* Default mount options */
-	uint32_t fst_meta_bg;         /* First metablock block group */
-	uint32_t mkfs_time;           /* Filesystem creation time */
-	uint32_t journal_blocks[17];  /* Backup of the journal inode */
+	uint8_t journalUuid[16];    /* Journal superblock ID */
+	uint32_t journalInode;      /* Journal file inode */
+	uint32_t journalDev;        /* Device number of journal file */
+	uint32_t lastOrphan;        /* Head of list of inodes to delete */
+	uint32_t hashSeed[4];       /* HTree hash seed */
+	uint8_t hashAlgo;           /* Hash algorith to use for directory hashes */
+	uint8_t journalBackup;      /* 0 or 1: journal blocks contain backup copy of the journal inodes */
+	uint16_t descsz;            /* Size of group descriptor */
+	uint32_t defMountOpts;      /* Default mount options */
+	uint32_t fstMetaBg;         /* First metablock block group */
+	uint32_t mkfsTime;          /* Filesystem creation time */
+	uint32_t journalBlocks[17]; /* Backup of the journal inode */
 
 	/* 64-bit support */
-	uint32_t blocks_hi;           /* High part of number of blocks */
-	uint32_t res_blocks_hi;       /* High part of number of reserved blocks */
-	uint32_t free_blocks_hi;      /* High part of number of free blocks */
-	uint16_t min_extra_inodesz;   /* Min size all inodes should have */
-	uint16_t want_extra_inodesz;  /* New inodes size */
-	uint32_t flags;               /* Miscellaneous flags */
-	uint16_t raid_stride;         /* RAID stride */
-	uint16_t mmp_interval;        /* Seconds to wait in MMP (Multi-Mount Protection) check */
-	uint64_t mmp_block;           /* Block for MMP */
-	uint32_t raid_stride_width;   /* Blocks on all data disks (N * stride) */
-	uint8_t log_flex_groups;      /* FLEX_BG group size */
-	uint8_t checksum_type;        /* Metadata checksum algorithm type. 1: crc32c */
-	uint16_t reserved_pad;        /* Padding */
-	uint64_t kbytes_written;      /* Number of KiB written (lifetime) */
-	uint32_t snapshot_inode;      /* Inode of the active snapshot */
-	uint32_t snapshot_id;         /* Sequential ID of the active snapshot */
-	uint64_t snapshot_res_blocks; /* Number of blocks reserved for the active snapshot's future use */
-	uint32_t snapshot_list;       /* Inode of the head of the on-disk snapshots list */
-	uint32_t errors;              /* Number of filesystem errors */
-	uint32_t fst_error_time;      /* First error time */
-	uint32_t fst_error_inode;     /* Inode involved in the first error */
-	uint64_t fst_error_block;     /* Block involved in the first error */
-	uint8_t fst_error_func[32];   /* Function where the first error happened */
-	uint32_t fst_error_line;      /* Line where the first error happened */
-	uint32_t last_error_time;     /* Last error time */
-	uint32_t last_error_inode;    /* Inode involved in the last error */
-	uint32_t last_error_line;     /* Line where the last error happened */
-	uint64_t last_error_block;    /* Block involved in the last error */
-	uint8_t last_error_func[32];  /* Function where the last error happened */
-	uint8_t mount_opts[64];       /* ASCIIZ string of mount options */
-	uint32_t usr_quota_inode;     /* Inode used for tracking user quota */
-	uint32_t grp_quota_inode;     /* Inode used for tracking group quota */
-	uint32_t overhead_blocks;     /* Overhead blocks in filesystem */
-	uint32_t backup_bgs[2];       /* Groups with SPARSE_SUPER2 superblocks */
-	uint8_t encrypt_algos[4];     /* Encryption algorithms in use */
-	uint8_t encrypt_pw_salt[16];  /* Salt used for string2key algorithm */
-	uint32_t lpf_inode;           /* Lost+found inode */
-	uint32_t pad[100];            /* Padding */
-	uint32_t checksum;            /* This superblock checksum (crc32c) */
-} __attribute__ ((packed)) ext2_sb_t;
+	uint32_t blocksHi;          /* High part of number of blocks */
+	uint32_t resBlocksHi;       /* High part of number of reserved blocks */
+	uint32_t freeBlocksHi;      /* High part of number of free blocks */
+	uint16_t minExtraInodesz;   /* Min size all inodes should have */
+	uint16_t wantExtraInodesz;  /* New inodes size */
+	uint32_t flags;             /* Miscellaneous flags */
+	uint16_t raidStride;        /* RAID stride */
+	uint16_t mmpInterval;       /* Seconds to wait in MMP (Multi-Mount Protection) check */
+	uint64_t mmpBlock;          /* Block for MMP (Multi-Mount Protection) */
+	uint32_t raidStrideWidth;   /* Blocks on all data disks (N * stride) */
+	uint8_t logFlexGroups;      /* FLEX_BG group size */
+	uint8_t checksumType;       /* Metadata checksum algorithm type, 1: crc32c */
+	uint16_t reservedPad;       /* Padding */
+	uint64_t kbytesWritten;     /* Number of KiB written (lifetime) */
+	uint32_t snapshotInode;     /* Inode of the active snapshot */
+	uint32_t snapshotId;        /* Sequential ID of the active snapshot */
+	uint64_t snapshotResBlocks; /* Number of blocks reserved for the active snapshot's future use */
+	uint32_t snapshotList;      /* Inode of the head of the on-disk snapshots list */
+	uint32_t errors;            /* Number of filesystem errors */
+	uint32_t fstErrorTime;      /* First error time */
+	uint32_t fstErrorInode;     /* Inode involved in the first error */
+	uint64_t fstErrorBlock;     /* Block involved in the first error */
+	uint8_t fstErrorFunc[32];   /* Function where the first error happened */
+	uint32_t fstErrorLine;      /* Line where the first error happened */
+	uint32_t lastErrorTime;     /* Last error time */
+	uint32_t lastErrorInode;    /* Inode involved in the last error */
+	uint32_t lastErrorLine;     /* Line where the last error happened */
+	uint64_t lastErrorBlock;    /* Block involved in the last error */
+	uint8_t lastErrorFunc[32];  /* Function where the last error happened */
+	uint8_t mountOpts[64];      /* ASCIIZ string of mount options */
+	uint32_t userQuotaInode;    /* Inode used for tracking user quota */
+	uint32_t groupQuotaInode;   /* Inode used for tracking group quota */
+	uint32_t overheadBlocks;    /* Overhead blocks in filesystem */
+	uint32_t backupBgs[2];      /* Groups with SPARSE_SUPER2 superblocks */
+	uint8_t encryptAlgos[4];    /* Encryption algorithms in use */
+	uint8_t encryptPwSalt[16];  /* Salt used for string2key algorithm */
+	uint32_t lpfInode;          /* Lost+found inode */
+	uint32_t pad[100];          /* Padding */
+	uint32_t checksum;          /* This superblock checksum (crc32c) */
+} __attribute__ ((packed));
 
 
-extern int ext2_init_sb(ext2_t *fs);
+/* Synchronizes superblock */
+extern int ext2_sb_sync(ext2_t *fs);
 
 
-extern int ext2_sync_sb(ext2_t *fs);
+/* Destroys superblock */
+extern void ext2_sb_destroy(ext2_t *fs);
+
+
+/* Initializes superblock */
+extern int ext2_sb_init(ext2_t *fs);
 
 
 #endif
