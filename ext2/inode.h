@@ -55,7 +55,7 @@ enum {
 	IFLAG_TOPDIR       = 0x00020000, /* Top of directory hierarchies */
 	IFLAG_HUGE_FILE    = 0x00040000, /* Set to each huge file */
 	IFLAG_EXTENTS      = 0x00080000, /* Inode uses extents */
-	IFLAG_EA_INODE     = 0x00200000, /* Inode used to store large extended attributes */
+	IFLAG_EAINODE      = 0x00200000, /* Inode used to store large extended attributes */
 	IFLAG_EOFBLOCKS    = 0x00400000, /* Blocks allocated beyond EOF */
 	IFLAG_RESERVED     = 0x80000000  /* Reserved */
 };
@@ -116,20 +116,20 @@ typedef struct {
 } __attribute__ ((packed)) ext2_inode_t;
 
 
-/* Creates inode */
-extern uint32_t ext2_inode_create(ext2_t *fs, uint32_t pino, uint16_t mode);
+/* Synchronizes inode */
+extern int ext2_inode_sync(ext2_t *fs, uint32_t ino, ext2_inode_t *inode);
 
 
 /* Initializes inode */
 extern ext2_inode_t *ext2_inode_init(ext2_t *fs, uint32_t ino);
 
 
-/* Synchronizes inode */
-extern int ext2_inode_sync(ext2_t *fs, uint32_t ino, ext2_inode_t *inode);
-
-
 /* Destroys inode */
 extern int ext2_inode_destroy(ext2_t *fs, uint32_t ino, uint16_t mode);
+
+
+/* Creates inode */
+extern uint32_t ext2_inode_create(ext2_t *fs, uint32_t pino, uint16_t mode);
 
 
 #endif

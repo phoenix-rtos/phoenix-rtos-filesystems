@@ -22,23 +22,23 @@
 #include <sys/types.h>
 
 
-/* Mounts filesystem */
-extern int libext2_mount(oid_t *dev, unsigned int sectorsz, ssize_t (*read)(id_t, offs_t, char *, size_t), ssize_t (*write)(id_t, offs_t, const char *, size_t), void **data);
-
-
-/* Unmounts filesystem */
-extern int libext2_unmount(void *data);
+#define LIBEXT2_NAME    "ext2"
+#define LIBEXT2_TYPE    0x83
+#define LIBEXT2_HANDLER libext2_handler
+#define LIBEXT2_UNMOUNT libext2_unmount
+#define LIBEXT2_MOUNT   libext2_mount
 
 
 /* Processes filesystem messages */
-extern int libext2_handler(void *data, msg_t *msg);
+extern int libext2_handler(void *fdata, msg_t *msg);
 
 
-#define LIBEXT2_TYPE    0x83
-#define LIBEXT2_NAME    "ext2"
-#define LIBEXT2_MOUNT   libext2_mount
-#define LIBEXT2_UNMOUNT libext2_unmount
-#define LIBEXT2_HANDLER libext2_handler
+/* Unmounts filesystem */
+extern int libext2_unmount(void *fdata);
+
+
+/* Mounts filesystem */
+extern int libext2_mount(oid_t *dev, unsigned int sectorsz, ssize_t (*read)(id_t, offs_t, char *, size_t), ssize_t (*write)(id_t, offs_t, const char *, size_t), void **fdata);
 
 
 #endif

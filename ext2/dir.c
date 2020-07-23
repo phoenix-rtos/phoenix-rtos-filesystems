@@ -28,7 +28,7 @@
 int _ext2_dir_empty(ext2_t *fs, ext2_obj_t *dir)
 {
 	ext2_dirent_t *entry;
-	uint32_t offs;
+	uint32_t offs = 0;
 	ssize_t ret;
 
 	if (!dir->inode->size)
@@ -40,27 +40,28 @@ int _ext2_dir_empty(ext2_t *fs, ext2_obj_t *dir)
 	if ((entry = (ext2_dirent_t *)malloc(fs->blocksz)) == NULL)
 		return -ENOMEM;
 
-	if ((ret = _ext2_file_read(fs, dir, 0, (char *)entry, fs->blocksz)) != fs->blocksz) {
+	if ((ret = _ext2_file_read(fs, dir, offs, (char *)entry, fs->blocksz)) != fs->blocksz) {
 		free(entry);
 		return (ret < 0) ? (int)ret : -EINVAL;
 	}
 
-	if (entry->len != 1 || strncmp(entry->name, ".", 1)) {
+	if ((entry->len != 1) || strncmp(entry->name, ".", 1)) {
 		free(entry);
 		return -EINVAL;
 	}
 
-	offs = entry->size;
-	entry = (ext2_dirent_t *)((uintptr_t)entry + offs);
+	offs += entry->size;
+	entry = (ext2_dirent_t *)((char *)entry + offs);
 
-	if (entry->len != 2 || strncmp(entry->name, "..", 2)) {
+	if ((entry->len != 2) || strncmp(entry->name, "..", 2)) {
 		free(entry);
 		return -EINVAL;
 	}
 
+	offs += entry->size;
 	free(entry);
 
-	return (offs + entry->size == fs->blocksz);
+	return (offs == fs->blocksz);
 }
 
 
@@ -91,7 +92,6 @@ static int _ext2_dir_find(ext2_t *fs, ext2_obj_t *dir, const char *name, uint8_t
 
 int _ext2_dir_search(ext2_t *fs, ext2_obj_t *dir, const char *name, uint8_t len, id_t *res)
 {
-	ext2_dirent_t *entry;
 	uint32_t offs = 0;
 	char *buff;
 	int err;
@@ -99,16 +99,16 @@ int _ext2_dir_search(ext2_t *fs, ext2_obj_t *dir, const char *name, uint8_t len,
 	if ((buff = (char *)malloc(fs->blocksz)) == NULL)
 		return -ENOMEM;
 
-	if ((err = _ext2_dir_find(fs, dir, name, len, buff, &offs)) < 0) {
-		free(buff);
-		return err;
-	}
+	do {
+		if ((err = _ext2_dir_find(fs, dir, name, len, buff, &offs)) < 0)
+			break;
 
-	entry = (ext2_dirent_t *)(buff + offs);
-	*res = entry->ino;
+		*res = ((ext2_dirent_t *)(buff + offs))->ino;
+	} while (0);
+
 	free(buff);
 
-	return EOK;
+	return err;
 }
 
 
@@ -120,7 +120,7 @@ int _ext2_dir_read(ext2_t *fs, ext2_obj_t *dir, offs_t offs, struct dirent *res,
 	if (!dir->inode->size || !dir->inode->links)
 		return -ENOENT;
 
-	if ((offs < 0) || (offs >= dir->inode->size) || (len < sizeof(ext2_dirent_t)))
+	if (len < sizeof(ext2_dirent_t))
 		return -EINVAL;
 
 	if ((entry = (ext2_dirent_t *)malloc(len)) == NULL)
@@ -128,7 +128,7 @@ int _ext2_dir_read(ext2_t *fs, ext2_obj_t *dir, offs_t offs, struct dirent *res,
 
 	if ((ret = _ext2_file_read(fs, dir, offs, (char *)entry, len)) != len) {
 		free(entry);
-		return (ret < 0) ? (int)ret : -EINVAL;
+		return (ret < 0) ? (int)ret : -ENOENT;
 	}
 
 	if (!entry->len) {
@@ -141,14 +141,28 @@ int _ext2_dir_read(ext2_t *fs, ext2_obj_t *dir, offs_t offs, struct dirent *res,
 		return -EINVAL;
 	}
 
+	switch (entry->type) {
+	case DIRENT_DIR:
+		res->d_type = dtDir;
+		break;
+
+	case DIRENT_CHRDEV:
+	case DIRENT_BLKDEV:
+		res->d_type = dtDev;
+		break;
+
+	default:
+		res->d_type = dtFile;
+	}
+
 	res->d_ino = entry->ino;
-	res->d_type = !(entry->type == DIRENT_DIR);
 	res->d_reclen = entry->size;
 	res->d_namlen = entry->len;
 	memcpy(res->d_name, entry->name, entry->len);
+	res->d_name[entry->len] = '\0';
 	free(entry);
 
-	if ((dir->flags & OFLAG_MOUNTPOINT) && !strcmp(res->d_name, ".."))
+	if ((dir->flags & OFLAG_MOUNTPOINT) && !strncmp(res->d_name, "..", 2))
 		res->d_ino = (ino_t)dir->mnt.id;
 
 	dir->inode->atime = time(NULL);
@@ -167,37 +181,39 @@ int _ext2_dir_add(ext2_t *fs, ext2_obj_t *dir, const char *name, uint8_t len, ui
 	if ((buff = (char *)malloc(fs->blocksz)) == NULL)
 		return -ENOMEM;
 
-	/* Dirent size is always rounded to block size and we only need last block of entries */
-	offs = (dir->inode->size > fs->blocksz) ? dir->inode->size - fs->blocksz : 0;
-	if ((ret = _ext2_file_read(fs, dir, offs, buff, fs->blocksz)) != fs->blocksz) {
-		free(buff);
-		return (ret < 0) ? (int)ret : -EINVAL;
+	if (!dir->inode->size) {
+		offs = fs->blocksz;
 	}
+	else {
+		if ((ret = _ext2_file_read(fs, dir, dir->inode->size - fs->blocksz, buff, fs->blocksz)) != fs->blocksz) {
+			free(buff);
+			return (ret < 0) ? (int)ret : -EINVAL;
+		}
 
-	for (offs = 0; offs < fs->blocksz; offs += entry->size) {
-		entry = (ext2_dirent_t *)(buff + offs);
+		for (offs = 0; offs < fs->blocksz; offs += entry->size) {
+			entry = (ext2_dirent_t *)(buff + offs);
 
-		if (!entry->size)
-			break;
+			if (!entry->size)
+				break;
 
-		if (offs + entry->size == fs->blocksz) {
-			entry->size = (entry->len) ? (entry->len + sizeof(ext2_dirent_t) + 3) & ~3 : 0;
-			offs += entry->size;
-			size = (len + sizeof(ext2_dirent_t) + 3) & ~3;
+			if (offs + entry->size == fs->blocksz) {
+				entry->size = (entry->len) ? (entry->len + sizeof(ext2_dirent_t) + 3) & ~3 : 0;
+				offs += entry->size;
 
-			if (size >= fs->blocksz - offs) {
-				entry->size += fs->blocksz - offs;
-				offs = fs->blocksz;
-			}
-			else {
+				if ((size = (len + sizeof(ext2_dirent_t) + 3) & ~3) >= fs->blocksz - offs) {
+					entry->size += fs->blocksz - offs;
+					offs = fs->blocksz;
+					break;
+				}
+
 				size = fs->blocksz - offs;
+				break;
 			}
-			break;
 		}
 	}
 
 	/* No space in this block => alloc new one */
-	if (!dir->inode->size || offs >= fs->blocksz) {
+	if (offs >= fs->blocksz) {
 		dir->inode->size += fs->blocksz;
 		memset(buff, 0, fs->blocksz);
 		size = fs->blocksz;
@@ -208,10 +224,21 @@ int _ext2_dir_add(ext2_t *fs, ext2_obj_t *dir, const char *name, uint8_t len, ui
 	entry->ino = ino;
 	entry->size = size;
 	entry->len = len;
-	entry->type = S_ISDIR(mode) ? DIRENT_DIR : DIRENT_FILE;
 	memcpy(entry->name, name, len);
 
+	if (S_ISDIR(mode))
+		entry->type = DIRENT_DIR;
+	else if (S_ISCHR(mode))
+		entry->type = DIRENT_CHRDEV;
+	else if (S_ISBLK(mode))
+		entry->type = DIRENT_BLKDEV;
+	else if (S_ISREG(mode))
+		entry->type = DIRENT_FILE;
+	else
+		entry->type = DIRENT_UNKNOWN;
+
 	offs = (dir->inode->size > fs->blocksz) ? dir->inode->size - fs->blocksz : 0;
+
 	if ((ret = _ext2_file_write(fs, dir, offs, buff, fs->blocksz)) != fs->blocksz) {
 		free(buff);
 		return (ret < 0) ? (int)ret : -EINVAL;
@@ -271,7 +298,7 @@ int _ext2_dir_remove(ext2_t *fs, ext2_obj_t *dir, const char *name, uint8_t len)
 		}
 	/* Entry at the start of the block => move next entry to the start of the block */
 	} else {
-		tmp = (ext2_dirent_t *)((uintptr_t)buff + entry->size);
+		tmp = (ext2_dirent_t *)((char *)buff + entry->size);
 		entry->ino = tmp->ino;
 		entry->size += tmp->size;
 		entry->type = tmp->type;

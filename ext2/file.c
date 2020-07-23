@@ -18,9 +18,6 @@
 #include <string.h>
 #include <time.h>
 
-#include <sys/stat.h>
-#include <sys/threads.h>
-
 #include "block.h"
 #include "file.h"
 
@@ -32,10 +29,7 @@ ssize_t _ext2_file_read(ext2_t *fs, ext2_obj_t *obj, offs_t offs, char *buff, si
 	void *data;
 	int err;
 
-	if (!S_ISREG(obj->inode->mode) && S_ISLNK(obj->inode->mode))
-		return -EINVAL;
-
-	if (offs >= obj->inode->size)
+	if ((offs < 0) || (offs >= obj->inode->size))
 		return 0;
 
 	if (len > obj->inode->size - offs)
@@ -212,25 +206,4 @@ int _ext2_file_truncate(ext2_t *fs, ext2_obj_t *obj, size_t size)
 	obj->flags |= OFLAG_DIRTY;
 
 	return EOK;
-}
-
-
-int ext2_file_truncate(ext2_t *fs, ext2_obj_t *obj, size_t size)
-{
-	int err;
-
-	mutexLock(obj->lock);
-
-	do {
-		if ((err = _ext2_file_truncate(fs, obj, size)) < 0)
-			break;
-
-		if ((err = _ext2_obj_sync(fs, obj)) < 0)
-			break;
-	} while (0);
-
-	mutexUnlock(obj->lock);
-	ext2_obj_put(fs, obj);
-
-	return err;
 }

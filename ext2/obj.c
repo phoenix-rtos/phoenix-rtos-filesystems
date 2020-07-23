@@ -24,10 +24,11 @@
 #include <sys/threads.h>
 
 #include "block.h"
+#include "file.h"
 #include "obj.h"
 
 
-/* Releases object resources and removes it from objects in use RBTree */
+/* Releases object resources and removes it from objects in use */
 static int _ext2_obj_remove(ext2_t *fs, ext2_obj_t *obj)
 {
 	int err;
@@ -47,7 +48,24 @@ static int _ext2_obj_remove(ext2_t *fs, ext2_obj_t *obj)
 }
 
 
-/* Removes object from LRU cache and destroys it */
+/* Destroys object */
+static int _ext2_obj_destroy(ext2_t *fs, ext2_obj_t *obj)
+{
+	int err;
+
+	if ((err = ext2_inode_destroy(fs, (uint32_t)obj->id, obj->inode->mode)) < 0)
+		return err;
+
+	if ((err = _ext2_obj_remove(fs, obj)) < 0)
+		return err;
+
+	free(obj);
+
+	return EOK;
+}
+
+
+/* Removes object from LRU cache */
 static int _ext2_obj_removelru(ext2_t *fs)
 {
 	ext2_obj_t *obj;
@@ -86,8 +104,8 @@ static int _ext2_obj_create(ext2_t *fs, uint32_t pino, ext2_inode_t *inode, uint
 		}
 
 		memset(inode, 0, fs->sb->inodesz);
-		inode->mode = mode;
 		inode->ctime = inode->mtime = inode->atime = time(NULL);
+		inode->mode = mode;
 	}
 	else {
 		ino = pino;
@@ -101,9 +119,12 @@ static int _ext2_obj_create(ext2_t *fs, uint32_t pino, ext2_inode_t *inode, uint
 			err = -ENOMEM;
 			break;
 		}
-		
+
+		memset(obj, 0, sizeof(ext2_obj_t));
+
 		if ((err = mutexCreate(&obj->lock)) < 0) {
 			free(obj);
+			*res = NULL;
 			break;
 		}
 
@@ -127,50 +148,6 @@ static int _ext2_obj_create(ext2_t *fs, uint32_t pino, ext2_inode_t *inode, uint
 }
 
 
-int ext2_obj_create(ext2_t *fs, uint32_t pino, ext2_inode_t *inode, uint16_t mode, ext2_obj_t **res)
-{
-	int ret;
-
-	mutexLock(fs->objs->lock);
-
-	ret = _ext2_obj_create(fs, pino, inode, mode, res);
-
-	mutexUnlock(fs->objs->lock);
-
-	return ret;
-}
-
-
-static int _ext2_obj_destroy(ext2_t *fs, ext2_obj_t *obj)
-{
-	int err;
-
-	if ((err = ext2_inode_destroy(fs, (uint32_t)obj->id, obj->inode->mode)) < 0)
-		return err;
-
-	if ((err = _ext2_obj_remove(fs, obj)) < 0)
-		return err;
-
-	free(obj);
-
-	return EOK;
-}
-
-
-int ext2_obj_destroy(ext2_t *fs, ext2_obj_t *obj)
-{
-	int ret;
-
-	mutexLock(fs->objs->lock);
-
-	ret = _ext2_obj_destroy(fs, obj);
-
-	mutexUnlock(fs->objs->lock);
-
-	return ret;
-}
-
-
 ext2_obj_t *ext2_obj_get(ext2_t *fs, id_t id)
 {
 	ext2_obj_t *obj, tmp;
@@ -181,27 +158,36 @@ ext2_obj_t *ext2_obj_get(ext2_t *fs, id_t id)
 	do {
 		tmp.id = id;
 		if ((obj = lib_treeof(ext2_obj_t, node, lib_rbFind(&fs->objs->used, &tmp.node))) != NULL) {
-			if (!obj->refs)
+			if (!obj->refs++ && !(S_ISCHR(obj->inode->mode) || S_ISBLK(obj->inode->mode)))
 				LIST_REMOVE(&fs->objs->lru, obj);
-
-			obj->refs++;
 			break;
 		}
 
-		if ((inode = ext2_inode_init(fs, (uint32_t)id)) == NULL) {
-			obj = NULL;
+		if ((inode = ext2_inode_init(fs, (uint32_t)id)) == NULL)
 			break;
-		}
 
-		if (_ext2_obj_create(fs, (uint32_t)id, inode, inode->mode, &obj) < 0) {
-			obj = NULL;
+		if (_ext2_obj_create(fs, (uint32_t)id, inode, inode->mode, &obj) < 0)
 			break;
-		}
 	} while (0);
 
 	mutexUnlock(fs->objs->lock);
 
 	return obj;
+}
+
+
+void ext2_obj_put(ext2_t *fs, ext2_obj_t *obj)
+{
+	mutexLock(fs->objs->lock);
+
+	if (!(--obj->refs) && !(S_ISCHR(obj->inode->mode) || S_ISBLK(obj->inode->mode))) {
+		if (!obj->inode->links)
+			_ext2_obj_destroy(fs, obj);
+		else
+			LIST_ADD(&fs->objs->lru, obj);
+	}
+
+	mutexUnlock(fs->objs->lock);
 }
 
 
@@ -216,14 +202,14 @@ int _ext2_obj_sync(ext2_t *fs, ext2_obj_t *obj)
 		obj->flags &= ~OFLAG_DIRTY;
 	}
 
-	if (!(obj->flags & OFLAG_MOUNT)) {
+	if (!(S_ISCHR(obj->inode->mode) || !S_ISBLK(obj->inode->mode)) && !(obj->flags & OFLAG_MOUNT)) {
 		if ((obj->ind[0].data != NULL) && (err = ext2_block_write(fs, obj->ind[0].bno, obj->ind[0].data, 1)) < 0)
 			return err;
 
-		if ((obj->ind[0].data != NULL) && (err = ext2_block_write(fs, obj->ind[1].bno, obj->ind[1].data, 1)) < 0)
+		if ((obj->ind[1].data != NULL) && (err = ext2_block_write(fs, obj->ind[1].bno, obj->ind[1].data, 1)) < 0)
 			return err;
 
-		if ((obj->ind[0].data != NULL) && (err = ext2_block_write(fs, obj->ind[2].bno, obj->ind[2].data, 1)) < 0)
+		if ((obj->ind[2].data != NULL) && (err = ext2_block_write(fs, obj->ind[2].bno, obj->ind[2].data, 1)) < 0)
 			return err;
 	}
 
@@ -245,18 +231,51 @@ int ext2_obj_sync(ext2_t *fs, ext2_obj_t *obj)
 }
 
 
-void ext2_obj_put(ext2_t *fs, ext2_obj_t *obj)
+int ext2_obj_truncate(ext2_t *fs, ext2_obj_t *obj, size_t size)
 {
+	int err;
+
+	mutexLock(obj->lock);
+
+	do {
+		if ((err = _ext2_file_truncate(fs, obj, size)) < 0)
+			break;
+
+		if ((err = _ext2_obj_sync(fs, obj)) < 0)
+			break;
+	} while (0);
+
+	mutexUnlock(obj->lock);
+
+	return err;
+}
+
+
+int ext2_obj_destroy(ext2_t *fs, ext2_obj_t *obj)
+{
+	int ret;
+
 	mutexLock(fs->objs->lock);
 
-	if (!(--obj->refs) && !(S_ISCHR(obj->inode->mode) || S_ISBLK(obj->inode->mode))) {
-		if (!obj->inode->links)
-			_ext2_obj_destroy(fs, obj);
-		else
-			LIST_ADD(&fs->objs->lru, obj);
-	}
+	ret = _ext2_obj_destroy(fs, obj);
 
 	mutexUnlock(fs->objs->lock);
+
+	return ret;
+}
+
+
+int ext2_obj_create(ext2_t *fs, uint32_t pino, ext2_inode_t *inode, uint16_t mode, ext2_obj_t **res)
+{
+	int ret;
+
+	mutexLock(fs->objs->lock);
+
+	ret = _ext2_obj_create(fs, pino, inode, mode, res);
+
+	mutexUnlock(fs->objs->lock);
+
+	return ret;
 }
 
 

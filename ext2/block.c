@@ -25,7 +25,7 @@ int ext2_block_read(ext2_t *fs, uint32_t bno, void *buff, uint32_t n)
 {
 	ssize_t size = n * fs->blocksz;
 
-	if (fs->read(fs->dev.id, bno * fs->blocksz, buff, size) != size)
+	if (fs->read(fs->oid.id, bno * fs->blocksz, buff, size) != size)
 		return -EIO;
 
 	return EOK;
@@ -36,8 +36,88 @@ int ext2_block_write(ext2_t *fs, uint32_t bno, const void *buff, uint32_t n)
 {
 	ssize_t size = n * fs->blocksz;
 
-	if (fs->write(fs->dev.id, bno * fs->blocksz, buff, size) != size)
+	if (fs->write(fs->oid.id, bno * fs->blocksz, buff, size) != size)
 		return -EIO;
+
+	return EOK;
+}
+
+
+int ext2_block_destroy(ext2_t *fs, uint32_t bno, uint32_t n)
+{
+	uint32_t group = (bno - 1) / fs->sb->groupBlocks;
+	uint32_t i, j, offset, pgroup = group;
+	void *bmp;
+	int err;
+
+	if ((bmp = malloc(fs->blocksz)) == NULL)
+		return -ENOMEM;
+
+	if ((err = ext2_block_read(fs, fs->gdt[group].blockBmp, bmp, 1)) < 0) {
+		free(bmp);
+		return err;
+	}
+
+	for (i = 0, j = 0; i < n; i++, j++) {
+		group = (bno + i - 1) / fs->sb->groupBlocks;
+		offset = (bno + i - 1) % fs->sb->groupBlocks + 1;
+
+		if (group != pgroup) {
+			if ((err = ext2_block_write(fs, fs->gdt[pgroup].blockBmp, bmp, 1)) < 0) {
+				free(bmp);
+				return err;
+			}
+
+			fs->gdt[pgroup].freeBlocks += j;
+
+			if ((err = ext2_gdt_syncone(fs, pgroup)) < 0) {
+				for (i = 0; i < j; i++)
+					ext2_togglebit(bmp, --offset);
+
+				if (!ext2_block_write(fs, fs->gdt[pgroup].blockBmp, bmp, 1))
+					fs->gdt[pgroup].freeBlocks -= j;
+				else
+					fs->sb->freeBlocks += j;
+
+				free(bmp);
+				return err;
+			}
+
+			fs->sb->freeBlocks += j;
+			pgroup = group;
+			j = 0;
+
+			if ((err = ext2_block_read(fs, fs->gdt[group].blockBmp, bmp, 1)) < 0) {
+				free(bmp);
+				return err;
+			}
+		}
+
+		ext2_togglebit(bmp, offset);
+	}
+
+	if ((err = ext2_block_write(fs, fs->gdt[group].blockBmp, bmp, 1)) < 0) {
+		free(bmp);
+		return err;
+	}
+
+	fs->gdt[group].freeBlocks += j;
+
+	if ((err = ext2_gdt_syncone(fs, group)) < 0) {
+		for (i = 0; i < j; i++)
+			ext2_togglebit(bmp, offset--);
+
+		if (!ext2_block_write(fs, fs->gdt[group].blockBmp, bmp, 1))
+			fs->gdt[group].freeBlocks -= j;
+		else
+			fs->sb->freeBlocks += j;
+
+		free(bmp);
+		return err;
+	}
+
+	fs->sb->freeBlocks += j;
+	free(bmp);
 
 	return EOK;
 }
@@ -81,7 +161,7 @@ static int ext2_block_createone(ext2_t *fs, uint32_t bno, uint32_t *res)
 
 	if ((err = ext2_gdt_syncone(fs, group)) < 0) {
 		ext2_togglebit(bmp, offset);
-	
+
 		if (!ext2_block_write(fs, fs->gdt[group].blockBmp, bmp, 1))
 			fs->gdt[group].freeBlocks++;
 		else
@@ -310,18 +390,6 @@ int ext2_block_get(ext2_t *fs, ext2_obj_t *obj, uint32_t block, uint32_t **res)
 }
 
 
-int ext2_block_init(ext2_t *fs, ext2_obj_t *obj, uint32_t block, void *buff)
-{
-	uint32_t *bno;
-	int err;
-
-	if ((err = ext2_block_get(fs, obj, block, &bno)) < 0)
-		return err;
-
-	return ext2_block_read(fs, *bno, buff, 1);
-}
-
-
 int ext2_block_syncone(ext2_t *fs, ext2_obj_t *obj, uint32_t block, const void *buff)
 {
 	uint32_t *bno;
@@ -457,86 +525,6 @@ static int ext2_block_destroyone(ext2_t *fs, uint32_t bno)
 }
 
 
-int ext2_block_destroy(ext2_t *fs, uint32_t bno, uint32_t n)
-{
-	uint32_t group = (bno - 1) / fs->sb->groupBlocks;
-	uint32_t i, j, offset, pgroup = group;
-	void *bmp;
-	int err;
-
-	if ((bmp = malloc(fs->blocksz)) == NULL)
-		return -ENOMEM;
-
-	if ((err = ext2_block_read(fs, fs->gdt[group].blockBmp, bmp, 1)) < 0) {
-		free(bmp);
-		return err;
-	}
-
-	for (i = 0, j = 0; i < n; i++, j++) {
-		group = (bno + i - 1) / fs->sb->groupBlocks;
-		offset = (bno + i - 1) % fs->sb->groupBlocks + 1;
-
-		if (group != pgroup) {
-			if ((err = ext2_block_write(fs, fs->gdt[pgroup].blockBmp, bmp, 1)) < 0) {
-				free(bmp);
-				return err;
-			}
-
-			fs->gdt[pgroup].freeBlocks += j;
-
-			if ((err = ext2_gdt_syncone(fs, pgroup)) < 0) {
-				for (i = 0; i < j; i++)
-					ext2_togglebit(bmp, --offset);
-
-				if (!ext2_block_write(fs, fs->gdt[pgroup].blockBmp, bmp, 1))
-					fs->gdt[pgroup].freeBlocks -= j;
-				else
-					fs->sb->freeBlocks += j;
-
-				free(bmp);
-				return err;
-			}
-
-			fs->sb->freeBlocks += j;
-			pgroup = group;
-			j = 0;
-
-			if ((err = ext2_block_read(fs, fs->gdt[group].blockBmp, bmp, 1)) < 0) {
-				free(bmp);
-				return err;
-			}
-		}
-
-		ext2_togglebit(bmp, offset);
-	}
-
-	if ((err = ext2_block_write(fs, fs->gdt[group].blockBmp, bmp, 1)) < 0) {
-		free(bmp);
-		return err;
-	}
-
-	fs->gdt[group].freeBlocks += j;
-
-	if ((err = ext2_gdt_syncone(fs, group)) < 0) {
-		for (i = 0; i < j; i++)
-			ext2_togglebit(bmp, offset--);
-		
-		if (!ext2_block_write(fs, fs->gdt[group].blockBmp, bmp, 1))
-			fs->gdt[group].freeBlocks -= j;
-		else
-			fs->sb->freeBlocks += j;
-		
-		free(bmp);
-		return err;
-	}
-
-	fs->sb->freeBlocks += j;
-	free(bmp);
-
-	return EOK;
-}
-
-
 int ext2_iblock_destroy(ext2_t *fs, ext2_obj_t *obj, uint32_t block, uint32_t n)
 {
 	uint32_t *ind[3] = { NULL, NULL, NULL };
@@ -609,4 +597,16 @@ int ext2_iblock_destroy(ext2_t *fs, ext2_obj_t *obj, uint32_t block, uint32_t n)
 	}
 
 	return EOK;
+}
+
+
+int ext2_block_init(ext2_t *fs, ext2_obj_t *obj, uint32_t block, void *buff)
+{
+	uint32_t *bno;
+	int err;
+
+	if ((err = ext2_block_get(fs, obj, block, &bno)) < 0)
+		return err;
+
+	return ext2_block_read(fs, *bno, buff, 1);
 }

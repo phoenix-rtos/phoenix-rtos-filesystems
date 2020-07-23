@@ -25,18 +25,162 @@
 #include "libext2.h"
 
 
-int libext2_mount(oid_t *dev, unsigned int sectorsz, ssize_t (*read)(id_t, offs_t, char *, size_t), ssize_t (*write)(id_t, offs_t, const char *, size_t), void **data)
+int libext2_handler(void *fdata, msg_t *msg)
+{
+	ext2_t *fs = (ext2_t *)fdata;
+	ext2_obj_t *obj;
+	uint16_t mode;
+	oid_t dev;
+
+	switch (msg->type) {
+	case mtCreate:
+		mode = (uint16_t)msg->i.create.mode;
+
+		switch (msg->i.create.type) {
+		case otDir:
+			mode |= S_IFDIR;
+			break;
+		
+		case otFile:
+			mode |= S_IFREG;
+			break;
+
+		case otDev:
+			mode &= 0x1ff;
+			mode |= S_IFCHR;
+			break;
+		}
+
+		if (ext2_lookup(fs, msg->i.create.dir.id, msg->i.data, (uint8_t)strlen(msg->i.data), &msg->o.create.oid.id, &dev) > 0) {
+			if ((obj = ext2_obj_get(fs, msg->o.create.oid.id)) == NULL) {
+				msg->o.create.err = -EINVAL;
+				break;
+			}
+
+			mutexLock(obj->lock);
+
+			if (S_ISCHR(obj->inode->mode) || S_ISBLK(obj->inode->mode)) {
+				if (!dev.port && !dev.id && (S_ISCHR(mode) || S_ISBLK(mode))) {
+					memcpy(&obj->dev, &msg->i.create.dev, sizeof(oid_t));
+					obj->inode->mode = mode;
+					obj->flags |= OFLAG_DIRTY;
+					msg->o.create.oid.id = obj->id;
+					msg->o.create.err = _ext2_obj_sync(fs, obj);
+
+					mutexUnlock(obj->lock);
+					ext2_obj_put(fs, obj);
+					break;
+				}
+				else {
+					mutexUnlock(obj->lock);
+					ext2_obj_put(fs, obj);
+
+					if ((dev.port == fs->oid.port) && (dev.id == msg->o.create.oid.id)) {
+						if (ext2_unlink(fs, msg->i.create.dir.id, msg->i.data, (uint8_t)strlen(msg->i.data)) < 0) {
+							msg->o.create.err = -EEXIST;
+							break;
+						}
+					}
+					else {
+						msg->o.create.err = -EEXIST;
+						break;
+					}
+				}
+			}
+			else {
+				mutexUnlock(obj->lock);
+				ext2_obj_put(fs, obj);
+
+				msg->o.create.err = -EEXIST;
+				break;
+			}
+		}
+
+		msg->o.create.err = ext2_create(fs, msg->i.create.dir.id, msg->i.data, (uint8_t)strlen(msg->i.data), &msg->i.create.dev, mode, &msg->o.create.oid.id);
+		break;
+
+	case mtDestroy:
+		msg->o.io.err = ext2_destroy(fs, msg->i.destroy.oid.id);
+		break;
+
+	case mtLookup:
+		msg->o.lookup.err = ext2_lookup(fs, msg->i.lookup.dir.id, msg->i.data, (uint8_t)strlen(msg->i.data), &msg->o.lookup.fil.id, &msg->o.lookup.dev);
+		break;
+
+	case mtOpen:
+		ext2_open(fs, msg->i.openclose.oid.id);
+		break;
+
+	case mtClose:
+		ext2_close(fs, msg->i.openclose.oid.id);
+		break;
+
+	case mtRead:
+		msg->o.io.err = ext2_read(fs, msg->i.io.oid.id, msg->i.io.offs, msg->o.data, msg->o.size);
+		break;
+
+	case mtReaddir:
+		msg->o.io.err = ext2_read(fs, msg->i.readdir.dir.id, msg->i.readdir.offs, msg->o.data, msg->o.size);
+		break;
+
+	case mtWrite:
+		msg->o.io.err = ext2_write(fs, msg->i.io.oid.id, msg->i.io.offs, msg->i.data, msg->i.size);
+		break;
+
+	case mtTruncate:
+		msg->o.io.err = ext2_truncate(fs, msg->i.io.oid.id, msg->i.io.len);
+		break;
+
+	case mtDevCtl:
+		msg->o.io.err = -EINVAL;
+		break;
+
+	case mtGetAttr:
+		ext2_getattr(fs, msg->i.attr.oid.id, msg->i.attr.type, &msg->o.attr.val);
+		break;
+
+	case mtSetAttr:
+		ext2_setattr(fs, msg->i.attr.oid.id, msg->i.attr.type, msg->i.attr.val);
+		break;
+
+	case mtLink:
+		msg->o.io.err = ext2_link(fs, msg->i.ln.dir.id, msg->i.data, (uint8_t)strlen(msg->i.data), msg->i.ln.oid.id);
+		break;
+
+	case mtUnlink:
+		msg->o.io.err = ext2_unlink(fs, msg->i.ln.dir.id, msg->i.data, (uint8_t)strlen(msg->i.data));
+		break;
+	}
+
+	return EOK;
+}
+
+
+int libext2_unmount(void *fdata)
+{
+	ext2_t *fs = (ext2_t *)fdata;
+
+	ext2_objs_destroy(fs);
+	ext2_gdt_destroy(fs);
+	ext2_sb_destroy(fs);
+	free(fs);
+
+	return EOK;
+}
+
+
+int libext2_mount(oid_t *oid, unsigned int sectorsz, dev_read read, dev_write write, void **fdata)
 {
 	ext2_t *fs;
 	int err;
 
-	if ((*data = fs = (ext2_t *)malloc(sizeof(ext2_t))) == NULL)
+	if ((*fdata = fs = (ext2_t *)malloc(sizeof(ext2_t))) == NULL)
 		return -ENOMEM;
 
-	memcpy(&fs->dev, dev, sizeof(oid_t));
 	fs->sectorsz = sectorsz;
 	fs->read = read;
 	fs->write = write;
+	memcpy(&fs->oid, oid, sizeof(oid_t));
 
 	if ((err = ext2_sb_init(fs)) < 0) {
 		free(fs);
@@ -61,130 +205,8 @@ int libext2_mount(oid_t *dev, unsigned int sectorsz, ssize_t (*read)(id_t, offs_
 		ext2_gdt_destroy(fs);
 		ext2_sb_destroy(fs);
 		free(fs);
-		return -EFAULT;
+		return -ENOENT;
 	}
 
 	return ROOT_INO;
-}
-
-
-int libext2_unmount(void *data)
-{
-	ext2_t *fs = (ext2_t *)data;
-
-	ext2_objs_destroy(fs);
-	ext2_gdt_destroy(fs);
-	ext2_sb_destroy(fs);
-	free(fs);
-
-	return EOK;
-}
-
-
-int libext2_handler(void *data, msg_t *msg)
-{
-	ext2_t *fs = (ext2_t *)data;
-	ext2_obj_t *obj;
-	uint16_t mode;
-	oid_t dev;
-
-	switch (msg->type) {
-	case mtCreate:
-		if (!ext2_lookup(fs, msg->i.create.dir.id, msg->i.data, (uint8_t)msg->i.size, &msg->o.create.oid.id, &dev, &mode)) {
-			if ((obj = ext2_obj_get(fs, msg->o.create.oid.id)) == NULL) {
-				msg->o.create.err = -EFAULT;
-				break;
-			}
-
-			mutexLock(obj->lock);
-
-			if ((S_ISCHR(obj->inode->mode) || S_ISBLK(obj->inode->mode)) && (dev.port == fs->dev.port) && (dev.id == msg->o.create.oid.id)) {
-				mutexUnlock(obj->lock);
-				ext2_obj_put(fs, obj);
-
-				if (ext2_unlink(fs, msg->i.create.dir.id, msg->i.data, (uint8_t)msg->i.size) < 0) {
-					msg->o.create.err = -EEXIST;
-					break;
-				}
-			}
-			else {
-				mutexUnlock(obj->lock);
-				ext2_obj_put(fs, obj);
-
-				msg->o.create.err = -EEXIST;
-				break;
-			}
-		}
-
-		mode = (uint16_t)msg->i.create.mode;
-
-		switch (msg->i.create.type) {
-		case otDir:
-			mode |= S_IFDIR;
-			break;
-		
-		case otFile:
-			mode |= S_IFREG;
-			break;
-
-		case otDev:
-			mode |= (S_IFCHR & 0x1ff);
-			break;
-		}
-
-		msg->o.create.oid.port = fs->dev.port;
-		msg->o.create.err = ext2_create(fs, msg->i.create.dir.id, msg->i.data, (uint8_t)msg->i.size, &msg->i.create.dev, mode, &msg->o.create.oid.id);
-		break;
-
-	case mtDestroy:
-		msg->o.io.err = ext2_destroy(fs, msg->i.destroy.oid.id);
-		break;
-
-	case mtLookup:
-		msg->o.lookup.fil.port = fs->dev.port;
-		msg->o.lookup.err = ext2_lookup(fs, msg->i.lookup.dir.id, msg->i.data, (uint8_t)msg->i.size, &msg->o.lookup.fil.id, &msg->o.lookup.dev, &mode);
-		break;
-
-	case mtOpen:
-		msg->o.io.err = ext2_open(fs, msg->i.openclose.oid.id);
-		break;
-
-	case mtClose:
-		msg->o.io.err = ext2_close(fs, msg->i.openclose.oid.id);
-		break;
-
-	case mtRead:
-		msg->o.io.err = ext2_read(fs, msg->i.io.oid.id, msg->i.io.offs, msg->o.data, msg->o.size);
-		break;
-
-	case mtWrite:
-		msg->o.io.err = ext2_write(fs, msg->i.io.oid.id, msg->i.io.offs, msg->i.data, msg->i.size);
-		break;
-
-	case mtTruncate:
-		msg->o.io.err = ext2_truncate(fs, msg->i.io.oid.id, msg->i.io.len);
-		break;
-
-	case mtDevCtl:
-		msg->o.io.err = -EINVAL;
-		break;
-
-	case mtGetAttr:
-		msg->o.io.err = ext2_getattr(fs, msg->i.attr.oid.id, msg->i.attr.type, &msg->o.attr.val);
-		break;
-
-	case mtSetAttr:
-		msg->o.io.err = ext2_setattr(fs, msg->i.attr.oid.id, msg->i.attr.type, msg->i.attr.val);
-		break;
-
-	case mtLink:
-		msg->o.io.err = ext2_link(fs, msg->i.ln.dir.id, msg->i.data, (uint8_t)msg->i.size, msg->i.ln.oid.id);
-		break;
-
-	case mtUnlink:
-		msg->o.io.err = ext2_unlink(fs, msg->i.ln.dir.id, msg->i.data, (uint8_t)msg->i.size);
-		break;
-	}
-
-	return EOK;
 }

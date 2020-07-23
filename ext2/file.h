@@ -35,8 +35,4 @@ extern ssize_t _ext2_file_write(ext2_t *fs, ext2_obj_t *obj, offs_t offs, const 
 extern int _ext2_file_truncate(ext2_t *fs, ext2_obj_t *obj, size_t size);
 
 
-/* Truncates and synchronizes a file */
-extern int ext2_file_truncate(ext2_t *fs, ext2_obj_t *obj, size_t size);
-
-
 #endif

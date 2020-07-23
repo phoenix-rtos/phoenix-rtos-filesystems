@@ -66,16 +66,12 @@ struct _ext2_objs_t {
 };
 
 
-/* Creates new object */
-extern int ext2_obj_create(ext2_t *fs, uint32_t pino, ext2_inode_t *inode, uint16_t mode, ext2_obj_t **res);
-
-
-/* Destroys object */
-extern int ext2_obj_destroy(ext2_t *fs, ext2_obj_t *obj);
-
-
 /* Retrives object */
 extern ext2_obj_t *ext2_obj_get(ext2_t *fs, id_t id);
+
+
+/* Releases object */
+extern void ext2_obj_put(ext2_t *fs, ext2_obj_t *obj);
 
 
 /* Synchronizes object (requires object to be locked) */
@@ -86,8 +82,16 @@ extern int _ext2_obj_sync(ext2_t *fs, ext2_obj_t *obj);
 extern int ext2_obj_sync(ext2_t *fs, ext2_obj_t *obj);
 
 
-/* Releases object */
-extern void ext2_obj_put(ext2_t *fs, ext2_obj_t *obj);
+/* Truncates object */
+extern int ext2_obj_truncate(ext2_t *fs, ext2_obj_t *obj, size_t size);
+
+
+/* Destroys object */
+extern int ext2_obj_destroy(ext2_t *fs, ext2_obj_t *obj);
+
+
+/* Creates new object */
+extern int ext2_obj_create(ext2_t *fs, uint32_t pino, ext2_inode_t *inode, uint16_t mode, ext2_obj_t **res);
 
 
 /* Destroys filesystem objects */

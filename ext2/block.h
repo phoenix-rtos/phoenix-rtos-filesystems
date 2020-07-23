@@ -29,12 +29,12 @@ extern int ext2_block_read(ext2_t *fs, uint32_t bno, void *buff, uint32_t n);
 extern int ext2_block_write(ext2_t *fs, uint32_t bno, const void *buff, uint32_t n);
 
 
+/* Destroys blocks */
+extern int ext2_block_destroy(ext2_t *fs, uint32_t bno, uint32_t n);
+
+
 /* Calculates physical block number (given object inode relative block number) */
 extern int ext2_block_get(ext2_t *fs, ext2_obj_t *obj, uint32_t block, uint32_t **res);
-
-
-/* Initializes block (given object inode relative block number) */
-extern int ext2_block_init(ext2_t *fs, ext2_obj_t *obj, uint32_t block, void *buff);
 
 
 /* Synchronizes one block (given object inode relative block number) */
@@ -45,12 +45,12 @@ extern int ext2_block_syncone(ext2_t *fs, ext2_obj_t *obj, uint32_t block, const
 extern int ext2_block_sync(ext2_t *fs, ext2_obj_t *obj, uint32_t block, const void *buff, uint32_t n);
 
 
-/* Destroys blocks */
-extern int ext2_block_destroy(ext2_t *fs, uint32_t bno, uint32_t n);
-
-
 /* Destroys inode blocks (given object inode relative block number) */
 extern int ext2_iblock_destroy(ext2_t *fs, ext2_obj_t *obj, uint32_t block, uint32_t n);
+
+
+/* Initializes block (given object inode relative block number) */
+extern int ext2_block_init(ext2_t *fs, ext2_obj_t *obj, uint32_t block, void *buff);
 
 
 #endif

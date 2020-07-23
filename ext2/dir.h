@@ -42,7 +42,7 @@ typedef struct {
 	uint16_t size; /* Entry size */
 	uint8_t len;   /* Entry name length */
 	uint8_t type;  /* Entry type */
-	char *name;    /* Entry name */
+	char name[];   /* Entry name */
 } ext2_dirent_t;
 
 

@@ -33,16 +33,14 @@ int ext2_create(ext2_t *fs, id_t id, const char *name, uint8_t len, oid_t *dev, 
 	ext2_obj_t *obj;
 	int err;
 
-	if (!len || (name == NULL))
-		return -EINVAL;
-
 	if ((err = ext2_obj_create(fs, (uint32_t)id, NULL, mode, &obj)) < 0)
 		return err;
 
-	if (ext2_link(fs, id, name, len, obj->id) < 0) {
-		ext2_obj_put(fs, obj);
-		return ext2_destroy(fs, obj->id);
-	}
+	if (ext2_link(fs, id, name, len, obj->id) < 0)
+		return ext2_obj_destroy(fs, obj);
+
+	if (S_ISCHR(obj->inode->mode) || S_ISBLK(obj->inode->mode))
+		memcpy(&obj->dev, dev, sizeof(oid_t));
 
 	*res = obj->id;
 	ext2_obj_put(fs, obj);
@@ -59,85 +57,87 @@ int ext2_destroy(ext2_t *fs, id_t id)
 	if ((obj = ext2_obj_get(fs, id)) == NULL)
 		return -EINVAL;
 
-	if ((err = ext2_obj_sync(fs, obj)) < 0)
-		return err;
+	do {
+		if ((err = ext2_obj_sync(fs, obj)) < 0)
+			break;
 
-	if ((err = ext2_file_truncate(fs, obj, 0)) < 0)
-		return err;
+		if ((err = ext2_obj_truncate(fs, obj, 0)) < 0)
+			break;
 
-	if ((err = ext2_obj_destroy(fs, obj)) < 0)
-		return err;
+		return ext2_obj_destroy(fs, obj);
+	} while (0);
 
-	if ((err = ext2_sb_sync(fs)) < 0)
-		return err;
+	ext2_obj_put(fs, obj);
 
-	return EOK;
+	return err;
 }
 
 
-int ext2_lookup(ext2_t *fs, id_t id, const char *name, const uint8_t len, id_t *res, oid_t *dev, uint16_t *mode)
+int ext2_lookup(ext2_t *fs, id_t id, const char *name, uint8_t len, id_t *res, oid_t *dev)
 {
 	ext2_obj_t *dir, *obj;
+	uint8_t i, j;
 	int err;
 
-	if (id < ROOT_INO)
+	if (!len || (name == NULL))
 		return -EINVAL;
 
-	if (!len || ((dir = ext2_obj_get(fs, id)) == NULL))
+	if ((dir = ext2_obj_get(fs, id)) == NULL)
 		return -ENOENT;
 
-	mutexLock(dir->lock);
+	for (i = 0, j = 0; i < len; i = j + 1, dir = obj) {
+		while ((i < len) && (name[i] == '/'))
+			i++;
 
-	do {
-		if (!S_ISDIR(dir->inode->mode)) {
-			err = -ENOTDIR;
-			break;
-		}
+		j = i + 1;
 
-		if ((err = _ext2_dir_search(fs, dir, name, len, res)) < 0)
-			break;
+		while ((j < len) && (name[j] != '/'))
+			j++;
 
-		if ((obj = ext2_obj_get(fs, *res)) == NULL) {
-			err = -ENOENT;
-			break;
-		}
+		mutexLock(dir->lock);
 
-		if (obj->id != dir->id)
-			mutexLock(obj->lock);
+		do {
+			if (i >= len) {
+				err = -ENOENT;
+				break;
+			}
 
-		if (S_ISCHR(obj->inode->mode) || S_ISBLK(obj->inode->mode)) {
-			dev->port = obj->dev.port;
-			dev->id = obj->dev.id;
-		}
-		else {
-			dev->port = fs->dev.port;
-			dev->id = *res;
-		}
+			if (!S_ISDIR(dir->inode->mode)) {
+				err = -ENOTDIR;
+				break;
+			}
 
-		if (obj->flags & OFLAG_MOUNT) {
-			*mode = obj->inode->mode;
-			*mode &= ~S_IFMT;
-			*mode |= 0xD000; //S_IFMNT
-		}
-		else if ((dir->flags & OFLAG_MOUNTPOINT) && (len == 2) && !strncmp(name, "..", 2)) {
-			*mode = dir->inode->mode;
-			*mode &= ~S_IFMT;
-			*mode |= 0xD000; //S_IFMNT
-			*res = dir->id;
-		}
-		else {
-			*mode = obj->inode->mode;
-		}
+			if ((err = _ext2_dir_search(fs, dir, name + i, j - i, res)) < 0)
+				break;
 
-		if (obj->id != dir->id)
-			mutexUnlock(obj->lock);
-		ext2_obj_put(fs, obj);
-	} while (0);
+			if ((obj = ext2_obj_get(fs, *res)) == NULL) {
+				ext2_unlink(fs, dir->id, name + i, j - i);
+				err = -ENOENT;
+				break;
+			}
+		} while (0);
+		
+		mutexUnlock(dir->lock);
+		ext2_obj_put(fs, dir);
 
-	mutexUnlock(dir->lock);
-	ext2_obj_put(fs, dir);
+		if (err < 0)
+			return err;
+	}
 
-	return err;
+	mutexLock(obj->lock);
+
+	if (S_ISCHR(obj->inode->mode) || S_ISBLK(obj->inode->mode)) {
+		memcpy(dev, &obj->dev, sizeof(oid_t));
+	}
+	else {
+		dev->port = fs->oid.port;
+		dev->id = *res;
+	}
+
+	mutexUnlock(obj->lock);
+	ext2_obj_put(fs, obj);
+
+	return j;
 }
 
 
@@ -220,7 +220,10 @@ ssize_t ext2_write(ext2_t *fs, id_t id, offs_t offs, const char *buff, size_t le
 
 	mutexLock(obj->lock);
 
-	ret = _ext2_file_write(fs, obj, offs, buff, len);
+	if (S_ISDIR(obj->inode->mode) || S_ISCHR(obj->inode->mode) || S_ISBLK(obj->inode->mode))
+		ret = -EINVAL;
+	else
+		ret = _ext2_file_write(fs, obj, offs, buff, len);
 
 	mutexUnlock(obj->lock);
 	ext2_obj_put(fs, obj);
@@ -237,20 +240,33 @@ int ext2_truncate(ext2_t *fs, id_t id, size_t size)
 	if ((obj = ext2_obj_get(fs, id)) == NULL)
 		return -EINVAL;
 
-	if ((err = ext2_file_truncate(fs, obj, size)) < 0)
-		return err;
+	do {
+		mutexLock(obj->lock);
 
-	if ((err = ext2_sb_sync(fs)) < 0)
-		return err;
+		if (S_ISCHR(obj->inode->mode) || S_ISBLK(obj->inode->mode)) {
+			mutexUnlock(obj->lock);
+			err = -EINVAL;
+			break;
+		}
 
-	return EOK;
+		mutexUnlock(obj->lock);
+
+		if ((err = ext2_obj_truncate(fs, obj, size)) < 0)
+			break;
+
+		if ((err = ext2_sb_sync(fs)) < 0)
+			break;
+	} while (0);
+
+	ext2_obj_put(fs, obj);
+
+	return err;
 }
 
 
 int ext2_getattr(ext2_t *fs, id_t id, int type, int *attr)
 {
 	ext2_obj_t *obj;
-	int err = 0;
 
 	if ((obj = ext2_obj_get(fs, id)) < 0)
 		return -EINVAL;
@@ -277,12 +293,10 @@ int ext2_getattr(ext2_t *fs, id_t id, int type, int *attr)
 	case atType:
 		if (S_ISDIR(obj->inode->mode))
 			*attr = otDir;
-		else if (S_ISREG(obj->inode->mode))
-			*attr = otFile;
 		else if (S_ISCHR(obj->inode->mode) || S_ISBLK(obj->inode->mode))
 			*attr = otDev;
 		else
-			err = -EFAULT;
+			*attr = otFile;
 		break;
 
 	case atCTime:
@@ -309,14 +323,14 @@ int ext2_getattr(ext2_t *fs, id_t id, int type, int *attr)
 	mutexUnlock(obj->lock);
 	ext2_obj_put(fs, obj);
 
-	return err;
+	return EOK;
 }
 
 
 int ext2_setattr(ext2_t *fs, id_t id, int type, int attr)
 {
 	ext2_obj_t *obj;
-	int err = 0;
+	int err = EOK;
 
 	if ((obj = ext2_obj_get(fs, id)) == NULL)
 		return -EINVAL;
@@ -367,6 +381,9 @@ int ext2_link(ext2_t *fs, id_t id, const char *name, uint8_t len, id_t lid)
 	id_t res;
 	int err;
 
+	if (!len || (name == NULL) || (id == lid))
+		return -EINVAL;
+
 	if ((dir = ext2_obj_get(fs, id)) == NULL)
 		return -EINVAL;
 
@@ -376,8 +393,7 @@ int ext2_link(ext2_t *fs, id_t id, const char *name, uint8_t len, id_t lid)
 	}
 
 	mutexLock(dir->lock);
-	if (obj->id != dir->id)
-		mutexLock(obj->lock);
+	mutexLock(obj->lock);
 
 	do {
 		if (!S_ISDIR(dir->inode->mode)) {
@@ -397,7 +413,7 @@ int ext2_link(ext2_t *fs, id_t id, const char *name, uint8_t len, id_t lid)
 
 		if ((err = _ext2_dir_add(fs, dir, name, len, obj->inode->mode, (uint32_t)lid)) < 0)
 			break;
-		
+
 		obj->inode->links++;
 		obj->inode->uid = 0;
 		obj->inode->gid = 0;
@@ -424,8 +440,7 @@ int ext2_link(ext2_t *fs, id_t id, const char *name, uint8_t len, id_t lid)
 			break;
 	} while (0);
 
-	if (obj->id != dir->id)
-		mutexUnlock(obj->lock);
+	mutexUnlock(obj->lock);
 	mutexUnlock(dir->lock);
 	ext2_obj_put(fs, obj);
 	ext2_obj_put(fs, dir);
@@ -439,6 +454,9 @@ int ext2_unlink(ext2_t *fs, id_t id, const char *name, uint8_t len)
 	ext2_obj_t *dir, *obj;
 	id_t res;
 	int err;
+
+	if (!len || (name == NULL))
+		return -EINVAL;
 
 	if ((dir = ext2_obj_get(fs, id)) == NULL)
 		return -EINVAL;
@@ -460,8 +478,7 @@ int ext2_unlink(ext2_t *fs, id_t id, const char *name, uint8_t len)
 			err = -ENOENT;
 		}
 
-		if (obj->id != dir->id)
-			mutexLock(obj->lock);
+		mutexLock(obj->lock);
 
 		do {
 			if (obj->flags & (OFLAG_MOUNTPOINT | OFLAG_MOUNT)) {
@@ -482,11 +499,10 @@ int ext2_unlink(ext2_t *fs, id_t id, const char *name, uint8_t len)
 			obj->inode->mtime = obj->inode->atime = time(NULL);
 		} while (0);
 
-		if (obj->id != dir->id)
-			mutexUnlock(obj->lock);
+		mutexUnlock(obj->lock);
 		ext2_obj_put(fs, obj);
 	} while (0);
-	
+
 	mutexUnlock(dir->lock);
 	ext2_obj_put(fs, dir);
 

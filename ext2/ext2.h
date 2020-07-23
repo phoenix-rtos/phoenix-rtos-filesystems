@@ -21,7 +21,7 @@
 #include <sys/types.h>
 
 
-/* Filesystem data types */
+/* Filesystem common data types forward declaration */
 typedef struct _ext2_sb_t   ext2_sb_t;   /* SuperBlock */
 typedef struct _ext2_gd_t   ext2_gd_t;   /* Group Descriptor*/
 typedef struct _ext2_obj_t  ext2_obj_t;  /* Filesystem object */
@@ -33,19 +33,19 @@ typedef struct _ext2_objs_t ext2_objs_t; /* Filesystem objects */
 #define MAX_OBJECTS 512 /* Max number of filesystem objects in use */
 
 
-/* Device access */
-typedef ssize_t (*read_dev)(id_t, offs_t, char *, size_t);
-typedef ssize_t (*write_dev)(id_t, offs_t, const char *, size_t);
+/* Device access callbacks */
+typedef ssize_t (*dev_read)(id_t, offs_t, char *, size_t);
+typedef ssize_t (*dev_write)(id_t, offs_t, const char *, size_t);
 
 
 typedef struct {
 	/* Device info */
-	oid_t dev;         /* Device ID */
 	uint32_t sectorsz; /* Device sector size */
-	read_dev read;     /* Device read callback */
-	write_dev write;   /* Device write callback */
+	dev_read read;     /* Device read callback */
+	dev_write write;   /* Device write callback */
 
 	/* Filesystem info */
+	oid_t oid;         /* Filesystem port and device ID */
 	ext2_sb_t *sb;     /* SuperBlock */
 	ext2_gd_t *gdt;    /* Group Descriptors Table */
 	uint32_t blocksz;  /* Block size */
@@ -57,7 +57,7 @@ typedef struct {
 } ext2_t;
 
 
-/* Include filesystem data types definitions */
+/* Include filesystem common data types definitions */
 #include "gdt.h"
 #include "obj.h"
 #include "sb.h"
@@ -72,7 +72,7 @@ extern int ext2_destroy(ext2_t *fs, id_t id);
 
 
 /* Lookups a file */
-extern int ext2_lookup(ext2_t *fs, id_t id, const char *name, const uint8_t len, id_t *res, oid_t *dev, uint16_t *mode);
+extern int ext2_lookup(ext2_t *fs, id_t id, const char *name, uint8_t len, id_t *res, oid_t *dev);
 
 
 /* Opens a file */

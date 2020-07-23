@@ -69,7 +69,7 @@ int ext2_gdt_sync(ext2_t *fs)
 			return err;
 		}
 
-		memcpy(buff, (void *)((uintptr_t)(void *)fs->gdt + blocks * fs->blocksz), gdtsz % fs->blocksz);
+		memcpy(buff, (char *)fs->gdt + blocks * fs->blocksz, gdtsz % fs->blocksz);
 
 		if ((err = ext2_block_write(fs, bno + blocks, buff, 1)) < 0) {
 			free(buff);
@@ -92,39 +92,37 @@ void ext2_gdt_destroy(ext2_t *fs)
 
 int ext2_gdt_init(ext2_t *fs)
 {
-	uint32_t groups = (fs->sb->blocks - 1) / fs->sb->groupBlocks + 1;
+	uint32_t groups = (fs->sb->inodes - 1) / fs->sb->groupInodes + 1;
 	uint32_t gdtsz = groups * sizeof(ext2_gd_t);
 	uint32_t blocks = gdtsz / fs->blocksz;
 	uint32_t bno = fs->sb->fstBlock + 1;
-	ext2_gd_t *gdt;
 	void *buff;
 	int err;
 
-	if ((gdt = (ext2_gd_t *)malloc(gdtsz)) == NULL)
+	if ((fs->gdt = (ext2_gd_t *)malloc(gdtsz)) == NULL)
 		return -ENOMEM;
 
-	if ((err = ext2_block_read(fs, bno, gdt, blocks)) < 0) {
-		free(gdt);
+	if ((err = ext2_block_read(fs, bno, fs->gdt, blocks)) < 0) {
+		free(fs->gdt);
 		return err;
 	}
 
 	if (gdtsz % fs->blocksz) {
 		if ((buff = malloc(fs->blocksz)) == NULL) {
-			free(gdt);
+			free(fs->gdt);
 			return -ENOMEM;
 		}
 
 		if ((err = ext2_block_read(fs, bno + blocks, buff, 1)) < 0) {
-			free(gdt);
+			free(fs->gdt);
 			free(buff);
 			return err;
 		}
 
-		memcpy((void *)((uintptr_t)(void *)gdt + blocks * fs->blocksz), buff, gdtsz % fs->blocksz);
+		memcpy((char *)fs->gdt + blocks * fs->blocksz, buff, gdtsz % fs->blocksz);
 		free(buff);
 	}
 
-	fs->gdt = gdt;
 	fs->groups = groups;
 
 	return EOK;
