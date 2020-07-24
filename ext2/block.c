@@ -432,7 +432,7 @@ int ext2_block_sync(ext2_t *fs, ext2_obj_t *obj, uint32_t block, const void *buf
 			for (i = j++; j < n; j++) {
 				if ((err = ext2_block_get(fs, obj, block + j, &bno)) < 0)
 					return err;
-				
+
 				if (*bno)
 					break;
 			}

@@ -116,7 +116,7 @@ int ext2_lookup(ext2_t *fs, id_t id, const char *name, uint8_t len, id_t *res, o
 				break;
 			}
 		} while (0);
-		
+
 		mutexUnlock(dir->lock);
 		ext2_obj_put(fs, dir);
 
@@ -520,7 +520,7 @@ uint32_t ext2_findzerobit(uint32_t *bmp, uint32_t size, uint32_t offs)
 			return i * (CHAR_BIT * sizeof(uint32_t)) + __builtin_ffsl(tmp);
 	}
 
-	return 0; 
+	return 0;
 }
 
 

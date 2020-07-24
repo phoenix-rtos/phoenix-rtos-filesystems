@@ -40,7 +40,7 @@ int libext2_handler(void *fdata, msg_t *msg)
 		case otDir:
 			mode |= S_IFDIR;
 			break;
-		
+
 		case otFile:
 			mode |= S_IFREG;
 			break;

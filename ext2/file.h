@@ -27,7 +27,7 @@
 extern ssize_t _ext2_file_read(ext2_t *fs, ext2_obj_t *obj, offs_t offs, char *buff, size_t len);
 
 
-/* Writes a file (requires object to be locked) */ 
+/* Writes a file (requires object to be locked) */
 extern ssize_t _ext2_file_write(ext2_t *fs, ext2_obj_t *obj, offs_t offs, const char *buff, size_t len);
 
 
