@@ -337,7 +337,7 @@ static int ext2_block_ind(ext2_t *fs, ext2_obj_t *obj, int depth, uint32_t offs[
 	int err;
 
 	if (depth == 4) {
-		if ((err = ext2_block_readind(fs, obj, &obj->inode->block[offs[3]], depth, ind + 2)) < 0)
+		if ((err = ext2_block_readind(fs, obj, obj->inode->block + offs[3], depth, ind + 2)) < 0)
 			return err;
 	}
 
@@ -347,7 +347,7 @@ static int ext2_block_ind(ext2_t *fs, ext2_obj_t *obj, int depth, uint32_t offs[
 				return err;
 		}
 		else {
-			if ((err = ext2_block_readind(fs, obj, &obj->inode->block[offs[2]], depth, ind + 1)) < 0)
+			if ((err = ext2_block_readind(fs, obj, obj->inode->block + offs[2], depth, ind + 1)) < 0)
 				return err;
 		}
 	}
@@ -358,7 +358,7 @@ static int ext2_block_ind(ext2_t *fs, ext2_obj_t *obj, int depth, uint32_t offs[
 				return err;
 		}
 		else {
-			if ((err = ext2_block_readind(fs, obj, &obj->inode->block[offs[1]], depth, ind)) < 0)
+			if ((err = ext2_block_readind(fs, obj, obj->inode->block + offs[1], depth, ind)) < 0)
 				return err;
 		}
 	}
