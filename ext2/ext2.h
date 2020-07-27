@@ -16,9 +16,15 @@
 #ifndef _EXT2_H_
 #define _EXT2_H_
 
+#include <limits.h>
 #include <stdint.h>
 
 #include <sys/types.h>
+
+
+/* Misc definitions */
+#define ROOT_INO    2   /* Root inode number */
+#define MAX_OBJECTS 512 /* Max number of filesystem objects in use */
 
 
 /* Filesystem common data types forward declaration */
@@ -26,11 +32,6 @@ typedef struct _ext2_sb_t   ext2_sb_t;   /* SuperBlock */
 typedef struct _ext2_gd_t   ext2_gd_t;   /* Group Descriptor*/
 typedef struct _ext2_obj_t  ext2_obj_t;  /* Filesystem object */
 typedef struct _ext2_objs_t ext2_objs_t; /* Filesystem objects */
-
-
-/* Misc definitions */
-#define ROOT_INO    2   /* Root inode number */
-#define MAX_OBJECTS 512 /* Max number of filesystem objects in use */
 
 
 /* Device access callbacks */
@@ -112,13 +113,37 @@ extern int ext2_unlink(ext2_t *fs, id_t id, const char *name, uint8_t len);
 
 
 /* Bitmap bit operations */
-extern uint32_t ext2_findzerobit(uint32_t *bmp, uint32_t size, uint32_t offs);
+static inline uint32_t ext2_findzerobit(uint32_t *bmp, uint32_t size, uint32_t offs)
+{
+	uint32_t len = (size - 1) / (CHAR_BIT * sizeof(uint32_t)) + 1;
+	uint32_t tmp, i;
+
+	for (i = offs / (CHAR_BIT * sizeof(uint32_t)); i < len; i++) {
+		if ((tmp = bmp[i] ^ ~0UL)) {
+			offs = i * (CHAR_BIT * sizeof(uint32_t)) + __builtin_ffsl(tmp);
+			return (offs > size) ? 0 : offs;
+		}
+	}
+
+	return 0;
+}
 
 
-extern uint8_t ext2_checkbit(uint32_t *bmp, uint32_t offs);
+static inline uint8_t ext2_checkbit(uint32_t *bmp, uint32_t offs)
+{
+	uint32_t woffs = (offs - 1) % (CHAR_BIT * sizeof(uint32_t));
+	uint32_t aoffs = (offs - 1) / (CHAR_BIT * sizeof(uint32_t));
+
+	return !!(bmp[aoffs] & (1UL << woffs));
+}
 
 
-extern uint32_t ext2_togglebit(uint32_t *bmp, uint32_t offs);
+static inline void ext2_togglebit(uint32_t *bmp, uint32_t offs)
+{
+	uint32_t woffs = (offs - 1) % (CHAR_BIT * sizeof(uint32_t));
+	uint32_t aoffs = (offs - 1) / (CHAR_BIT * sizeof(uint32_t));
+	bmp[aoffs] ^= 1UL << woffs;
+}
 
 
 #endif

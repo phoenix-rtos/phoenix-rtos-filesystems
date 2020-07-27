@@ -14,7 +14,6 @@
  */
 
 #include <errno.h>
-#include <limits.h>
 #include <poll.h>
 #include <string.h>
 #include <time.h>
@@ -507,38 +506,4 @@ int ext2_unlink(ext2_t *fs, id_t id, const char *name, uint8_t len)
 	ext2_obj_put(fs, dir);
 
 	return err;
-}
-
-
-uint32_t ext2_findzerobit(uint32_t *bmp, uint32_t size, uint32_t offs)
-{
-	uint32_t len = (size - 1) / (CHAR_BIT * sizeof(uint32_t)) + 1;
-	uint32_t tmp, i;
-
-	for (i = offs / (CHAR_BIT * sizeof(uint32_t)); i < len; i++) {
-		if ((tmp = bmp[i] ^ ~0UL))
-			return i * (CHAR_BIT * sizeof(uint32_t)) + __builtin_ffsl(tmp);
-	}
-
-	return 0;
-}
-
-
-uint8_t ext2_checkbit(uint32_t *bmp, uint32_t offs)
-{
-	uint32_t woffs = (offs - 1) % (CHAR_BIT * sizeof(uint32_t));
-	uint32_t aoffs = (offs - 1) / (CHAR_BIT * sizeof(uint32_t));
-
-	return (bmp[aoffs] & 1UL << woffs) != 0;
-}
-
-
-uint32_t ext2_togglebit(uint32_t *bmp, uint32_t offs)
-{
-	uint32_t woffs = (offs - 1) % (CHAR_BIT * sizeof(uint32_t));
-	uint32_t aoffs = (offs - 1) / (CHAR_BIT * sizeof(uint32_t));
-	uint32_t old = bmp[aoffs];
-	bmp[aoffs] ^= 1UL << woffs;
-
-	return (old & 1UL << woffs) != 0;
 }
