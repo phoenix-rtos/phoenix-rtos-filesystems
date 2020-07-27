@@ -512,7 +512,7 @@ int ext2_unlink(ext2_t *fs, id_t id, const char *name, uint8_t len)
 
 uint32_t ext2_findzerobit(uint32_t *bmp, uint32_t size, uint32_t offs)
 {
-	uint32_t len = size / (CHAR_BIT * sizeof(uint32_t));
+	uint32_t len = (size - 1) / (CHAR_BIT * sizeof(uint32_t)) + 1;
 	uint32_t tmp, i;
 
 	for (i = offs / (CHAR_BIT * sizeof(uint32_t)); i < len; i++) {
