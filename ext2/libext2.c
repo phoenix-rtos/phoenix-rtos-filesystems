@@ -35,6 +35,7 @@ int libext2_handler(void *fdata, msg_t *msg)
 	switch (msg->type) {
 	case mtCreate:
 		mode = (uint16_t)msg->i.create.mode;
+		msg->o.create.oid.port = fs->oid.port;
 
 		switch (msg->i.create.type) {
 		case otDir:
@@ -104,6 +105,7 @@ int libext2_handler(void *fdata, msg_t *msg)
 		break;
 
 	case mtLookup:
+		msg->o.lookup.fil.port = fs->oid.port;
 		msg->o.lookup.err = ext2_lookup(fs, msg->i.lookup.dir.id, msg->i.data, (uint8_t)strlen(msg->i.data), &msg->o.lookup.fil.id, &msg->o.lookup.dev);
 		break;
 
