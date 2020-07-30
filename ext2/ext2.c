@@ -242,7 +242,7 @@ int ext2_truncate(ext2_t *fs, id_t id, size_t size)
 	do {
 		mutexLock(obj->lock);
 
-		if (S_ISCHR(obj->inode->mode) || S_ISBLK(obj->inode->mode)) {
+		if (!S_ISREG(obj->inode->mode)) {
 			mutexUnlock(obj->lock);
 			err = -EINVAL;
 			break;
@@ -472,9 +472,9 @@ int ext2_unlink(ext2_t *fs, id_t id, const char *name, uint8_t len)
 			break;
 
 		if ((obj = ext2_obj_get(fs, res)) == NULL) {
-			if ((err = _ext2_dir_remove(fs, dir, name, len)) < 0)
-				break;
-			err = -ENOENT;
+			if (!(err = _ext2_dir_remove(fs, dir, name, len)))
+				err = -ENOENT;
+			break;
 		}
 
 		mutexLock(obj->lock);
@@ -482,6 +482,11 @@ int ext2_unlink(ext2_t *fs, id_t id, const char *name, uint8_t len)
 		do {
 			if (obj->flags & (OFLAG_MOUNTPOINT | OFLAG_MOUNT)) {
 				err = -EBUSY;
+				break;
+			}
+
+			if (S_ISDIR(obj->inode->mode) && !_ext2_dir_empty(fs, obj)) {
+				err = -EACCES;
 				break;
 			}
 
