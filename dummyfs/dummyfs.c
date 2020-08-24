@@ -454,7 +454,7 @@ int dummyfs_destroy(oid_t *oid)
 
 		else if (o->type == 0xaBadBabe) {
 #ifndef NOMMU
-			munmap((void *)((unsigned)o->chunks->data & ~0xfff), (o->size + 0xfff) & ~0xfff);
+			munmap((void *)((uintptr_t)o->chunks->data & ~0xfff), (o->size + 0xfff) & ~0xfff);
 #endif
 			free(o->chunks);
 		}
@@ -599,7 +599,7 @@ int fetch_modules(void)
 		o->chunks->offs = 0;
 		o->chunks->size = prog.size;
 		o->chunks->used = prog.size;
-		o->chunks->data = (void *)((unsigned)prog_addr & ~0xfff) + (prog.addr & 0xfff);
+		o->chunks->data = (void *)((uintptr_t)prog_addr & ~0xfff) + (prog.addr & 0xfff);
 		o->chunks->next = o->chunks;
 		o->chunks->prev = o->chunks;
 		o->size = prog.size;
@@ -690,7 +690,7 @@ int main(int argc, char **argv)
 	oid_t root = { 0 };
 	msg_t msg;
 	dummyfs_object_t *o;
-	unsigned int rid;
+	unsigned long rid;
 	const char *mountpt = NULL;
 	const char *remount_path = NULL;
 	int non_fs_namespace = 0;
@@ -732,6 +732,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+
 	/* Daemonizing first to make all initialization in child process.
 	 * Otherwise the port will be destroyed when parent exits. */
 	if (daemonize) {
@@ -765,9 +766,11 @@ int main(int argc, char **argv)
 	}
 
 	if (mountpt == NULL) {
+
 #ifndef TARGET_IMX6ULL
-		while (write(1, "", 0) < 0)
+		while (write(1, "", 0) < 0) {
 			usleep(500000);
+		}
 #else
 		portCreate(&reserved);
 #endif
@@ -785,6 +788,7 @@ int main(int argc, char **argv)
 #endif
 	}
 	else {
+
 		if (non_fs_namespace) {
 			while (write(1, "", 0) < 0)
 				usleep(1000);
