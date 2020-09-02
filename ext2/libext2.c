@@ -50,6 +50,10 @@ int libext2_handler(void *fdata, msg_t *msg)
 			mode &= 0x1ff;
 			mode |= S_IFCHR;
 			break;
+
+		case otSymlink:
+			mode |= S_IFLNK;
+			break;
 		}
 
 		if (ext2_lookup(fs, msg->i.create.dir.id, msg->i.data, (uint8_t)strlen(msg->i.data), &msg->o.create.oid.id, &dev) > 0) {
