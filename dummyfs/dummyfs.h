@@ -50,7 +50,6 @@ typedef struct _dummyfs_chunk_t {
 
 typedef struct _dummyfs_object_t {
 	oid_t oid, dev;
-	uint32_t type;
 
 	unsigned int uid;
 	unsigned int gid;

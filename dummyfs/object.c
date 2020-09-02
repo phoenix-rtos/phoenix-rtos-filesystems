@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/file.h>
+#include <sys/stat.h>
 #include <sys/threads.h>
 #include <sys/msg.h>
 #include <sys/rb.h>
@@ -65,7 +66,7 @@ dummyfs_object_t *object_create(void)
 
 	r->oid.id = id;
 	r->refs = 1;
-	r->type = otUnknown;
+	r->mode = 0;
 	r->nlink = 0;
 
 	mutexUnlock(olock);
@@ -125,7 +126,7 @@ void object_put(dummyfs_object_t *o)
 	if (o != NULL && o->refs) {
 		o->refs--;
 
-		if (!o->refs && o->type == otDir && o->dirty) {
+		if (!o->refs && S_ISDIR(o->mode) && o->dirty) {
 			object_lock(o);
 			dir_clean(o);
 			object_unlock(o);

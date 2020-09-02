@@ -21,7 +21,7 @@ extern int dir_find(dummyfs_object_t *dir, const char *name, oid_t *res);
 extern int dir_replace(dummyfs_object_t *dir, const char *name, oid_t *new);
 
 
-extern int dir_add(dummyfs_object_t *dir, const char *name, int type, oid_t *oid);
+extern int dir_add(dummyfs_object_t *dir, const char *name, uint32_t mode, oid_t *oid);
 
 
 extern int dir_remove(dummyfs_object_t *dir, const char *name);

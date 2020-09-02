@@ -14,6 +14,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/msg.h>
+#include <sys/file.h>
+#include <sys/stat.h>
 #include <string.h>
 
 #include "dummyfs.h"
@@ -27,7 +29,7 @@ int dir_find(dummyfs_object_t *dir, const char *name, oid_t *res)
 	char *end = strchr(dirname, '/');
 	int len;
 
-	if (dir->type != otDir)
+	if (!S_ISDIR(dir->mode))
 		return -EINVAL;
 
 	if (e == NULL)
@@ -61,7 +63,7 @@ int dir_replace(dummyfs_object_t *dir, const char *name, oid_t *new)
 	char *dirname = strdup(name);
 	char *end = strchr(dirname, '/');
 
-	if (dir->type != otDir)
+	if (!S_ISDIR(dir->mode))
 		return -EINVAL;
 
 	if (e == NULL)
@@ -86,7 +88,7 @@ int dir_replace(dummyfs_object_t *dir, const char *name, oid_t *new)
 }
 
 
-int dir_add(dummyfs_object_t *dir, const char *name, int type, oid_t *oid)
+int dir_add(dummyfs_object_t *dir, const char *name, uint32_t mode, oid_t *oid)
 {
 	oid_t res;
 	dummyfs_dirent_t *n;
@@ -144,7 +146,16 @@ int dir_add(dummyfs_object_t *dir, const char *name, int type, oid_t *oid)
 	memcpy(n->name, name, n->len);
 	n->name[n->len - 1] = '\0';
 	memcpy(&n->oid, oid, sizeof(oid_t));
-	n->type = type;
+	if (S_ISDIR(mode))
+		n->type = otDir;
+	else if (S_ISREG(mode))
+		n->type = otFile;
+	else if (S_ISCHR(mode) || S_ISBLK(mode))
+		n->type = otDev;
+	else if (S_ISLNK(mode))
+		n->type = otSymlink;
+	else
+		n->type = otUnknown;
 	dir->size += strlen(name);
 
 	return EOK;

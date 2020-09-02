@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/msg.h>
+#include <sys/stat.h>
 #include <sys/threads.h>
 #include <string.h>
 
@@ -32,7 +33,7 @@ int dummyfs_truncate(oid_t *oid, size_t size)
 	if (o == NULL)
 		return -EINVAL;
 
-	if (o->type != otFile) {
+	if (!S_ISREG(o->mode)) {
 		object_put(o);
 		return -EACCES;
 	}
@@ -187,7 +188,7 @@ int dummyfs_read(oid_t *oid, offs_t offs, char *buff, size_t len)
 	if (o == NULL)
 		return -EINVAL;
 
-	if (o->type != otFile && o->type != otSymlink && o->type != 0xaBadBabe)
+	if (!S_ISREG(o->mode) && !S_ISLNK(o->mode) && o->mode != 0xaBadBabe)
 		ret = -EINVAL;
 
 	if (buff == NULL)
@@ -250,7 +251,7 @@ int dummyfs_write(oid_t *oid, offs_t offs, const char *buff, size_t len)
 	if (o == NULL)
 		return -EINVAL;
 
-	if (o->type != otFile)
+	if (!S_ISREG(o->mode))
 		ret = -EINVAL;
 
 	if (buff == NULL)

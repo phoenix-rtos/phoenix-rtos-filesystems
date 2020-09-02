@@ -67,7 +67,7 @@ int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res, oid_t *dev)
 	else if ((d = object_get(dir->id)) == NULL)
 		return -ENOENT;
 
-	if (d->type != otDir) {
+	if (!S_ISDIR(d->mode)) {
 		object_put(d);
 		return -EINVAL;
 	}
@@ -101,7 +101,7 @@ int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res, oid_t *dev)
 
 	o = dummyfs_get(res);
 
-	if (o->type == otDev)
+	if (S_ISCHR(d->mode) || S_ISBLK(d->mode))
 		memcpy(dev, &o->dev, sizeof(oid_t));
 	else
 		memcpy(dev, res, sizeof(oid_t));
@@ -188,7 +188,16 @@ int dummyfs_getattr(oid_t *oid, int type, int *attr)
 			break;
 
 		case (atType):
-			*attr = o->type;
+			if (S_ISDIR(o->mode))
+				*attr = otDir;
+			else if (S_ISREG(o->mode))
+				*attr = otFile;
+			else if (S_ISCHR(o->mode) || S_ISBLK(o->mode))
+				*attr = otDev;
+			else if (S_ISLNK(o->mode))
+				*attr = otSymlink;
+			else
+				*attr = otUnknown;
 			break;
 
 		case (atPort):
@@ -246,13 +255,13 @@ int dummyfs_link(oid_t *dir, const char *name, oid_t *oid)
 		return -ENOENT;
 	}
 
-	if (d->type != otDir) {
+	if (!S_ISDIR(d->mode)) {
 		object_put(o);
 		object_put(d);
 		return -EEXIST;
 	}
 
-	if (o->type == otDir && o->nlink != 0) {
+	if (S_ISDIR(o->mode) && o->nlink != 0) {
 		object_put(o);
 		object_put(d);
 		return -EINVAL;
@@ -260,10 +269,10 @@ int dummyfs_link(oid_t *dir, const char *name, oid_t *oid)
 
 	o->nlink++;
 
-	if (o->type == otDir) {
+	if (S_ISDIR(o->mode)) {
 		object_lock(o);
-		dir_add(o, ".", otDir, oid);
-		dir_add(o, "..", otDir, dir);
+		dir_add(o, ".", S_IFDIR | 0666, oid);
+		dir_add(o, "..", S_IFDIR | 0666, dir);
 		o->nlink++;
 		object_unlock(o);
 		object_lock(d);
@@ -274,7 +283,7 @@ int dummyfs_link(oid_t *dir, const char *name, oid_t *oid)
 #ifdef LINK_ALLOW_OVERRIDE
 	if (dir_find(d, name, &victim_oid) > 0) {
 		victim_o = object_get(victim_oid.id);
-		if (victim_o->type == otDir // explicitly disallow overwriting directories
+		if (S_ISDIR(victim_o->mode) // explicitly disallow overwriting directories
 				|| victim_oid.id == oid->id) { // linking to self
 			object_put(victim_o);
 			victim_o = NULL;
@@ -287,7 +296,7 @@ int dummyfs_link(oid_t *dir, const char *name, oid_t *oid)
 
 	object_lock(d);
 	if (!victim_o) {
-		ret = dir_add(d, name, o->type, oid);
+		ret = dir_add(d, name, o->mode, oid);
 	}
 	else {
 		ret = dir_replace(d, name, oid);
@@ -299,7 +308,7 @@ int dummyfs_link(oid_t *dir, const char *name, oid_t *oid)
 		object_unlock(d);
 		object_lock(o);
 		o->nlink--;
-		if (o->type == otDir)
+		if (S_ISDIR(o->mode))
 			o->nlink--;
 		object_unlock(o);
 	}
@@ -357,7 +366,7 @@ int dummyfs_unlink(oid_t *dir, const char *name)
 		return -ENOENT;
 	}
 
-	if (o->type == otDir && dir_empty(o) != EOK) {
+	if (S_ISDIR(o->mode) && dir_empty(o) != EOK) {
 		object_unlock(d);
 		object_put(d);
 		object_put(o);
@@ -366,7 +375,7 @@ int dummyfs_unlink(oid_t *dir, const char *name)
 
 	ret = dir_remove(d, name);
 
-	if (ret == EOK && o->type == otDir)
+	if (ret == EOK && S_ISDIR(o->mode))
 		d->nlink--;
 
 	d->mtime = d->atime = o->mtime = time(NULL);
@@ -377,7 +386,7 @@ int dummyfs_unlink(oid_t *dir, const char *name)
 	if (ret == EOK) {
 		object_lock(o);
 		o->nlink--;
-		if (o->type == otDir)
+		if (S_ISDIR(o->mode))
 			o->nlink--;
 		object_unlock(o);
 	}
@@ -387,12 +396,12 @@ int dummyfs_unlink(oid_t *dir, const char *name)
 }
 
 
-int dummyfs_create(oid_t *dir, const char *name, oid_t *oid, int type, int mode, oid_t *dev)
+int dummyfs_create(oid_t *dir, const char *name, oid_t *oid, uint32_t mode, oid_t *dev)
 {
 	dummyfs_object_t *o;
 	int ret;
 
-	if (type == otDev)
+	if (S_ISCHR(mode) || S_ISBLK(mode))
 		o = dev_find(dev, 1);
 	else
 		o = object_create();
@@ -402,11 +411,10 @@ int dummyfs_create(oid_t *dir, const char *name, oid_t *oid, int type, int mode,
 
 	object_lock(o);
 	o->oid.port = dummyfs_common.port;
-	o->type = type;
 	o->mode = mode;
 	o->atime = o->mtime = o->ctime = time(NULL);
 
-	if (type == otDev)
+	if (S_ISCHR(mode) || S_ISBLK(mode))
 		memcpy(oid, dev, sizeof(oid_t));
 	else
 		memcpy(oid, &o->oid, sizeof(oid_t));
@@ -418,7 +426,7 @@ int dummyfs_create(oid_t *dir, const char *name, oid_t *oid, int type, int mode,
 		return ret;
 	}
 
-	if (type == otSymlink) {
+	if (S_ISLNK(mode)) {
 		const char* path = name + strlen(name) + 1;
 		object_lock(o);
 		// TODO: remove symlink if write failed
@@ -442,17 +450,17 @@ int dummyfs_destroy(oid_t *oid)
 		return -ENOENT;
 
 	if ((ret = object_remove(o)) == EOK) {
-		if (o->type == otFile) {
+		if (S_ISREG(o->mode)) {
 			object_lock(o);
 			dummyfs_truncate_internal(o, 0);
 			object_unlock(o);
 		}
-		else if (o->type == otDir)
+		else if (S_ISDIR(o->mode))
 			dir_destroy(o);
-		else if (o->type == otDev)
+		else if (S_ISCHR(o->mode) || S_ISBLK(o->mode))
 			dev_destroy(&o->dev);
 
-		else if (o->type == 0xaBadBabe) {
+		else if (o->mode == 0xaBadBabe) {
 #ifndef NOMMU
 			munmap((void *)((uintptr_t)o->chunks->data & ~0xfff), (o->size + 0xfff) & ~0xfff);
 #endif
@@ -481,7 +489,7 @@ int dummyfs_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int s
 	if (d == NULL)
 		return -ENOENT;
 
-	if (d->type != otDir) {
+	if (!S_ISDIR(d->mode)) {
 		object_put(d);
 		return -EINVAL;
 	}
@@ -573,7 +581,7 @@ int fetch_modules(void)
 	int i, progsz;
 
 	progsz = syspageprog(NULL, -1);
-	dummyfs_create(&root, "syspage", &sysoid, otDir, 0, NULL);
+	dummyfs_create(&root, "syspage", &sysoid, S_IFDIR | 0666, NULL);
 
 	for (i = 0; i < progsz; i++) {
 		syspageprog(&prog, i);
@@ -585,7 +593,7 @@ int fetch_modules(void)
 		if (!prog_addr)
 			continue;
 #endif
-		dummyfs_create(&sysoid, prog.name, &toid, otFile, 0, NULL);
+		dummyfs_create(&sysoid, prog.name, &toid, S_IFREG | 0755, NULL);
 		o = object_get(toid.id);
 
 		if (!o) {
@@ -603,7 +611,7 @@ int fetch_modules(void)
 		o->chunks->next = o->chunks;
 		o->chunks->prev = o->chunks;
 		o->size = prog.size;
-		o->type = 0xaBadBabe;
+		o->mode = 0xaBadBabe;
 	}
 
 	return EOK;
@@ -695,6 +703,7 @@ int main(int argc, char **argv)
 	const char *remount_path = NULL;
 	int non_fs_namespace = 0;
 	int daemonize = 0;
+	uint32_t mode;
 	int c;
 
 #ifdef TARGET_IMX6ULL
@@ -819,15 +828,12 @@ int main(int argc, char **argv)
 	if (o == NULL)
 		return -1;
 
-	o->type = otDir;
 	o->oid.port = dummyfs_common.port;
-	o->mode = 0;
+	o->mode = S_IFDIR | 0666;
 
 	memcpy(&root, &o->oid, sizeof(oid_t));
-	dir_add(o, ".", otDir, &root);
-	dir_add(o, "..", otDir, &root);
-
-	dummyfs_setattr(&o->oid, atMode, S_IFDIR | 0777, NULL, 0);
+	dir_add(o, ".", S_IFDIR | 0666, &root);
+	dir_add(o, "..", S_IFDIR | 0666, &root);
 
 	if (!non_fs_namespace && mountpt == NULL) {
 		fetch_modules();
@@ -883,7 +889,26 @@ int main(int argc, char **argv)
 				break;
 
 			case mtCreate:
-				msg.o.create.err = dummyfs_create(&msg.i.create.dir, msg.i.data, &msg.o.create.oid, msg.i.create.type, msg.i.create.mode, &msg.i.create.dev);
+				mode = msg.i.create.mode;
+				switch (msg.i.create.type) {
+				case otDir:
+					mode |= S_IFDIR;
+					break;
+
+				case otFile:
+					mode |= S_IFREG;
+					break;
+
+				case otDev:
+					mode &= 0x1ff;
+					mode |= S_IFCHR;
+					break;
+
+				case otSymlink:
+					mode |= S_IFLNK;
+					break;
+				}
+				msg.o.create.err = dummyfs_create(&msg.i.create.dir, msg.i.data, &msg.o.create.oid, mode, &msg.i.create.dev);
 				break;
 
 			case mtDestroy:
