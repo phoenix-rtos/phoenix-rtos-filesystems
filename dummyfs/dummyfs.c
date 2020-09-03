@@ -504,7 +504,7 @@ int dummyfs_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int s
 	dent->d_reclen = 0;
 	do {
 		if (diroffs >= offs) {
-			if ((sizeof(struct dirent) + ei->len) > size) {
+			if ((sizeof(struct dirent) + ei->len + 1) > size) {
 				object_unlock(d);
 				object_put(d);
 				return 	-EINVAL;
@@ -519,7 +519,7 @@ int dummyfs_readdir(oid_t *dir, offs_t offs, struct dirent *dent, unsigned int s
 			dent->d_reclen++;
 			dent->d_namlen = ei->len;
 			dent->d_type = ei->type;
-			memcpy(&(dent->d_name[0]), ei->name, ei->len);
+			strcpy(dent->d_name, ei->name);
 
 			object_unlock(d);
 			object_put(d);

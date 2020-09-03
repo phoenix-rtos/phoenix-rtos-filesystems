@@ -110,19 +110,17 @@ int dir_add(dummyfs_object_t *dir, const char *name, uint32_t mode, oid_t *oid)
 		return -ENOMEM;
 	}
 
-	n->len = strlen(name) + 1;
+	n->len = strlen(name);
 	n->deleted = 0;
 
-	if (dummyfs_incsz(n->len) != EOK) {
+	if (dummyfs_incsz(n->len + 1) != EOK) {
 		dummyfs_decsz(sizeof(dummyfs_dirent_t));
 		free(n);
 		return -ENOMEM;
 	}
 
-	n->name = malloc(n->len);
-
-	if (n->name == NULL) {
-		dummyfs_decsz(sizeof(dummyfs_dirent_t) + n->len);
+	if ((n->name = strdup(name)) == NULL) {
+		dummyfs_decsz(sizeof(dummyfs_dirent_t) + n->len + 1);
 		free(n);
 		return -ENOMEM;
 	}
@@ -143,8 +141,6 @@ int dir_add(dummyfs_object_t *dir, const char *name, uint32_t mode, oid_t *oid)
 		e->prev = n;
 	}
 
-	memcpy(n->name, name, n->len);
-	n->name[n->len - 1] = '\0';
 	memcpy(&n->oid, oid, sizeof(oid_t));
 	if (S_ISDIR(mode))
 		n->type = otDir;
@@ -156,7 +152,7 @@ int dir_add(dummyfs_object_t *dir, const char *name, uint32_t mode, oid_t *oid)
 		n->type = otSymlink;
 	else
 		n->type = otUnknown;
-	dir->size += strlen(name);
+	dir->size += n->len;
 
 	return EOK;
 }
@@ -197,7 +193,7 @@ void dir_clean(dummyfs_object_t *dir)
 			e->next->prev = e->prev;
 			if (dir->entries == e)
 				dir->entries = e->next;
-			dummyfs_decsz(e->len + sizeof(dummyfs_dirent_t));
+			dummyfs_decsz(e->len + 1 + sizeof(dummyfs_dirent_t));
 			v = e;
 			e = e->next;
 
