@@ -202,7 +202,7 @@ int _ext2_obj_sync(ext2_t *fs, ext2_obj_t *obj)
 		obj->flags &= ~OFLAG_DIRTY;
 	}
 
-	if (!(S_ISCHR(obj->inode->mode) || !S_ISBLK(obj->inode->mode)) && !(obj->flags & OFLAG_MOUNT)) {
+	if (!(S_ISCHR(obj->inode->mode) || S_ISBLK(obj->inode->mode)) && !(obj->flags & OFLAG_MOUNT)) {
 		if ((obj->ind[0].data != NULL) && (err = ext2_block_write(fs, obj->ind[0].bno, obj->ind[0].data, 1)) < 0)
 			return err;
 
