@@ -66,14 +66,14 @@ void flash_chipErase(void)
 void flash_eraseSector(unsigned int addr)
 {
 	spi_write(cmd_wren, 0, spi_cmd, NULL, 0);
-	spi_write(cmd_sector_erase, addr, spi_cmd | spi_address, NULL, 0);
+	spi_write(cmd_sector_erase, addr, spi_cmd | (3 << SPI_ADDRSHIFT), NULL, 0);
 	_flash_waitBusy();
 }
 
 
 void flash_read(unsigned int addr, void *buff, size_t bufflen)
 {
-	spi_read(cmd_read, addr, spi_cmd | spi_address, buff, bufflen);
+	spi_read(cmd_read, addr, spi_cmd | (3 << SPI_ADDRSHIFT), buff, bufflen);
 }
 
 
@@ -83,7 +83,7 @@ void flash_writeSafe(unsigned int addr, void *buff, size_t bufflen)
 
 	for (i = 0; i < bufflen; ++i) {
 		spi_write(cmd_wren, 0, spi_cmd, NULL, 0);
-		spi_write(cmd_write, addr + i, spi_cmd | spi_address, buff + i, 1);
+		spi_write(cmd_write, addr + i, spi_cmd | (3 << SPI_ADDRSHIFT), buff + i, 1);
 		_flash_waitBusy();
 	}
 }
@@ -95,14 +95,14 @@ void flash_writeAAI(unsigned int addr, void *buff, size_t bufflen)
 
 	if (addr & 1) {
 		spi_write(cmd_wren, 0, spi_cmd, NULL, 0);
-		spi_write(cmd_write, addr, spi_cmd | spi_address, buff, 1);
+		spi_write(cmd_write, addr, spi_cmd | (3 << SPI_ADDRSHIFT), buff, 1);
 		_flash_waitBusy();
 		++i;
 	}
 
 	if (bufflen - i >= 2) {
 		spi_write(cmd_wren, 0, spi_cmd, NULL, 0);
-		spi_write(cmd_aai_write, addr + i, spi_cmd | spi_address, buff + i, 2);
+		spi_write(cmd_aai_write, addr + i, spi_cmd | (3 << SPI_ADDRSHIFT), buff + i, 2);
 		_flash_waitBusy();
 		for (i += 2; i < bufflen - 1; i += 2) {
 			spi_write(cmd_aai_write, 0, spi_cmd, buff + i, 2);
@@ -114,7 +114,7 @@ void flash_writeAAI(unsigned int addr, void *buff, size_t bufflen)
 
 	if (i < bufflen) {
 		spi_write(cmd_wren, 0, spi_cmd, NULL, 0);
-		spi_write(cmd_write, addr + i, spi_cmd | spi_address, buff + i, 1);
+		spi_write(cmd_write, addr + i, spi_cmd | (3 << SPI_ADDRSHIFT), buff + i, 1);
 	}
 
 	_flash_waitBusy();
@@ -130,7 +130,7 @@ void flash_writePage(unsigned int addr, void *buff, size_t bufflen)
 			chunk = bufflen;
 
 		spi_write(cmd_wren, 0, spi_cmd, NULL, 0);
-		spi_write(cmd_write, addr, spi_cmd | spi_address, buff, chunk);
+		spi_write(cmd_write, addr, spi_cmd | (3 << SPI_ADDRSHIFT), buff, chunk);
 		_flash_waitBusy();
 
 		addr += chunk;
