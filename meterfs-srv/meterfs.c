@@ -736,7 +736,7 @@ int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o)
 
 int main(void)
 {
-	unsigned int rid;
+	unsigned long int rid;
 	meterfs_i_devctl_t *idevctl = (meterfs_i_devctl_t *)meterfs_common.msg.i.raw;
 	meterfs_o_devctl_t *odevctl = (meterfs_o_devctl_t *)meterfs_common.msg.o.raw;
 
