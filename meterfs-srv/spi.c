@@ -81,27 +81,32 @@ void spi_powerCtrl(int state)
 {
 	if (state) {
 		keepidle(1);
+		gpio_pinConfig(CS_PORT, CS_PIN, 0, 0, 0, 0, 0);
 		gpio_pinSet(PWEN_PORT, PWEN_PIN, PWEN_POL);
 		gpio_pinSet(CS_PORT, CS_PIN, 1);
+		gpio_pinConfig(CS_PORT, CS_PIN, 1, 0, 0, 0, 0);
 
 #ifdef WP_PORT
 		gpio_pinSet(WP_PORT, WP_PIN, 1);
 #endif
 
-		gpio_pinConfig(SCK_PORT, SCK_PIN, 2, 5, 1, 0, 0);
-		gpio_pinConfig(MISO_PORT, MISO_PIN, 2, 5, 1, 0, 0);
-		gpio_pinConfig(MOSI_PORT, MOSI_PIN, 2, 5, 1, 0, 0);
+		gpio_pinConfig(SCK_PORT, SCK_PIN, 2, 5, 0, 0, 0);
+		gpio_pinConfig(MISO_PORT, MISO_PIN, 2, 5, 0, 0, 0);
+		gpio_pinConfig(MOSI_PORT, MOSI_PIN, 2, 5, 0, 0, 0);
 
 		usleep(10000);
 		flash_removeWP();
 	}
 	else {
-		gpio_pinConfig(SCK_PORT, SCK_PIN, 1, 5, 1, 0, 0);
-		gpio_pinConfig(MISO_PORT, MISO_PIN, 1, 5, 1, 0, 0);
-		gpio_pinConfig(MOSI_PORT, MOSI_PIN, 1, 5, 1, 0, 0);
+		gpio_pinConfig(SCK_PORT, SCK_PIN, 1, 5, 0, 0, 0);
+		gpio_pinConfig(MOSI_PORT, MOSI_PIN, 1, 5, 0, 0, 0);
 
+		gpio_pinConfig(CS_PORT, CS_PIN, 0, 0, 0, 0, 0);
 		gpio_pinSet(PWEN_PORT, PWEN_PIN, !PWEN_POL);
 		gpio_pinSet(CS_PORT, CS_PIN, INACTIVE_POL);
+		gpio_pinConfig(CS_PORT, CS_PIN, 1, 0, 0, 0, 0);
+
+		gpio_pinConfig(MISO_PORT, MISO_PIN, 1, 5, 0, 0, 0);
 
 	#ifdef WP_PORT
 		gpio_pinSet(WP_PORT, WP_PIN, INACTIVE_POL);
@@ -167,8 +172,8 @@ void spi_write(unsigned char cmd, unsigned int addr, unsigned char flags, const 
 
 void spi_init(void)
 {
-	gpio_pinConfig(PWEN_PORT, PWEN_PIN, 1, 0, 1, 0, 0);
-	gpio_pinConfig(CS_PORT, CS_PIN, 1, 0, 1, 0, 0);
+	gpio_pinConfig(PWEN_PORT, PWEN_PIN, 1, 0, 0, 0, 0);
+	gpio_pinConfig(CS_PORT, CS_PIN, 1, 0, 0, 0, 0);
 
 	gpio_pinSet(SCK_PORT, SCK_PIN, INACTIVE_POL);
 	gpio_pinSet(MISO_PORT, MISO_PIN, INACTIVE_POL);
