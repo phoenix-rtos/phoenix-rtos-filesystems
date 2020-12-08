@@ -18,6 +18,8 @@ TARGET ?= ia32-generic
 include ../phoenix-rtos-build/Makefile.common
 include ../phoenix-rtos-build/Makefile.$(TARGET_SUFF)
 
+CFLAGS += $(BOARD_CONFIG)
+
 CFLAGS += -I"$(PREFIX_H)"
 LDFLAGS += -L"$(PREFIX_A)"
 
