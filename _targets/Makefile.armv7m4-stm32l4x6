@@ -8,6 +8,5 @@
 
 CFLAGS += -DTARGET_STM32 -DTARGET_STM32L4
 
-include meterfs-srv/Makefile
-include meterfs-srv/test/Makefile
+include meterfs/Makefile
 include dummyfs/Makefile
