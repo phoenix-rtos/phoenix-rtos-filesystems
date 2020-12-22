@@ -175,6 +175,8 @@ int meterfs_getFileInfoName(const char *name, fileheader_t *f, meterfs_ctx_t *ct
 			if (f != NULL)
 				ctx->read(ctx->offset + ctx->hcurrAddr + HGRAIN + (i * HGRAIN), f, sizeof(*f));
 
+			meterfs_powerctrl(0, ctx);
+
 			return i;
 		}
 	}
