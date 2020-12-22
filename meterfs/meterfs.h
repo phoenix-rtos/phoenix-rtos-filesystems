@@ -69,6 +69,7 @@ typedef struct {
 	ssize_t (*write)(unsigned int addr, void *buff, size_t bufflen);
 	void (*eraseSector)(unsigned int addr);
 	void (*partitionErase)(void);
+	void (*powerCtrl)(int state);
 } meterfs_ctx_t;
 
 
