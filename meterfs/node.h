@@ -14,7 +14,6 @@
 #ifndef _METERFS_OPENED_H_
 #define _METERFS_OPENED_H_
 
-#include <arch.h>
 #include <sys/rb.h>
 #include "files.h"
 

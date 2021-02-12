@@ -11,7 +11,6 @@
  * %LICENSE%
  */
 
-#include <arch.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
@@ -56,7 +55,7 @@ int node_add(file_t *file, id_t id, rbtree_t *tree)
 
 	lib_rbInsert(tree, &r->linkage);
 
-	return EOK;
+	return 0;
 }
 
 
@@ -109,7 +108,7 @@ int node_put(id_t id, rbtree_t *tree)
 		free(r);
 	}
 
-	return EOK;
+	return 0;
 }
 
 
