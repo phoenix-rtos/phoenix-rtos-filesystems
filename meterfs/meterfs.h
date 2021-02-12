@@ -14,7 +14,6 @@
 #ifndef _METERFS_H_
 #define _METERFS_H_
 
-#include <arch.h>
 #include <sys/rb.h>
 
 
@@ -24,7 +23,7 @@ enum { meterfs_allocate = 0, meterfs_resize, meterfs_info, meterfs_chiperase };
 typedef struct {
 	int type;
 	union {
-		oid_t oid;
+		id_t id;
 
 		struct {
 			size_t sectors;
@@ -34,7 +33,7 @@ typedef struct {
 		} allocate;
 
 		struct {
-			oid_t oid;
+			id_t id;
 			size_t filesz;
 			size_t recordsz;
 		} resize;
@@ -76,13 +75,13 @@ typedef struct {
 int meterfs_init(meterfs_ctx_t *ctx);
 
 
-int meterfs_open(oid_t *oid, meterfs_ctx_t *ctx);
+int meterfs_open(id_t id, meterfs_ctx_t *ctx);
 
 
-int meterfs_close(oid_t *oid, meterfs_ctx_t *ctx);
+int meterfs_close(id_t id, meterfs_ctx_t *ctx);
 
 
-int meterfs_lookup(const char *name, oid_t *res, meterfs_ctx_t *ctx);
+int meterfs_lookup(const char *name, id_t *res, meterfs_ctx_t *ctx);
 
 
 int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size_t recordsz, meterfs_ctx_t *ctx);
@@ -91,10 +90,10 @@ int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size
 int meterfs_resizeFile(const char *name, size_t filesz, size_t recordsz, meterfs_ctx_t *ctx);
 
 
-int meterfs_readFile(oid_t *oid, offs_t offs, char *buff, size_t bufflen, meterfs_ctx_t *ctx);
+int meterfs_readFile(id_t id, off_t off, char *buff, size_t bufflen, meterfs_ctx_t *ctx);
 
 
-int meterfs_writeFile(oid_t *oid, const char *buff, size_t bufflen, meterfs_ctx_t *ctx);
+int meterfs_writeFile(id_t id, const char *buff, size_t bufflen, meterfs_ctx_t *ctx);
 
 
 int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *ctx);

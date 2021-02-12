@@ -14,6 +14,8 @@
 #ifndef _METERFS_FILES_H_
 #define _METERFS_FILES_H_
 
+#include <stdint.h>
+
 #define MAX_FILE_CNT 255
 #define HGRAIN       32
 
@@ -26,16 +28,16 @@ typedef struct {
 
 typedef struct {
 	unsigned int sector;
-	size_t sectorcnt;
-	size_t filesz;
-	size_t recordsz;
+	uint32_t sectorcnt;
+	uint32_t filesz;
+	uint32_t recordsz;
 	char name[8];
 } __attribute__((packed)) fileheader_t;
 
 
 typedef struct {
 	index_t id;
-	size_t filecnt;
+	uint32_t filecnt;
 	unsigned char magic[4];
 } __attribute__((packed)) header_t;
 
