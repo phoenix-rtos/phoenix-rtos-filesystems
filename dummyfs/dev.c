@@ -54,6 +54,9 @@ dummyfs_object_t *dev_find(oid_t *oid, int create)
 	dummyfs_dev_t find, *entry;
 	dummyfs_object_t *o;
 
+	if (oid == NULL)
+		return NULL;
+
 	memcpy(&find.dev, oid, sizeof(oid_t));
 
 	mutexLock(dev_common.mutex);

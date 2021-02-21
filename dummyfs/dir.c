@@ -91,8 +91,7 @@ int dir_replace(dummyfs_object_t *dir, const char *name, oid_t *new)
 int dir_add(dummyfs_object_t *dir, const char *name, uint32_t mode, oid_t *oid)
 {
 	oid_t res;
-	dummyfs_dirent_t *n;
-	dummyfs_dirent_t *e = dir->entries;
+	dummyfs_dirent_t *n, *e;
 
 	if (dir == NULL)
 		return -EINVAL;
@@ -125,6 +124,7 @@ int dir_add(dummyfs_object_t *dir, const char *name, uint32_t mode, oid_t *oid)
 		return -ENOMEM;
 	}
 
+	e = dir->entries;
 	if (e == NULL) {
 		dir->entries = n;
 		n->next = n;
