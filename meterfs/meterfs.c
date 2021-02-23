@@ -295,7 +295,7 @@ void meterfs_getFilePos(file_t *f, meterfs_ctx_t *ctx)
 		idx = ((f->lastoff / (f->header.recordsz + sizeof(entry_t))) + interval) % totalrecord;
 		offset = idx * (f->header.recordsz + sizeof(entry_t));
 		ctx->read(ctx->offset + baddr + offset + offsetof(entry_t, id), &id, sizeof(id));
-		if (!id.nvalid && ((f->lastidx.no + interval) % (1 << 31)) == id.no) {
+		if (!id.nvalid && ((f->lastidx.no + interval) % (1U << 31)) == id.no) {
 			f->lastidx = id;
 			f->lastoff = offset;
 			diff += interval;
@@ -322,7 +322,7 @@ void meterfs_getFilePos(file_t *f, meterfs_ctx_t *ctx)
 			idx %= totalrecord;
 		offset = idx * (f->header.recordsz + sizeof(entry_t));
 		ctx->read(ctx->offset + baddr + offset + offsetof(entry_t, id), &id, sizeof(id));
-		if (!id.nvalid && ((f->firstidx.no + interval) % (1 << 31)) == id.no) {
+		if (!id.nvalid && ((f->firstidx.no + interval) % (1U << 31)) == id.no) {
 			f->firstidx = id;
 			f->firstoff = offset;
 			diff -= interval;
