@@ -16,6 +16,8 @@
 
 #include <sys/rb.h>
 
+#define MAX_NAME_LEN	8
+
 
 enum { meterfs_allocate = 0, meterfs_resize, meterfs_info, meterfs_chiperase };
 
@@ -29,7 +31,7 @@ typedef struct {
 			size_t sectors;
 			size_t filesz;
 			size_t recordsz;
-			char name[8];
+			char name[MAX_NAME_LEN + 1];
 		} allocate;
 
 		struct {
