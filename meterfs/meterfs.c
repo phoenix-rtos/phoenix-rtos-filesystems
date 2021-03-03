@@ -32,7 +32,6 @@
 
 #define MIN_PARTITIONS_SECTORS_NB    3
 
-
 static const unsigned char magic[4] = { 0xaa, 0x41, 0x4b, 0x55 };
 
 
@@ -45,6 +44,15 @@ static void meterfs_powerctrl(int state, meterfs_ctx_t *ctx)
 {
 	if (ctx->powerCtrl != NULL)
 		(ctx->powerCtrl)(state);
+}
+
+
+static int meterfs_fileNameCheck(const char *name)
+{
+	if (*name == '\0'|| strnlen(name, MAX_NAME_LEN + 1) > MAX_NAME_LEN)
+		return -EINVAL;
+
+	return 0;
 }
 
 
@@ -460,6 +468,9 @@ int meterfs_lookup(const char *name, id_t *res, meterfs_ctx_t *ctx)
 	char bname[sizeof(f.header.name)];
 	int i = 0, j, err;
 
+	if ((err = meterfs_fileNameCheck(&name[1])) < 0)
+		return err;
+
 	if (name[0] == '/')
 		++i;
 
@@ -498,6 +509,10 @@ int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size
 	header_t h;
 	fileheader_t hdr, t;
 	unsigned int addr, i, headerNew;
+	int err;
+
+	if ((err = meterfs_fileNameCheck(name)) < 0)
+		return err;
 
 	if (meterfs_getFileInfoName(name, &hdr, ctx) >= 0)
 		return -EEXIST;
