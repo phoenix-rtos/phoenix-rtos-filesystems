@@ -537,6 +537,8 @@ int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size
 		}
 	}
 	else {
+		if (sectorcnt * ctx->sectorsz >= (ctx->sz - ctx->sectorsz * 4))
+			return -ENOMEM;
 		addr = ctx->h1Addr << 1;
 		hdr.sector = addr / ctx->sectorsz;
 	}
