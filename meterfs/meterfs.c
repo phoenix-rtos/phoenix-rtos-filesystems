@@ -352,6 +352,7 @@ int meterfs_writeRecord(file_t *f, const void *buff, size_t bufflen, meterfs_ctx
 	/* This function assumes that f contains valid lastidx and lastoff */
 	entry_t e;
 	unsigned int offset;
+	ssize_t wrote = 0, stat = 0;
 
 	if (bufflen > f->header.recordsz)
 		bufflen = f->header.recordsz;
@@ -373,8 +374,11 @@ int meterfs_writeRecord(file_t *f, const void *buff, size_t bufflen, meterfs_ctx
 	e.id.no = f->lastidx.no + 1;
 	e.id.nvalid = 0;
 
-	ctx->write(ctx->offset + f->header.sector * ctx->sectorsz + offset + sizeof(entry_t), (void *)buff, bufflen);
-	ctx->write(ctx->offset + f->header.sector * ctx->sectorsz + offset, &e, sizeof(entry_t));
+	if ((wrote = ctx->write(ctx->offset + f->header.sector * ctx->sectorsz + offset + sizeof(entry_t), (void *)buff, bufflen)) < 0)
+		return wrote;
+
+	if ((stat = ctx->write(ctx->offset + f->header.sector * ctx->sectorsz + offset, &e, sizeof(entry_t))) < 0)
+		return stat;
 
 	meterfs_powerctrl(0, ctx);
 
@@ -397,7 +401,7 @@ int meterfs_writeRecord(file_t *f, const void *buff, size_t bufflen, meterfs_ctx
 			f->firstoff = 0;
 	}
 
-	return f->header.recordsz;
+	return wrote;
 }
 
 
@@ -408,6 +412,7 @@ int meterfs_readRecord(file_t *f, void *buff, size_t bufflen, unsigned int idx, 
 	unsigned char fbuff[32];
 	index_t id;
 	entry_t *eptr = (entry_t *)fbuff;
+	ssize_t read = 0, stat;
 
 	if (f->firstidx.nvalid || idx > f->recordcnt)
 		return -ENOENT;
@@ -421,7 +426,10 @@ int meterfs_readRecord(file_t *f, void *buff, size_t bufflen, unsigned int idx, 
 		bufflen = f->header.recordsz - offset;
 
 	if (f->header.recordsz + sizeof(entry_t) <= sizeof(fbuff)) {
-		ctx->read(ctx->offset + addr, fbuff, f->header.recordsz + sizeof(entry_t));
+		if ((stat = ctx->read(ctx->offset + addr, fbuff, f->header.recordsz + sizeof(entry_t))) < 0)
+			return stat;
+		else
+			read = stat - sizeof(entry_t);
 
 		if (eptr->id.nvalid || eptr->id.no != f->firstidx.no + idx)
 			return -ENOENT;
@@ -429,16 +437,17 @@ int meterfs_readRecord(file_t *f, void *buff, size_t bufflen, unsigned int idx, 
 		memcpy(buff, fbuff + sizeof(entry_t) + offset, bufflen);
 	}
 	else {
-		ctx->read(ctx->offset + addr + offsetof(entry_t, id), &id, sizeof(id));
+		if ((stat = ctx->read(ctx->offset + addr + offsetof(entry_t, id), &id, sizeof(id))) < 0)
+			return stat;
 
 		if (id.nvalid || id.no != f->firstidx.no + idx)
 			return -ENOENT;
 
 		/* Read data */
-		ctx->read(ctx->offset + addr + sizeof(entry_t) + offset, buff, bufflen);
+		read = ctx->read(ctx->offset + addr + sizeof(entry_t) + offset, buff, bufflen);
 	}
 
-	return bufflen;
+	return read;
 }
 
 
