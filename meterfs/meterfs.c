@@ -171,17 +171,21 @@ int meterfs_getFileInfoName(const char *name, fileheader_t *f, meterfs_ctx_t *ct
 {
 	fileheader_t t;
 	uint32_t i, filecnt;
+	ssize_t err = 0;
 
 	meterfs_powerctrl(1, ctx);
 
-	ctx->read(ctx->offset + ctx->hcurrAddr + offsetof(header_t, filecnt), &filecnt, sizeof(filecnt));
+	if ((err = ctx->read(ctx->offset + ctx->hcurrAddr + offsetof(header_t, filecnt), &filecnt, sizeof(filecnt))) < 0)
+		return err;
 
 	for (i = 0; i < filecnt; ++i) {
-		ctx->read(ctx->offset + ctx->hcurrAddr + HGRAIN + (i * HGRAIN) + offsetof(fileheader_t, name), &t.name, sizeof(t.name));
+		if ((err = ctx->read(ctx->offset + ctx->hcurrAddr + HGRAIN + (i * HGRAIN) + offsetof(fileheader_t, name), &t.name, sizeof(t.name))) < 0)
+			return err;
 		if (strncmp(name, t.name, sizeof(t.name)) == 0) {
-			if (f != NULL)
-				ctx->read(ctx->offset + ctx->hcurrAddr + HGRAIN + (i * HGRAIN), f, sizeof(*f));
-
+			if (f != NULL) {
+				if ((err = ctx->read(ctx->offset + ctx->hcurrAddr + HGRAIN + (i * HGRAIN), f, sizeof(*f))) < 0)
+					return err;
+			}
 			meterfs_powerctrl(0, ctx);
 
 			return i;
@@ -196,6 +200,7 @@ int meterfs_getFileInfoName(const char *name, fileheader_t *f, meterfs_ctx_t *ct
 int meterfs_updateFileInfo(fileheader_t *f, meterfs_ctx_t *ctx)
 {
 	unsigned int headerNew, i;
+	ssize_t err = 0;
 	union {
 		header_t h;
 		fileheader_t t;
@@ -230,18 +235,25 @@ int meterfs_updateFileInfo(fileheader_t *f, meterfs_ctx_t *ctx)
 	meterfs_eraseFileTable((headerNew == 0) ? 0 : 1, ctx);
 
 	for (i = 0; i < ctx->filecnt; ++i) {
-		ctx->read(ctx->offset + ctx->hcurrAddr + HGRAIN + (i * HGRAIN), &u.t, sizeof(fileheader_t));
-		if (strncmp(f->name, u.t.name, sizeof(f->name)) == 0)
-			ctx->write(ctx->offset + headerNew + HGRAIN + (i * HGRAIN), f, sizeof(fileheader_t));
-		else
-			ctx->write(ctx->offset + headerNew + HGRAIN + (i * HGRAIN), &u.t, sizeof(fileheader_t));
+		if ((err = ctx->read(ctx->offset + ctx->hcurrAddr + HGRAIN + (i * HGRAIN), &u.t, sizeof(fileheader_t))) < 0)
+			return err;
+		if (strncmp(f->name, u.t.name, sizeof(f->name)) == 0) {
+			if ((err = ctx->write(ctx->offset + headerNew + HGRAIN + (i * HGRAIN), f, sizeof(fileheader_t))) < 0)
+				return err;
+		} 
+		else {
+			if ((err = ctx->write(ctx->offset + headerNew + HGRAIN + (i * HGRAIN), &u.t, sizeof(fileheader_t))) < 0)
+				return err;
+		}
 	}
 
 	/* Prepare new header */
-	ctx->read(ctx->offset + ctx->hcurrAddr, &u.h, sizeof(u.h));
+	if ((err = ctx->read(ctx->offset + ctx->hcurrAddr, &u.h, sizeof(u.h))) < 0)
+		return err;
 	++u.h.id.no;
 
-	ctx->write(ctx->offset + headerNew, &u.h, sizeof(u.h));
+	if ((err = ctx->write(ctx->offset + headerNew, &u.h, sizeof(u.h))) < 0)
+		return err;
 
 	meterfs_powerctrl(0, ctx);
 
@@ -518,7 +530,7 @@ int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size
 	header_t h;
 	fileheader_t hdr, t;
 	unsigned int addr, i, headerNew;
-	int err;
+	int err = 0;
 
 	if ((err = meterfs_fileNameCheck(name)) < 0)
 		return err;
@@ -541,7 +553,8 @@ int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size
 
 	meterfs_powerctrl(1, ctx);
 
-	ctx->read(ctx->offset + ctx->hcurrAddr, &h, sizeof(h));
+	if ((err = ctx->read(ctx->offset + ctx->hcurrAddr, &h, sizeof(h))) < 0)
+		return err;
 
 	if (h.filecnt >= MAX_FILE_CNT) {
 		meterfs_powerctrl(0, ctx);
@@ -550,7 +563,8 @@ int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size
 
 	/* Find free sectors */
 	if (h.filecnt != 0) {
-		ctx->read(ctx->offset + ctx->hcurrAddr + HGRAIN + (h.filecnt - 1) * HGRAIN, &t, sizeof(t));
+		if ((err = ctx->read(ctx->offset + ctx->hcurrAddr + HGRAIN + (h.filecnt - 1) * HGRAIN, &t, sizeof(t))) < 0)
+			return err;
 
 		hdr.sector = t.sector + t.sectorcnt;
 		addr = hdr.sector * ctx->sectorsz;
@@ -576,18 +590,22 @@ int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size
 
 	/* Copy data from the old header */
 	for (i = 0; i < h.filecnt; ++i) {
-		ctx->read(ctx->offset + ctx->hcurrAddr + HGRAIN + (i * HGRAIN), &t, sizeof(t));
-		ctx->write(ctx->offset + headerNew + HGRAIN + (i * HGRAIN), &t, sizeof(t));
+		if ((err = ctx->read(ctx->offset + ctx->hcurrAddr + HGRAIN + (i * HGRAIN), &t, sizeof(t))) < 0)
+			return err;
+		if ((err = ctx->write(ctx->offset + headerNew + HGRAIN + (i * HGRAIN), &t, sizeof(t))) < 0)
+			return err;
 	}
 
 	/* Store new file header */
-	ctx->write(ctx->offset + headerNew + HGRAIN + (h.filecnt * HGRAIN), &hdr, sizeof(fileheader_t));
+	if ((err = ctx->write(ctx->offset + headerNew + HGRAIN + (h.filecnt * HGRAIN), &hdr, sizeof(fileheader_t))) < 0)
+		return err;
 
 	/* Commit new header and update global info */
 	h.filecnt += 1;
 	h.id.no += 1;
 
-	ctx->write(ctx->offset + headerNew, &h, sizeof(h));
+	if ((err = ctx->write(ctx->offset + headerNew, &h, sizeof(h))) < 0)
+		return err;
 	meterfs_powerctrl(0, ctx);
 	ctx->filecnt += 1;
 	ctx->hcurrAddr = headerNew;
@@ -716,7 +734,9 @@ int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *
 				p->header.recordsz = i->resize.recordsz;
 			}
 
-			meterfs_getFileInfoName(p->header.name, &p->header, ctx);
+			if ((err = meterfs_getFileInfoName(p->header.name, &p->header, ctx)) < 0)
+				return err;
+			err = 0;
 			meterfs_getFilePos(p, ctx);
 
 			node_put(i->resize.id, &ctx->nodesTree);
