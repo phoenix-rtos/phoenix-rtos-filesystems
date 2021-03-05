@@ -24,7 +24,7 @@
 #include "files.h"
 #include "node.h"
 
-#define TOTAL_SIZE(f)           ((((f)->filesz / (f)->recordsz) * ((f)->recordsz + sizeof(entry_t))) / (f)->recordsz)
+#define TOTAL_SIZE(f)           (((f)->filesz / (f)->recordsz) * ((f)->recordsz + sizeof(entry_t)))
 #define SECTORS(f, sectorsz)    (((TOTAL_SIZE(f) + sectorsz - 1) / sectorsz) + 1)
 
 #define LOG_INFO(str, ...)      do { if(0) printf(str "\n", ##__VA_ARGS__); } while(0)
