@@ -625,8 +625,14 @@ int meterfs_readFile(id_t id, off_t off, char *buff, size_t bufflen, meterfs_ctx
 	unsigned int idx;
 	size_t chunk, i = 0, pos = off;
 
+	if (bufflen == 0)
+		return -EINVAL;
+
 	if ((f = node_getById(id, &ctx->nodesTree)) == NULL)
 		return -ENOENT;
+
+	if (f->recordcnt == 0)
+		return 0;
 
 	if (!f->header.filesz || !f->header.recordsz)
 		return 0;
@@ -658,6 +664,9 @@ int meterfs_writeFile(id_t id, const char *buff, size_t bufflen, meterfs_ctx_t *
 {
 	file_t *f;
 	int err;
+
+	if (bufflen == 0)
+		return -EINVAL;
 
 	if ((f = node_getById(id, &ctx->nodesTree)) == NULL)
 		return -ENOENT;
