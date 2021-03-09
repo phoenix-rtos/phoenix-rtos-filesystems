@@ -177,16 +177,22 @@ int meterfs_getFileInfoName(const char *name, fileheader_t *f, meterfs_ctx_t *ct
 
 	meterfs_powerctrl(1, ctx);
 
-	if ((err = ctx->read(ctx->offset + ctx->hcurrAddr + offsetof(header_t, filecnt), &filecnt, sizeof(filecnt))) < 0)
+	if ((err = ctx->read(ctx->offset + ctx->hcurrAddr + offsetof(header_t, filecnt), &filecnt, sizeof(filecnt))) < 0) {
+		meterfs_powerctrl(0, ctx);
 		return err;
+	}
 
 	for (i = 0; i < filecnt; ++i) {
-		if ((err = ctx->read(ctx->offset + ctx->hcurrAddr + HGRAIN + (i * HGRAIN) + offsetof(fileheader_t, name), &t.name, sizeof(t.name))) < 0)
+		if ((err = ctx->read(ctx->offset + ctx->hcurrAddr + HGRAIN + (i * HGRAIN) + offsetof(fileheader_t, name), &t.name, sizeof(t.name))) < 0) {
+			meterfs_powerctrl(0, ctx);
 			return err;
+		}
 		if (strncmp(name, t.name, sizeof(t.name)) == 0) {
 			if (f != NULL) {
-				if ((err = ctx->read(ctx->offset + ctx->hcurrAddr + HGRAIN + (i * HGRAIN), f, sizeof(*f))) < 0)
+				if ((err = ctx->read(ctx->offset + ctx->hcurrAddr + HGRAIN + (i * HGRAIN), f, sizeof(*f))) < 0) {
+					meterfs_powerctrl(0, ctx);
 					return err;
+				}
 			}
 			meterfs_powerctrl(0, ctx);
 
@@ -237,25 +243,35 @@ int meterfs_updateFileInfo(fileheader_t *f, meterfs_ctx_t *ctx)
 	meterfs_eraseFileTable((headerNew == 0) ? 0 : 1, ctx);
 
 	for (i = 0; i < ctx->filecnt; ++i) {
-		if ((err = ctx->read(ctx->offset + ctx->hcurrAddr + HGRAIN + (i * HGRAIN), &u.t, sizeof(fileheader_t))) < 0)
+		if ((err = ctx->read(ctx->offset + ctx->hcurrAddr + HGRAIN + (i * HGRAIN), &u.t, sizeof(fileheader_t))) < 0) {
+			meterfs_powerctrl(0, ctx);
 			return err;
+		}
 		if (strncmp(f->name, u.t.name, sizeof(f->name)) == 0) {
-			if ((err = ctx->write(ctx->offset + headerNew + HGRAIN + (i * HGRAIN), f, sizeof(fileheader_t))) < 0)
+			if ((err = ctx->write(ctx->offset + headerNew + HGRAIN + (i * HGRAIN), f, sizeof(fileheader_t))) < 0) {
+				meterfs_powerctrl(0, ctx);
 				return err;
+			}
 		} 
 		else {
-			if ((err = ctx->write(ctx->offset + headerNew + HGRAIN + (i * HGRAIN), &u.t, sizeof(fileheader_t))) < 0)
+			if ((err = ctx->write(ctx->offset + headerNew + HGRAIN + (i * HGRAIN), &u.t, sizeof(fileheader_t))) < 0) {
+				meterfs_powerctrl(0, ctx);
 				return err;
+			}
 		}
 	}
 
 	/* Prepare new header */
-	if ((err = ctx->read(ctx->offset + ctx->hcurrAddr, &u.h, sizeof(u.h))) < 0)
+	if ((err = ctx->read(ctx->offset + ctx->hcurrAddr, &u.h, sizeof(u.h))) < 0) {
+		meterfs_powerctrl(0, ctx);
 		return err;
+	}
 	++u.h.id.no;
 
-	if ((err = ctx->write(ctx->offset + headerNew, &u.h, sizeof(u.h))) < 0)
+	if ((err = ctx->write(ctx->offset + headerNew, &u.h, sizeof(u.h))) < 0) {
+		meterfs_powerctrl(0, ctx);
 		return err;
+	}
 
 	meterfs_powerctrl(0, ctx);
 
@@ -388,11 +404,15 @@ int meterfs_writeRecord(file_t *f, const void *buff, size_t bufflen, meterfs_ctx
 	e.id.no = f->lastidx.no + 1;
 	e.id.nvalid = 0;
 
-	if ((wrote = ctx->write(ctx->offset + f->header.sector * ctx->sectorsz + offset + sizeof(entry_t), (void *)buff, bufflen)) < 0)
+	if ((wrote = ctx->write(ctx->offset + f->header.sector * ctx->sectorsz + offset + sizeof(entry_t), (void *)buff, bufflen)) < 0) {
+		meterfs_powerctrl(0, ctx);
 		return wrote;
+	}
 
-	if ((stat = ctx->write(ctx->offset + f->header.sector * ctx->sectorsz + offset, &e, sizeof(entry_t))) < 0)
+	if ((stat = ctx->write(ctx->offset + f->header.sector * ctx->sectorsz + offset, &e, sizeof(entry_t))) < 0) {
+		meterfs_powerctrl(0, ctx);
 		return stat;
+	}
 
 	meterfs_powerctrl(0, ctx);
 
@@ -555,8 +575,10 @@ int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size
 
 	meterfs_powerctrl(1, ctx);
 
-	if ((err = ctx->read(ctx->offset + ctx->hcurrAddr, &h, sizeof(h))) < 0)
+	if ((err = ctx->read(ctx->offset + ctx->hcurrAddr, &h, sizeof(h))) < 0) {
+		meterfs_powerctrl(0, ctx);
 		return err;
+	}
 
 	if (h.filecnt >= MAX_FILE_CNT) {
 		meterfs_powerctrl(0, ctx);
@@ -565,8 +587,10 @@ int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size
 
 	/* Find free sectors */
 	if (h.filecnt != 0) {
-		if ((err = ctx->read(ctx->offset + ctx->hcurrAddr + HGRAIN + (h.filecnt - 1) * HGRAIN, &t, sizeof(t))) < 0)
+		if ((err = ctx->read(ctx->offset + ctx->hcurrAddr + HGRAIN + (h.filecnt - 1) * HGRAIN, &t, sizeof(t))) < 0) {
+			meterfs_powerctrl(0, ctx);
 			return err;
+		}
 
 		hdr.sector = t.sector + t.sectorcnt;
 		addr = hdr.sector * ctx->sectorsz;
@@ -577,8 +601,10 @@ int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size
 		}
 	}
 	else {
-		if (sectorcnt * ctx->sectorsz >= (ctx->sz - ctx->sectorsz * 4))
+		if (sectorcnt * ctx->sectorsz >= (ctx->sz - ctx->sectorsz * 4)) {
+			meterfs_powerctrl(0, ctx);
 			return -ENOMEM;
+		}
 		addr = ctx->h1Addr << 1;
 		hdr.sector = addr / ctx->sectorsz;
 	}
@@ -592,22 +618,30 @@ int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size
 
 	/* Copy data from the old header */
 	for (i = 0; i < h.filecnt; ++i) {
-		if ((err = ctx->read(ctx->offset + ctx->hcurrAddr + HGRAIN + (i * HGRAIN), &t, sizeof(t))) < 0)
+		if ((err = ctx->read(ctx->offset + ctx->hcurrAddr + HGRAIN + (i * HGRAIN), &t, sizeof(t))) < 0) {
+			meterfs_powerctrl(0, ctx);
 			return err;
-		if ((err = ctx->write(ctx->offset + headerNew + HGRAIN + (i * HGRAIN), &t, sizeof(t))) < 0)
+		}
+		if ((err = ctx->write(ctx->offset + headerNew + HGRAIN + (i * HGRAIN), &t, sizeof(t))) < 0) {
+			meterfs_powerctrl(0, ctx);
 			return err;
+		}
 	}
 
 	/* Store new file header */
-	if ((err = ctx->write(ctx->offset + headerNew + HGRAIN + (h.filecnt * HGRAIN), &hdr, sizeof(fileheader_t))) < 0)
+	if ((err = ctx->write(ctx->offset + headerNew + HGRAIN + (h.filecnt * HGRAIN), &hdr, sizeof(fileheader_t))) < 0) {
+		meterfs_powerctrl(0, ctx);
 		return err;
+	}
 
 	/* Commit new header and update global info */
 	h.filecnt += 1;
 	h.id.no += 1;
 
-	if ((err = ctx->write(ctx->offset + headerNew, &h, sizeof(h))) < 0)
+	if ((err = ctx->write(ctx->offset + headerNew, &h, sizeof(h))) < 0) {
+		meterfs_powerctrl(0, ctx);
 		return err;
+	}
 	meterfs_powerctrl(0, ctx);
 	ctx->filecnt += 1;
 	ctx->hcurrAddr = headerNew;
