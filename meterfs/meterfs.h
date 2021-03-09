@@ -55,16 +55,18 @@ typedef struct {
 
 
 typedef struct {
-	size_t sz;
-	size_t sectorsz;
-
-	uint32_t offset;
-
+	/* meterfs internals */
 	unsigned int h1Addr;
 	unsigned int hcurrAddr;
 	unsigned int filecnt;
 
 	rbtree_t nodesTree;
+
+	/* meterfs externals - should be initialized before meterfs_init */
+	size_t sz;
+	size_t sectorsz;
+
+	uint32_t offset;
 
 	ssize_t (*read)(unsigned int addr, void *buff, size_t bufflen);
 	ssize_t (*write)(unsigned int addr, void *buff, size_t bufflen);
