@@ -103,6 +103,8 @@ void meterfs_checkfs(meterfs_ctx_t *ctx)
 	if (!valid0 && !valid1) {
 		LOG_INFO("meterfs: No valid filesystem detected. Formating.");
 		ctx->partitionErase();
+		ctx->filecnt = 0;
+		ctx->hcurrAddr = 0;
 
 		u.h.filecnt = 0;
 		u.h.id.no = 0;
