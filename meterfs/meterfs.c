@@ -434,6 +434,8 @@ int meterfs_writeRecord(file_t *f, const void *buff, size_t bufflen, meterfs_ctx
 		if (f->firstoff + f->header.recordsz + sizeof(entry_t) > f->header.sectorcnt * ctx->sectorsz)
 			f->firstoff = 0;
 	}
+	if (wrote == bufflen && wrote < f->header.recordsz)
+		wrote += f->header.recordsz - bufflen;
 
 	return wrote;
 }
