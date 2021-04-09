@@ -1,0 +1,9 @@
+#
+# Makefile for Phoenix-RTOS 3 filesystems
+#
+# Host PC drivers
+#
+# Copyright 2021 Phoenix Systems
+#
+
+include meterfs/Makefile
