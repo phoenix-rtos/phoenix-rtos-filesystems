@@ -47,15 +47,6 @@ static void meterfs_powerctrl(int state, meterfs_ctx_t *ctx)
 }
 
 
-static int meterfs_fileNameCheck(const char *name)
-{
-	if (*name == '\0'|| strnlen(name, MAX_NAME_LEN + 1) > MAX_NAME_LEN)
-		return -EINVAL;
-
-	return 0;
-}
-
-
 void meterfs_eraseFileTable(unsigned int n, meterfs_ctx_t *ctx)
 {
 	unsigned int addr, i;
@@ -512,9 +503,10 @@ int meterfs_lookup(const char *name, id_t *res, meterfs_ctx_t *ctx)
 	file_t f;
 	char bname[sizeof(f.header.name)];
 	int i = 0, j, err;
+	int len = strnlen(&name[1], sizeof(f.header.name) + 1);
 
-	if ((err = meterfs_fileNameCheck(&name[1])) < 0)
-		return err;
+	if (len < 1 || len > sizeof(f.header.name))
+		return -EINVAL;
 
 	if (name[0] == '/')
 		++i;
@@ -554,10 +546,11 @@ int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size
 	header_t h;
 	fileheader_t hdr, t;
 	unsigned int addr, i, headerNew;
+	int len = strnlen(name, sizeof(hdr.name) + 1);
 	int err = 0;
 
-	if ((err = meterfs_fileNameCheck(name)) < 0)
-		return err;
+	if (len < 1 || len > sizeof(hdr.name))
+		return -EINVAL;
 
 	if (meterfs_getFileInfoName(name, &hdr, ctx) >= 0)
 		return -EEXIST;
@@ -565,7 +558,8 @@ int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size
 	if (recordsz > filesz || !recordsz)
 		return -EINVAL;
 
-	strncpy(hdr.name, name, sizeof(hdr.name));
+	memset(hdr.name, 0, sizeof(hdr.name));
+	memcpy(hdr.name, name, len);
 	hdr.filesz = filesz;
 	hdr.recordsz = recordsz;
 	hdr.sector = 0;
@@ -767,14 +761,15 @@ int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *
 			if ((p = node_getById(i->resize.id, &ctx->nodesTree)) == NULL)
 				return -ENOENT;
 
-			if ((err = meterfs_resizeFile(p->header.name, i->resize.filesz, i->resize.recordsz, ctx)) == 0) {
-				p->header.filesz = i->resize.filesz;
-				p->header.recordsz = i->resize.recordsz;
-			}
+			if ((err = meterfs_resizeFile(p->header.name, i->resize.filesz, i->resize.recordsz, ctx)) < 0)
+				return err;
+
+			p->header.filesz = i->resize.filesz;
+			p->header.recordsz = i->resize.recordsz;
 
 			if ((err = meterfs_getFileInfoName(p->header.name, &p->header, ctx)) < 0)
 				return err;
-			err = 0;
+
 			meterfs_getFilePos(p, ctx);
 
 			node_put(i->resize.id, &ctx->nodesTree);
