@@ -767,14 +767,15 @@ int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *
 			if ((p = node_getById(i->resize.id, &ctx->nodesTree)) == NULL)
 				return -ENOENT;
 
-			if ((err = meterfs_resizeFile(p->header.name, i->resize.filesz, i->resize.recordsz, ctx)) == 0) {
-				p->header.filesz = i->resize.filesz;
-				p->header.recordsz = i->resize.recordsz;
-			}
+			if ((err = meterfs_resizeFile(p->header.name, i->resize.filesz, i->resize.recordsz, ctx)) < 0)
+				return err;
+
+			p->header.filesz = i->resize.filesz;
+			p->header.recordsz = i->resize.recordsz;
 
 			if ((err = meterfs_getFileInfoName(p->header.name, &p->header, ctx)) < 0)
 				return err;
-			err = 0;
+
 			meterfs_getFilePos(p, ctx);
 
 			node_put(i->resize.id, &ctx->nodesTree);
