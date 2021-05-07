@@ -521,14 +521,10 @@ int meterfs_lookup(const char *name, id_t *res, meterfs_ctx_t *ctx)
 			break;
 	}
 
-	if (node_getByName(bname, res, &ctx->nodesTree) != NULL) {
-		node_put(*res, &ctx->nodesTree);
-
+	if (node_getByName(bname, res, &ctx->nodesTree) != NULL)
 		return i;
-	}
-	else if ((err = meterfs_getFileInfoName(bname, &f.header, ctx)) < 0) {
+	else if ((err = meterfs_getFileInfoName(bname, &f.header, ctx)) < 0)
 		return -ENOENT;
-	}
 
 	*res = err;
 
