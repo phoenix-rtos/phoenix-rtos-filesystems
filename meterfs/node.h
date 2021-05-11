@@ -26,9 +26,6 @@ file_t *node_getByName(const char *name, id_t *id, rbtree_t *tree);
 file_t *node_getById(id_t id, rbtree_t *tree);
 
 
-int node_put(id_t id, rbtree_t *tree);
-
-
 void node_cleanAll(rbtree_t *tree);
 
 

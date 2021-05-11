@@ -22,7 +22,6 @@ typedef struct {
 	rbnode_t linkage;
 	size_t lmaxgap;
 	size_t rmaxgap;
-	int refs;
 	id_t id;
 	file_t file;
 } node_t;
@@ -49,7 +48,6 @@ int node_add(file_t *file, id_t id, rbtree_t *tree)
 	if ((r = malloc(sizeof(node_t))) == NULL)
 		return -ENOMEM;
 
-	r->refs = 0;
 	r->id = id;
 	memcpy(&r->file, file, sizeof(file_t));
 
@@ -68,7 +66,6 @@ file_t *node_getByName(const char *name, id_t *id, rbtree_t *tree)
 	while (p != NULL) {
 		if (strncmp(name, p->file.header.name, sizeof(p->file.header.name)) == 0) {
 			(*id) = p->id;
-			++(p->refs);
 			return &p->file;
 		}
 
@@ -88,27 +85,7 @@ file_t *node_getById(id_t id, rbtree_t *tree)
 	if ((p = lib_treeof(node_t, linkage, lib_rbFind(tree, &t.linkage))) == NULL)
 		return NULL;
 
-	++(p->refs);
-
 	return &p->file;
-}
-
-
-int node_put(id_t id, rbtree_t *tree)
-{
-	node_t *r, t;
-
-	t.id = id;
-
-	if ((r = lib_treeof(node_t, linkage, lib_rbFind(tree, &t.linkage))) == NULL)
-		return -ENOENT;
-
-	if ((--r->refs) <= 0) {
-		lib_rbRemove(tree, &r->linkage);
-		free(r);
-	}
-
-	return 0;
 }
 
 
