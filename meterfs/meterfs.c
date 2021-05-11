@@ -3,8 +3,8 @@
  *
  * Meterfs Library
  *
- * Copyright 2017, 2018, 2020 Phoenix Systems
- * Author: Aleksander Kaminski, Hubert Buczynski
+ * Copyright 2017, 2018, 2020, 2021 Phoenix Systems
+ * Author: Aleksander Kaminski, Hubert Buczynski, Tomasz Korniluk
  *
  * This file is part of Phoenix-RTOS.
  *
@@ -368,6 +368,34 @@ void meterfs_getFilePos(file_t *f, meterfs_ctx_t *ctx)
 }
 
 
+static int meterfs_rbTreeFill(meterfs_ctx_t *ctx)
+{
+	file_t f;
+	int err;
+	unsigned int i;
+
+	meterfs_powerctrl(1, ctx);
+
+	for (i = 0; i < ctx->filecnt; ++i) {
+		if ((err = ctx->read(ctx->offset + ctx->hcurrAddr + HGRAIN + (i * HGRAIN), &f.header, sizeof(f.header))) < 0) {
+			meterfs_powerctrl(0, ctx);
+			return err;
+		}
+
+		meterfs_getFilePos(&f, ctx);
+
+		if ((err = node_add(&f, (id_t)i, &ctx->nodesTree)) < 0) {
+			meterfs_powerctrl(0, ctx);
+			return err;
+		}
+	}
+	
+	meterfs_powerctrl(0, ctx);
+
+	return 0;
+}
+
+
 int meterfs_writeRecord(file_t *f, const void *buff, size_t bufflen, meterfs_ctx_t *ctx)
 {
 	/* This function assumes that f contains valid lastidx and lastoff */
@@ -494,7 +522,10 @@ int meterfs_open(id_t id, meterfs_ctx_t *ctx)
 
 int meterfs_close(id_t id, meterfs_ctx_t *ctx)
 {
-	return node_put(id, &ctx->nodesTree);
+	if (node_getById(id, &ctx->nodesTree) != NULL)
+		return 0;
+
+	return -ENOENT;
 }
 
 
@@ -502,7 +533,7 @@ int meterfs_lookup(const char *name, id_t *res, meterfs_ctx_t *ctx)
 {
 	file_t f;
 	char bname[sizeof(f.header.name)];
-	int i = 0, j, err;
+	int i = 0, j;
 	int len = strnlen(&name[1], sizeof(f.header.name) + 1);
 
 	if (len < 1 || len > sizeof(f.header.name))
@@ -521,17 +552,8 @@ int meterfs_lookup(const char *name, id_t *res, meterfs_ctx_t *ctx)
 			break;
 	}
 
-	if (node_getByName(bname, res, &ctx->nodesTree) != NULL)
-		return i;
-	else if ((err = meterfs_getFileInfoName(bname, &f.header, ctx)) < 0)
+	if (node_getByName(bname, res, &ctx->nodesTree) == NULL)
 		return -ENOENT;
-
-	*res = err;
-
-	meterfs_getFilePos(&f, ctx);
-
-	if ((err = node_add(&f, *res, &ctx->nodesTree)) < 0)
-		return err;
 
 	return i;
 }
@@ -539,30 +561,31 @@ int meterfs_lookup(const char *name, id_t *res, meterfs_ctx_t *ctx)
 
 int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size_t recordsz, meterfs_ctx_t *ctx)
 {
+	file_t f;
 	header_t h;
-	fileheader_t hdr, t;
+	fileheader_t t;
 	unsigned int addr, i, headerNew;
-	int len = strnlen(name, sizeof(hdr.name) + 1);
+	int len = strnlen(name, sizeof(f.header.name) + 1);
 	int err = 0;
 
-	if (len < 1 || len > sizeof(hdr.name))
+	if (len < 1 || len > sizeof(f.header.name))
 		return -EINVAL;
 
-	if (meterfs_getFileInfoName(name, &hdr, ctx) >= 0)
+	if (meterfs_getFileInfoName(name, &f.header, ctx) >= 0)
 		return -EEXIST;
 
 	if (recordsz > filesz || !recordsz)
 		return -EINVAL;
 
-	memset(hdr.name, 0, sizeof(hdr.name));
-	memcpy(hdr.name, name, len);
-	hdr.filesz = filesz;
-	hdr.recordsz = recordsz;
-	hdr.sector = 0;
-	hdr.sectorcnt = sectorcnt;
+	memset(f.header.name, 0, sizeof(f.header.name));
+	memcpy(f.header.name, name, len);
+	f.header.filesz = filesz;
+	f.header.recordsz = recordsz;
+	f.header.sector = 0;
+	f.header.sectorcnt = sectorcnt;
 
 	/* Check if sectorcnt is valid */
-	if (SECTORS(&hdr, ctx->sectorsz) > hdr.sectorcnt || hdr.sectorcnt < 2)
+	if (SECTORS(&f.header, ctx->sectorsz) > f.header.sectorcnt || f.header.sectorcnt < 2)
 		return -EINVAL;
 
 	meterfs_powerctrl(1, ctx);
@@ -584,10 +607,10 @@ int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size
 			return err;
 		}
 
-		hdr.sector = t.sector + t.sectorcnt;
-		addr = hdr.sector * ctx->sectorsz;
+		f.header.sector = t.sector + t.sectorcnt;
+		addr = f.header.sector * ctx->sectorsz;
 
-		if (addr + (hdr.sectorcnt * ctx->sectorsz) >= ctx->sz) {
+		if (addr + (f.header.sectorcnt * ctx->sectorsz) >= ctx->sz) {
 			meterfs_powerctrl(0, ctx);
 			return -ENOMEM;
 		}
@@ -598,12 +621,12 @@ int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size
 			return -ENOMEM;
 		}
 		addr = ctx->h1Addr << 1;
-		hdr.sector = addr / ctx->sectorsz;
+		f.header.sector = addr / ctx->sectorsz;
 	}
 
 	/* Prepare data space */
-	for (i = 0; i < hdr.sectorcnt; ++i)
-		ctx->eraseSector(ctx->offset + (hdr.sector + i) * ctx->sectorsz);
+	for (i = 0; i < f.header.sectorcnt; ++i)
+		ctx->eraseSector(ctx->offset + (f.header.sector + i) * ctx->sectorsz);
 
 	headerNew = (ctx->hcurrAddr == 0) ? ctx->h1Addr : 0;
 	meterfs_eraseFileTable((headerNew == 0) ? 0 : 1, ctx);
@@ -621,7 +644,7 @@ int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size
 	}
 
 	/* Store new file header */
-	if ((err = ctx->write(ctx->offset + headerNew + HGRAIN + (h.filecnt * HGRAIN), &hdr, sizeof(fileheader_t))) < 0) {
+	if ((err = ctx->write(ctx->offset + headerNew + HGRAIN + (h.filecnt * HGRAIN), &f.header, sizeof(fileheader_t))) < 0) {
 		meterfs_powerctrl(0, ctx);
 		return err;
 	}
@@ -634,9 +657,17 @@ int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size
 		meterfs_powerctrl(0, ctx);
 		return err;
 	}
-	meterfs_powerctrl(0, ctx);
+
 	ctx->filecnt += 1;
 	ctx->hcurrAddr = headerNew;
+
+	/* Add new node to data structure. */
+	meterfs_getFilePos(&f, ctx);
+
+	meterfs_powerctrl(0, ctx);
+
+	if ((err = node_add(&f, (id_t)ctx->filecnt, &ctx->nodesTree)) < 0)
+		return err;
 
 	return 0;
 }
@@ -700,8 +731,6 @@ int meterfs_readFile(id_t id, off_t off, char *buff, size_t bufflen, meterfs_ctx
 
 	meterfs_powerctrl(0, ctx);
 
-	node_put(id, &ctx->nodesTree);
-
 	return i;
 }
 
@@ -721,8 +750,6 @@ int meterfs_writeFile(id_t id, const char *buff, size_t bufflen, meterfs_ctx_t *
 		return 0;
 
 	err = meterfs_writeRecord(f, buff, bufflen, ctx);
-
-	node_put(id, &ctx->nodesTree);
 
 	return err;
 }
@@ -768,7 +795,6 @@ int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *
 
 			meterfs_getFilePos(p, ctx);
 
-			node_put(i->resize.id, &ctx->nodesTree);
 			break;
 
 		case meterfs_info:
@@ -780,7 +806,6 @@ int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *
 			o->info.recordsz = p->header.recordsz;
 			o->info.recordcnt = p->recordcnt;
 
-			node_put(i->id, &ctx->nodesTree);
 			break;
 
 		case meterfs_chiperase:
@@ -802,6 +827,8 @@ int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *
 
 int meterfs_init(meterfs_ctx_t *ctx)
 {
+	int err;
+
 	if (ctx == NULL)
 		return -1;
 
@@ -811,6 +838,10 @@ int meterfs_init(meterfs_ctx_t *ctx)
 	node_init(&ctx->nodesTree);
 
 	meterfs_checkfs(ctx);
+
+	if ((err = meterfs_rbTreeFill(ctx)) < 0)
+		return err;
+
 	LOG_INFO("meterfs: Filesystem check done. Found %u files.", ctx->filecnt);
 
 	return 0;
