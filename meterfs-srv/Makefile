@@ -4,12 +4,9 @@
 # Copyright 2018 Phoenix Systems
 #
 
-METERFS_OBJS := spi.o flash.o node.o meterfs.o
+NAME := meterfs
+LOCAL_PATH := $(call my-dir)
+SRCS := $(wildcard $(LOCAL_PATH)*.c)
+LOCAL_HEADERS := meterfs-srv.h
 
-$(PREFIX_PROG)meterfs: $(addprefix $(PREFIX_O)meterfs-srv/, $(METERFS_OBJS))
-	$(LINK)
-
-$(PREFIX_H)meterfs.h: meterfs-srv/meterfs.h
-	$(HEADER)
-
-all: $(PREFIX_PROG_STRIPPED)meterfs $(PREFIX_H)meterfs.h
+include $(binary.mk)

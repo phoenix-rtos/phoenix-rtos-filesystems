@@ -8,5 +8,4 @@
 
 CFLAGS += -DTARGET_STM32 -DTARGET_STM32L4
 
-include meterfs/Makefile
-include dummyfs/Makefile
+DEFAULT_COMPONENTS := dummyfs libmeterfs

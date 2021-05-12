@@ -5,10 +5,15 @@
 #
 # Copyright 2020 Phoenix Systems
 #
+#
+CFLAGS += -DTARGET_IMXRT
 
-CFLAGS += -DTARGET_IMXRT -DTARGET_IMXRT1060
+ifneq (, $(findstring 117, $(TARGET)))
+  CFLAGS += -DTARGET_IMXRT1170
+else ifneq (, $(findstring 105, $(TARGET)))
+  CFLAGS += -DTARGET_IMXRT1050
+else ifneq (, $(findstring 106, $(TARGET)))
+  CFLAGS += -DTARGET_IMXRT1060
+endif
 
-include dummyfs/Makefile
-include meterfs/Makefile
-include ptable/Makefile
-
+DEFAULT_COMPONENTS := dummyfs libmeterfs libptable

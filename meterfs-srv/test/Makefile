@@ -3,10 +3,9 @@
 #
 # Copyright 2018 Phoenix Systems
 #
+#
+NAME := meterfs-test
+LOCAL_PATH := $(call my-dir)
+SRCS := $(wildcard $(LOCAL_PATH)*.c)
 
-METERFS_OBJS := test.o
-
-$(PREFIX_PROG)meterfs-test: $(addprefix $(PREFIX_O)meterfs-srv/test/, $(METERFS_OBJS))
-	$(LINK)
-
-all: $(PREFIX_PROG_STRIPPED)meterfs-test
+include $(binary.mk)

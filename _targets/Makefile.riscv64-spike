@@ -6,4 +6,4 @@
 # Copyright 2020 Phoenix Systems
 #
 
-include dummyfs/Makefile
+DEFAULT_COMPONENTS := dummyfs

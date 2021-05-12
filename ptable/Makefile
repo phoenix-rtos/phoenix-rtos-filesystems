@@ -4,12 +4,8 @@
 # Copyright 2020 Phoenix Systems
 #
 
+NAME := libptable
+LOCAL_SRCS := ptable.c
+LOCAL_HEADERS := ptable.h
 
-$(PREFIX_A)libptable.a: $(addprefix $(PREFIX_O)ptable/, ptable.o)
-	$(ARCH)
-
-$(PREFIX_H)ptable.h: ptable/ptable.h 
-	$(HEADER)
-
-all: $(PREFIX_A)libptable.a $(PREFIX_H)ptable.h
-
+include $(static-lib.mk)
