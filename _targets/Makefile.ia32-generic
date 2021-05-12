@@ -6,5 +6,4 @@
 # Copyright 2020 Phoenix Systems
 #
 
-include dummyfs/Makefile
-include ext2/Makefile
+DEFAULT_COMPONENTS := dummyfs libext2

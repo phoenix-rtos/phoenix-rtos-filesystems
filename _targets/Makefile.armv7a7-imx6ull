@@ -6,6 +6,4 @@
 # Copyright 2020 Phoenix Systems
 #
 
-include jffs2/Makefile
-include dummyfs/Makefile
-
+DEFAULT_COMPONENTS := dummyfs libjffs2

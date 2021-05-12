@@ -1,12 +1,1 @@
-#
-# Makefile for Phoenix-RTOS 3 filesystems
-#
-# STM32L1 drivers
-#
-# Copyright 2020 Phoenix Systems
-#
-
-CFLAGS += -DTARGET_STM32 -DTARGET_STM32L1
-
-include meterfs-srv/Makefile
-include meterfs-srv/test/Makefile
+Makefile.armv7m3-stm32l152xd

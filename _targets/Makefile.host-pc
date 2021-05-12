@@ -6,4 +6,4 @@
 # Copyright 2021 Phoenix Systems
 #
 
-include meterfs/Makefile
+DEFAULT_COMPONENTS := libmeterfs

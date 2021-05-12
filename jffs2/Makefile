@@ -1,63 +1,62 @@
 #
-# Makefile for Phoenix-RTOS imx6ull-uart driver
+# Makefile for Phoenix-RTOS jffs2 port
 #
 # Copyright 2018, 2019 Phoenix Systems
 #
 
-CFLAGS += -Wno-pointer-sign -Wno-discarded-qualifiers -Wno-unused-value -Wno-strict-prototypes\
-	-DCONFIG_JFFS2_CMODE_NONE -DCONFIG_JFFS2_FS_WRITEBUFFER -DCONFIG_JFFS2_SUMMARY
-	
+NAME := libjffs2
+LOCAL_HEADERS := libjffs2.h
+
+# disable some warnings for jffs2 code
+LOCAL_CFLAGS := -Wno-pointer-sign -Wno-discarded-qualifiers -Wno-unused-value -Wno-strict-prototypes
+
+# enable desired functions: NAND writebuffer and summary nodes
+LOCAL_CFLAGS += -DCONFIG_JFFS2_CMODE_NONE -DCONFIG_JFFS2_FS_WRITEBUFFER -DCONFIG_JFFS2_SUMMARY
+
 # linux base jffs2 files + writebuffer for nand support + summary for faster mount times
-JFFS2_OBJS := compr.o dir.o file.o ioctl.o nodelist.o malloc.o read.o nodemgmt.o \
-	readinode.o write.o scan.o gc.o symlink.o build.o erase.o \
-	background.o fs.o writev.o super.o debug.o wbuf.o summary.o
+LOCAL_SRCS := compr.c dir.c file.c ioctl.c nodelist.c malloc.c read.c nodemgmt.c \
+	readinode.c write.c scan.c gc.c symlink.c build.c erase.c \
+	background.c fs.c writev.c super.c debug.c wbuf.c summary.c
 
 # phoenix-rtos specific files
-JFFS2_OBJS += phoenix-rtos/fs.o phoenix-rtos/completion.o phoenix-rtos/slab.o \
-	phoenix-rtos/dev.o phoenix-rtos/crc32.o phoenix-rtos/rb.o phoenix-rtos/dentry.o \
-	phoenix-rtos/wait.o phoenix-rtos/phoenix-rtos.o phoenix-rtos/locks.o jffs2.o \
-	phoenix-rtos/object.o
+LOCAL_SRCS += phoenix-rtos/fs.c phoenix-rtos/completion.c phoenix-rtos/slab.c \
+	phoenix-rtos/dev.c phoenix-rtos/crc32.c phoenix-rtos/rb.c phoenix-rtos/dentry.c \
+	phoenix-rtos/wait.c phoenix-rtos/phoenix-rtos.c phoenix-rtos/locks.c jffs2.c \
+	phoenix-rtos/object.c
 
 ifeq ($(MTD_EM), 1)
-	JFFS2_OBJS += phoenix-rtos/mtd_em.o
+  LOCAL_SRCS += phoenix-rtos/mtd_em.c
 else
-	JFFS2_OBJS += phoenix-rtos/mtd.o
+  LOCAL_SRCS += phoenix-rtos/mtd.c
 endif
 
 # rest of additional jffs2 options (not supported)
-ifdef $(CONFIG_JFFS2_FS_XATTR)
-	JFFS2_OBJS += xattr.o xattr_trusted.o xattr_user.o
+ifeq ($(CONFIG_JFFS2_FS_XATTR), 1)
+  LOCAL_SRCS += xattr.c xattr_trusted.c xattr_user.c
 endif
 
-ifdef $(CONFIG_JFFS2_FS_SECURITY)
-	JFFS2_OBJS += security.o
+ifeq ($(CONFIG_JFFS2_FS_SECURITY), 1)
+  LOCAL_SRCS += security.c
 endif
 
-ifdef $(CONFIG_JFFS2_FS_POSIX_ACL)
-	JFFS2_OBJS += acl.o
+ifeq ($(CONFIG_JFFS2_FS_POSIX_ACL), 1)
+  LOCAL_SRCS += acl.c
 endif
 
-ifdef $(CONFIG_JFFS2_RUBIN)
-	JFFS2_OBJS += compr_rubin.o
+ifeq ($(CONFIG_JFFS2_RUBIN), 1)
+  LOCAL_SRCS += compr_rubin.c
 endif
 
-ifdef $(CONFIG_JFFS2_RTIME)
-	JFFS2_OBJS += compr_rtime.o
+ifeq ($(CONFIG_JFFS2_RTIME), 1)
+  LOCAL_SRCS += compr_rtime.c
 endif
 
-ifdef $(CONFIG_JFFS2_ZLIB)
-	JFFS2_OBJS += compr_zlib.o
+ifeq ($(CONFIG_JFFS2_ZLIB), 1)
+  LOCAL_SRCS += compr_zlib.c
 endif
 
-ifdef $(CONFIG_JFFS2_LZO)
-	JFFS2_OBJS += compr_lzo.o
-endif	
-	
+ifeq ($(CONFIG_JFFS2_LZO), 1)
+  LOCAL_SRCS += compr_lzo.c
+endif
 
-$(PREFIX_A)libjffs2.a: $(addprefix $(PREFIX_O)jffs2/, $(JFFS2_OBJS))
-	$(ARCH)
-
-#INSTALL_HDRS := libjffs2.h
-
-all: $(PREFIX_A)libjffs2.a
- 
+include $(static-lib.mk)

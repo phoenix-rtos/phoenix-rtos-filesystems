@@ -4,9 +4,8 @@
 # Copyright 2017, 2018 Phoenix Systems
 #
 
-DUMMYFS_OBJS := dummyfs.o file.o dir.o object.o dev.o
+NAME := dummyfs
+LOCAL_PATH := $(call my-dir)
+SRCS := $(wildcard $(LOCAL_PATH)*.c)
 
-$(PREFIX_PROG)dummyfs: $(addprefix $(PREFIX_O)dummyfs/, $(DUMMYFS_OBJS))
-	$(LINK)
-
-all: $(PREFIX_PROG_STRIPPED)dummyfs
+include $(binary.mk)
