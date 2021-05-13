@@ -8,4 +8,4 @@
 
 CFLAGS += -DTARGET_STM32 -DTARGET_STM32L1
 
-DEFAULT_COMPONENTS := meterfs-srv meterfs-test
+DEFAULT_COMPONENTS := meterfs
