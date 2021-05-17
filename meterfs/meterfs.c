@@ -312,10 +312,8 @@ void meterfs_getFilePos(file_t *f, meterfs_ctx_t *ctx)
 	f->firstoff = f->lastoff;
 
 	/* Is file empty? */
-	if (f->lastidx.nvalid) {
-		meterfs_powerctrl(0, ctx);
+	if (f->lastidx.nvalid)
 		return;
-	}
 
 	/* Find newest record */
 	for (interval = totalrecord - 1; interval != 0; ) {
