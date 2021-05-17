@@ -294,8 +294,6 @@ void meterfs_getFilePos(file_t *f, meterfs_ctx_t *ctx)
 	interval = ctx->sectorsz / (f->header.recordsz + sizeof(entry_t));
 	interval = (interval + 1) * (f->header.recordsz + sizeof(entry_t));
 
-	meterfs_powerctrl(1, ctx);
-
 	for (i = 0, offset = 0; i < f->header.sectorcnt; ++i) {
 		ctx->read(ctx->offset + baddr + offset + offsetof(entry_t, id), &id, sizeof(id));
 		if (!id.nvalid) {
@@ -362,8 +360,6 @@ void meterfs_getFilePos(file_t *f, meterfs_ctx_t *ctx)
 		interval /= 2;
 	}
 
-	meterfs_powerctrl(0, ctx);
-
 	f->recordcnt = f->lastidx.no - f->firstidx.no + 1;
 }
 
@@ -371,28 +367,28 @@ void meterfs_getFilePos(file_t *f, meterfs_ctx_t *ctx)
 static int meterfs_rbTreeFill(meterfs_ctx_t *ctx)
 {
 	file_t f;
-	int err;
+	int err, ret = 0;;
 	unsigned int i;
 
 	meterfs_powerctrl(1, ctx);
 
 	for (i = 0; i < ctx->filecnt; ++i) {
 		if ((err = ctx->read(ctx->offset + ctx->hcurrAddr + HGRAIN + (i * HGRAIN), &f.header, sizeof(f.header))) < 0) {
-			meterfs_powerctrl(0, ctx);
-			return err;
+			ret = err;
+			break;
 		}
 
 		meterfs_getFilePos(&f, ctx);
 
 		if ((err = node_add(&f, (id_t)i, &ctx->nodesTree)) < 0) {
-			meterfs_powerctrl(0, ctx);
-			return err;
+			ret = err;
+			break;
 		}
 	}
 	
 	meterfs_powerctrl(0, ctx);
 
-	return 0;
+	return ret;
 }
 
 
@@ -793,7 +789,9 @@ int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *
 			if ((err = meterfs_getFileInfoName(p->header.name, &p->header, ctx)) < 0)
 				return err;
 
+			meterfs_powerctrl(1, ctx);
 			meterfs_getFilePos(p, ctx);
+			meterfs_powerctrl(0, ctx);
 
 			break;
 
