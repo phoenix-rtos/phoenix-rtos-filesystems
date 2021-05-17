@@ -367,7 +367,7 @@ void meterfs_getFilePos(file_t *f, meterfs_ctx_t *ctx)
 static int meterfs_rbTreeFill(meterfs_ctx_t *ctx)
 {
 	file_t f;
-	int err, ret = 0;;
+	int err, ret = 0;
 	unsigned int i;
 
 	meterfs_powerctrl(1, ctx);
