@@ -47,28 +47,34 @@ static void meterfs_powerctrl(int state, meterfs_ctx_t *ctx)
 }
 
 
-void meterfs_eraseFileTable(unsigned int n, meterfs_ctx_t *ctx)
+static int meterfs_eraseFileTable(unsigned int n, meterfs_ctx_t *ctx)
 {
 	unsigned int addr, i;
 	size_t sectorcnt;
+	int err;
 
 	if (n != 0 && n != 1)
-		return;
+		return -EINVAL;
 
 	addr = (n == 0) ? 0 : ctx->h1Addr;
 	sectorcnt = HGRAIN + MAX_FILE_CNT * HGRAIN;
 	sectorcnt += ctx->sectorsz - 1;
 	sectorcnt /= ctx->sectorsz;
 
-	for (i = 0; i < sectorcnt; ++i)
-		ctx->eraseSector(ctx->offset + addr + i * ctx->sectorsz);
+	for (i = 0; i < sectorcnt; ++i) {
+		if ((err = ctx->eraseSector(ctx->offset + addr + i * ctx->sectorsz)) < 0)
+			return err;
+	}
+
+	return 0;
 }
 
 
-void meterfs_checkfs(meterfs_ctx_t *ctx)
+static int meterfs_checkfs(meterfs_ctx_t *ctx)
 {
 	unsigned int addr = 0, valid0 = 0, valid1 = 0, src, dst, i;
 	index_t id;
+	ssize_t err;
 	union {
 		header_t h;
 		fileheader_t f;
@@ -77,7 +83,10 @@ void meterfs_checkfs(meterfs_ctx_t *ctx)
 	meterfs_powerctrl(1, ctx);
 
 	/* Check if first header is valid */
-	ctx->read(ctx->offset + addr, &u.h, sizeof(u.h));
+	if ((err = ctx->read(ctx->offset + addr, &u.h, sizeof(u.h))) < 0) {
+		meterfs_powerctrl(0, ctx);
+		return err;
+	}
 	if (!(u.h.id.nvalid || memcmp(u.h.magic, magic, 4))) {
 		valid0 = 1;
 		id = u.h.id;
@@ -86,14 +95,20 @@ void meterfs_checkfs(meterfs_ctx_t *ctx)
 	/* Check next header */
 	ctx->h1Addr = HGRAIN + MAX_FILE_CNT * HGRAIN;
 
-	ctx->read(ctx->offset + ctx->h1Addr, &u.h, sizeof(u.h));
+	if ((err = ctx->read(ctx->offset + ctx->h1Addr, &u.h, sizeof(u.h))) < 0) {
+		meterfs_powerctrl(0, ctx);
+		return err;
+	}
 
 	if (!(u.h.id.nvalid || memcmp(u.h.magic, magic, 4)))
 		valid1 = 1;
 
 	if (!valid0 && !valid1) {
 		LOG_INFO("meterfs: No valid filesystem detected. Formating.");
-		ctx->partitionErase();
+		if ((err = ctx->partitionErase()) < 0) {
+			meterfs_powerctrl(0, ctx);
+			return err;
+		}
 		ctx->filecnt = 0;
 		ctx->hcurrAddr = 0;
 
@@ -102,11 +117,17 @@ void meterfs_checkfs(meterfs_ctx_t *ctx)
 		u.h.id.nvalid = 0;
 		memcpy(u.h.magic, magic, 4);
 
-		ctx->write(ctx->offset + 0, &u.h, sizeof(u.h));
-		ctx->write(ctx->offset + ctx->h1Addr, &u.h, sizeof(u.h));
+		if ((err = ctx->write(ctx->offset + 0, &u.h, sizeof(u.h))) < 0) {
+			meterfs_powerctrl(0, ctx);
+			return err;
+		}
+		if ((err = ctx->write(ctx->offset + ctx->h1Addr, &u.h, sizeof(u.h))) < 0) {
+			meterfs_powerctrl(0, ctx);
+			return err;
+		}
 
 		meterfs_powerctrl(0, ctx);
-		return;
+		return 0;
 	}
 
 	/* Select active header and files table */
@@ -116,10 +137,13 @@ void meterfs_checkfs(meterfs_ctx_t *ctx)
 		else
 			ctx->hcurrAddr = 0;
 
-		ctx->read(ctx->offset + ctx->hcurrAddr + offsetof(header_t, filecnt), &ctx->filecnt, sizeof(ctx->filecnt));
+		if ((err = ctx->read(ctx->offset + ctx->hcurrAddr + offsetof(header_t, filecnt), &ctx->filecnt, sizeof(ctx->filecnt))) < 0) {
+			meterfs_powerctrl(0, ctx);
+			return err;
+		}
 
 		meterfs_powerctrl(0, ctx);
-		return;
+		return 0;
 	}
 
 	/* There should be copy of file table at all times. Fix it if necessary */
@@ -127,40 +151,62 @@ void meterfs_checkfs(meterfs_ctx_t *ctx)
 		LOG_INFO("meterfs: Filetable header #0 is damaged - repairing.");
 		src = ctx->h1Addr;
 		dst = 0;
-		meterfs_eraseFileTable(0, ctx);
+		if ((err = meterfs_eraseFileTable(0, ctx)) < 0) {
+			meterfs_powerctrl(0, ctx);
+			return err;
+		}
 		ctx->hcurrAddr = ctx->h1Addr;
 	}
 	else {
 		LOG_INFO("meterfs: Filetable header #1 is damaged - repairing.");
 		src = 0;
 		dst = ctx->h1Addr;
-		meterfs_eraseFileTable(1, ctx);
+		if ((err = meterfs_eraseFileTable(1, ctx)) < 0) {
+			meterfs_powerctrl(0, ctx);
+			return err;
+		}
 		ctx->hcurrAddr = 0;
 	}
 
-	ctx->read(ctx->offset + ctx->hcurrAddr + offsetof(header_t, filecnt), &ctx->filecnt, sizeof(ctx->filecnt));
+	if ((err = ctx->read(ctx->offset + ctx->hcurrAddr + offsetof(header_t, filecnt), &ctx->filecnt, sizeof(ctx->filecnt))) < 0) {
+		meterfs_powerctrl(0, ctx);
+		return err;
+	}
 
 	/* Copy header */
-	ctx->read(ctx->offset + src, &u.h, sizeof(u.h));
-	ctx->write(ctx->offset + dst, &u.h, sizeof(u.h));
+	if ((err = ctx->read(ctx->offset + src, &u.h, sizeof(u.h))) < 0) {
+		meterfs_powerctrl(0, ctx);
+		return err;
+	}
+	if ((err = ctx->write(ctx->offset + dst, &u.h, sizeof(u.h))) < 0) {
+		meterfs_powerctrl(0, ctx);
+		return err;
+	}
 
 	src += HGRAIN;
 	dst += HGRAIN;
 
 	/* Copy file info */
 	for (i = 0; i < ctx->filecnt; ++i) {
-		ctx->read(ctx->offset + src, &u.f, sizeof(u.f));
-		ctx->write(ctx->offset + dst, &u.f, sizeof(u.f));
+		if ((err = ctx->read(ctx->offset + src, &u.f, sizeof(u.f))) < 0) {
+			meterfs_powerctrl(0, ctx);
+			return err;
+		}
+		if ((err = ctx->write(ctx->offset + dst, &u.f, sizeof(u.f))) < 0) {
+			meterfs_powerctrl(0, ctx);
+			return err;
+		}
 
 		src += HGRAIN;
 		dst += HGRAIN;
 	}
 
 	meterfs_powerctrl(0, ctx);
+	return 0;
 }
 
 
-int meterfs_getFileInfoName(const char *name, fileheader_t *f, meterfs_ctx_t *ctx)
+static int meterfs_getFileInfoName(const char *name, fileheader_t *f, meterfs_ctx_t *ctx)
 {
 	fileheader_t t;
 	uint32_t i, filecnt;
@@ -196,7 +242,7 @@ int meterfs_getFileInfoName(const char *name, fileheader_t *f, meterfs_ctx_t *ct
 }
 
 
-int meterfs_updateFileInfo(fileheader_t *f, meterfs_ctx_t *ctx)
+static int meterfs_updateFileInfo(fileheader_t *f, meterfs_ctx_t *ctx)
 {
 	unsigned int headerNew, i;
 	ssize_t err = 0;
@@ -225,13 +271,20 @@ int meterfs_updateFileInfo(fileheader_t *f, meterfs_ctx_t *ctx)
 	meterfs_powerctrl(1, ctx);
 
 	/* Clear file content */
-	for (i = 0; i < f->sectorcnt; ++i)
-		ctx->eraseSector(ctx->offset + (f->sector + i) * ctx->sectorsz);
+	for (i = 0; i < f->sectorcnt; ++i) {
+		if ((err = ctx->eraseSector(ctx->offset + (f->sector + i) * ctx->sectorsz)) < 0) {
+			meterfs_powerctrl(0, ctx);
+			return err;
+		}
+	}
 
 	headerNew = (ctx->hcurrAddr == ctx->h1Addr) ? 0 : ctx->h1Addr;
 
 	/* Make space for new file table */
-	meterfs_eraseFileTable((headerNew == 0) ? 0 : 1, ctx);
+	if ((err = meterfs_eraseFileTable((headerNew == 0) ? 0 : 1, ctx)) < 0) {
+		meterfs_powerctrl(0, ctx);
+		return err;
+	}
 
 	for (i = 0; i < ctx->filecnt; ++i) {
 		if ((err = ctx->read(ctx->offset + ctx->hcurrAddr + HGRAIN + (i * HGRAIN), &u.t, sizeof(fileheader_t))) < 0) {
@@ -273,11 +326,12 @@ int meterfs_updateFileInfo(fileheader_t *f, meterfs_ctx_t *ctx)
 }
 
 
-void meterfs_getFilePos(file_t *f, meterfs_ctx_t *ctx)
+static int meterfs_getFilePos(file_t *f, meterfs_ctx_t *ctx)
 {
 	unsigned int baddr, eaddr, totalrecord, maxrecord;
 	int i, offset, interval, diff, idx;
 	index_t id;
+	ssize_t err;
 
 	f->lastidx.no = 0;
 	f->lastidx.nvalid = 1;
@@ -295,7 +349,8 @@ void meterfs_getFilePos(file_t *f, meterfs_ctx_t *ctx)
 	interval = (interval + 1) * (f->header.recordsz + sizeof(entry_t));
 
 	for (i = 0, offset = 0; i < f->header.sectorcnt; ++i) {
-		ctx->read(ctx->offset + baddr + offset + offsetof(entry_t, id), &id, sizeof(id));
+		if ((err = ctx->read(ctx->offset + baddr + offset + offsetof(entry_t, id), &id, sizeof(id))) < 0)
+			return err;
 		if (!id.nvalid) {
 			f->lastidx = id;
 			f->lastoff = offset;
@@ -313,13 +368,14 @@ void meterfs_getFilePos(file_t *f, meterfs_ctx_t *ctx)
 
 	/* Is file empty? */
 	if (f->lastidx.nvalid)
-		return;
+		return 0;
 
 	/* Find newest record */
 	for (interval = totalrecord - 1; interval != 0; ) {
 		idx = ((f->lastoff / (f->header.recordsz + sizeof(entry_t))) + interval) % totalrecord;
 		offset = idx * (f->header.recordsz + sizeof(entry_t));
-		ctx->read(ctx->offset + baddr + offset + offsetof(entry_t, id), &id, sizeof(id));
+		if ((err = ctx->read(ctx->offset + baddr + offset + offsetof(entry_t, id), &id, sizeof(id))) < 0)
+			return err;
 		if (!id.nvalid && ((f->lastidx.no + interval) % (1U << 31)) == id.no) {
 			f->lastidx = id;
 			f->lastoff = offset;
@@ -346,7 +402,8 @@ void meterfs_getFilePos(file_t *f, meterfs_ctx_t *ctx)
 		else
 			idx %= totalrecord;
 		offset = idx * (f->header.recordsz + sizeof(entry_t));
-		ctx->read(ctx->offset + baddr + offset + offsetof(entry_t, id), &id, sizeof(id));
+		if ((err = ctx->read(ctx->offset + baddr + offset + offsetof(entry_t, id), &id, sizeof(id))) < 0)
+			return err;
 		if (!id.nvalid && ((f->firstidx.no + interval) % (1U << 31)) == id.no) {
 			f->firstidx = id;
 			f->firstoff = offset;
@@ -359,6 +416,8 @@ void meterfs_getFilePos(file_t *f, meterfs_ctx_t *ctx)
 	}
 
 	f->recordcnt = f->lastidx.no - f->firstidx.no + 1;
+
+	return 0;
 }
 
 
@@ -376,7 +435,10 @@ static int meterfs_rbTreeFill(meterfs_ctx_t *ctx)
 			break;
 		}
 
-		meterfs_getFilePos(&f, ctx);
+		if ((err = meterfs_getFilePos(&f, ctx)) < 0) {
+			ret = err;
+			break;
+		}
 
 		if ((err = node_add(&f, (id_t)i, &ctx->nodesTree)) < 0) {
 			ret = err;
@@ -390,7 +452,7 @@ static int meterfs_rbTreeFill(meterfs_ctx_t *ctx)
 }
 
 
-int meterfs_writeRecord(file_t *f, const void *buff, size_t bufflen, meterfs_ctx_t *ctx)
+static int meterfs_writeRecord(file_t *f, const void *buff, size_t bufflen, meterfs_ctx_t *ctx)
 {
 	/* This function assumes that f contains valid lastidx and lastoff */
 	entry_t e;
@@ -411,8 +473,12 @@ int meterfs_writeRecord(file_t *f, const void *buff, size_t bufflen, meterfs_ctx
 	meterfs_powerctrl(1, ctx);
 
 	/* Check if we have to erase sector to write new data */
-	if (offset == 0 || (offset / ctx->sectorsz) != ((offset + f->header.recordsz + sizeof(entry_t)) / ctx->sectorsz))
-		ctx->eraseSector(ctx->offset + (f->header.sector * ctx->sectorsz) + (offset + f->header.recordsz + sizeof(entry_t)));
+	if (offset == 0 || (offset / ctx->sectorsz) != ((offset + f->header.recordsz + sizeof(entry_t)) / ctx->sectorsz)) {
+		if ((stat = ctx->eraseSector(ctx->offset + (f->header.sector * ctx->sectorsz) + (offset + f->header.recordsz + sizeof(entry_t)))) < 0) {
+			meterfs_powerctrl(0, ctx);
+			return stat;
+		}
+	}
 
 	e.id.no = f->lastidx.no + 1;
 	e.id.nvalid = 0;
@@ -454,7 +520,7 @@ int meterfs_writeRecord(file_t *f, const void *buff, size_t bufflen, meterfs_ctx
 }
 
 
-int meterfs_readRecord(file_t *f, void *buff, size_t bufflen, unsigned int idx, size_t offset, meterfs_ctx_t *ctx)
+static int meterfs_readRecord(file_t *f, void *buff, size_t bufflen, unsigned int idx, size_t offset, meterfs_ctx_t *ctx)
 {
 	/* This function assumes that f contains valid firstidx and firstoff */
 	unsigned int addr, pos;
@@ -619,11 +685,18 @@ int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size
 	}
 
 	/* Prepare data space */
-	for (i = 0; i < f.header.sectorcnt; ++i)
-		ctx->eraseSector(ctx->offset + (f.header.sector + i) * ctx->sectorsz);
+	for (i = 0; i < f.header.sectorcnt; ++i) {
+		if ((err = ctx->eraseSector(ctx->offset + (f.header.sector + i) * ctx->sectorsz)) < 0) {
+			meterfs_powerctrl(0, ctx);
+			return err;
+		}
+	}
 
 	headerNew = (ctx->hcurrAddr == 0) ? ctx->h1Addr : 0;
-	meterfs_eraseFileTable((headerNew == 0) ? 0 : 1, ctx);
+	if ((err = meterfs_eraseFileTable((headerNew == 0) ? 0 : 1, ctx)) < 0) {
+		meterfs_powerctrl(0, ctx);
+		return err;
+	}
 
 	/* Copy data from the old header */
 	for (i = 0; i < h.filecnt; ++i) {
@@ -656,7 +729,10 @@ int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size
 	ctx->hcurrAddr = headerNew;
 
 	/* Add new node to data structure. */
-	meterfs_getFilePos(&f, ctx);
+	if ((err = meterfs_getFilePos(&f, ctx)) < 0) {
+		meterfs_powerctrl(0, ctx);
+		return err;
+	}
 
 	meterfs_powerctrl(0, ctx);
 
@@ -788,7 +864,10 @@ int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *
 				return err;
 
 			meterfs_powerctrl(1, ctx);
-			meterfs_getFilePos(p, ctx);
+			if ((err = meterfs_getFilePos(p, ctx)) < 0) {
+				meterfs_powerctrl(0, ctx);
+				return err;
+			}
 			meterfs_powerctrl(0, ctx);
 
 			break;
@@ -806,10 +885,14 @@ int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *
 
 		case meterfs_chiperase:
 			meterfs_powerctrl(1, ctx);
-			ctx->partitionErase();
+			if ((err = ctx->partitionErase()) < 0) {
+				meterfs_powerctrl(0, ctx);
+				return err;
+			}
 			meterfs_powerctrl(0, ctx);
 			node_cleanAll(&ctx->nodesTree);
-			meterfs_checkfs(ctx);
+			if ((err = meterfs_checkfs(ctx)) < 0)
+				return err;
 			break;
 
 		default:
@@ -833,7 +916,8 @@ int meterfs_init(meterfs_ctx_t *ctx)
 
 	node_init(&ctx->nodesTree);
 
-	meterfs_checkfs(ctx);
+	if ((err = meterfs_checkfs(ctx)) < 0)
+		return err;
 
 	if ((err = meterfs_rbTreeFill(ctx)) < 0)
 		return err;
