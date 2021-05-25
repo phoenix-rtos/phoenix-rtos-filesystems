@@ -3,8 +3,8 @@
  *
  * Meterfs data types definitions
  *
- * Copyright 2017, 2018, 2020 Phoenix Systems
- * Author: Aleksander Kaminski, Hubert Buczynski
+ * Copyright 2017, 2018, 2020, 2021 Phoenix Systems
+ * Author: Aleksander Kaminski, Hubert Buczynski, Tomasz Korniluk
  *
  * This file is part of Phoenix-RTOS.
  *
@@ -70,8 +70,8 @@ typedef struct {
 
 	ssize_t (*read)(unsigned int addr, void *buff, size_t bufflen);
 	ssize_t (*write)(unsigned int addr, void *buff, size_t bufflen);
-	void (*eraseSector)(unsigned int addr);
-	void (*partitionErase)(void);
+	int (*eraseSector)(unsigned int addr);
+	int (*partitionErase)(void);
 	void (*powerCtrl)(int state);
 } meterfs_ctx_t;
 
