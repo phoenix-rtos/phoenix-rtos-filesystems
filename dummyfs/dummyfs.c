@@ -101,7 +101,7 @@ int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res, oid_t *dev)
 
 	o = dummyfs_get(res);
 
-	if (S_ISCHR(d->mode) || S_ISBLK(d->mode))
+	if (S_ISCHR(d->mode) || S_ISBLK(d->mode) || S_ISFIFO(d->mode))
 		memcpy(dev, &o->dev, sizeof(oid_t));
 	else
 		memcpy(dev, res, sizeof(oid_t));
@@ -192,7 +192,7 @@ int dummyfs_getattr(oid_t *oid, int type, int *attr)
 				*attr = otDir;
 			else if (S_ISREG(o->mode))
 				*attr = otFile;
-			else if (S_ISCHR(o->mode) || S_ISBLK(o->mode))
+			else if (S_ISCHR(o->mode) || S_ISBLK(o->mode) || S_ISFIFO(o->mode))
 				*attr = otDev;
 			else if (S_ISLNK(o->mode))
 				*attr = otSymlink;
@@ -401,7 +401,7 @@ int dummyfs_create(oid_t *dir, const char *name, oid_t *oid, uint32_t mode, oid_
 	dummyfs_object_t *o;
 	int ret;
 
-	if (S_ISCHR(mode) || S_ISBLK(mode))
+	if (S_ISCHR(mode) || S_ISBLK(mode) || S_ISFIFO(mode))
 		o = dev_find(dev, 1);
 	else
 		o = object_create();
@@ -414,7 +414,7 @@ int dummyfs_create(oid_t *dir, const char *name, oid_t *oid, uint32_t mode, oid_
 	o->mode = mode;
 	o->atime = o->mtime = o->ctime = time(NULL);
 
-	if (S_ISCHR(mode) || S_ISBLK(mode))
+	if (S_ISCHR(mode) || S_ISBLK(mode) || S_ISFIFO(mode))
 		memcpy(oid, dev, sizeof(oid_t));
 	else
 		memcpy(oid, &o->oid, sizeof(oid_t));
@@ -457,7 +457,7 @@ int dummyfs_destroy(oid_t *oid)
 		}
 		else if (S_ISDIR(o->mode))
 			dir_destroy(o);
-		else if (S_ISCHR(o->mode) || S_ISBLK(o->mode))
+		else if (S_ISCHR(o->mode) || S_ISBLK(o->mode) || S_ISFIFO(o->mode))
 			dev_destroy(&o->dev);
 
 		else if (o->mode == 0xaBadBabe) {
@@ -900,8 +900,10 @@ int main(int argc, char **argv)
 					break;
 
 				case otDev:
-					mode &= 0x1ff;
-					mode |= S_IFCHR;
+					if (!(S_ISCHR(mode) || S_ISBLK(mode) || S_ISFIFO(mode))) {
+						mode &= 0x1ff;
+						mode |= S_IFCHR;
+					}
 					break;
 
 				case otSymlink:
