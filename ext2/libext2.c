@@ -142,11 +142,11 @@ int libext2_handler(void *fdata, msg_t *msg)
 		break;
 
 	case mtGetAttr:
-		ext2_getattr(fs, msg->i.attr.oid.id, msg->i.attr.type, &msg->o.attr.val);
+		msg->o.attr.err = ext2_getattr(fs, msg->i.attr.oid.id, msg->i.attr.type, &msg->o.attr.val);
 		break;
 
 	case mtSetAttr:
-		ext2_setattr(fs, msg->i.attr.oid.id, msg->i.attr.type, msg->i.attr.val);
+		msg->o.attr.err = ext2_setattr(fs, msg->i.attr.oid.id, msg->i.attr.type, msg->i.attr.val);
 		break;
 
 	case mtLink:

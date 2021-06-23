@@ -918,11 +918,11 @@ int main(int argc, char **argv)
 				break;
 
 			case mtSetAttr:
-				dummyfs_setattr(&msg.i.attr.oid, msg.i.attr.type, msg.i.attr.val, msg.i.data, msg.i.size);
+				msg.o.attr.err = dummyfs_setattr(&msg.i.attr.oid, msg.i.attr.type, msg.i.attr.val, msg.i.data, msg.i.size);
 				break;
 
 			case mtGetAttr:
-				dummyfs_getattr(&msg.i.attr.oid, msg.i.attr.type, &msg.o.attr.val);
+				msg.o.attr.err = dummyfs_getattr(&msg.i.attr.oid, msg.i.attr.type, &msg.o.attr.val);
 				break;
 
 			case mtLookup:
