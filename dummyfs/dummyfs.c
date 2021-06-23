@@ -69,7 +69,7 @@ int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res, oid_t *dev)
 
 	if (!S_ISDIR(d->mode)) {
 		object_put(d);
-		return -EINVAL;
+		return -ENOTDIR;
 	}
 
 	object_lock(d);
