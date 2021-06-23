@@ -289,6 +289,8 @@ static int jffs2_srv_getattr(jffs2_partition_t *p, oid_t *oid, int type, int *at
 				*attr = otFile;
 			else if (S_ISCHR(inode->i_mode))
 				*attr = otDev;
+			else if (S_ISLNK(inode->i_mode))
+				*attr = otSymlink;
 			else
 				*attr = otUnknown;
 			break;
