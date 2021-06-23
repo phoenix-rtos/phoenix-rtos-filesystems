@@ -31,6 +31,7 @@ int libext2_handler(void *fdata, msg_t *msg)
 	ext2_obj_t *obj;
 	uint16_t mode;
 	oid_t dev;
+	unsigned int namelen;
 
 	switch (msg->type) {
 	case mtCreate:
@@ -56,7 +57,9 @@ int libext2_handler(void *fdata, msg_t *msg)
 			break;
 		}
 
-		if (ext2_lookup(fs, msg->i.create.dir.id, msg->i.data, (uint8_t)strlen(msg->i.data), &msg->o.create.oid.id, &dev) > 0) {
+		/* FIXME: casting namelen to (uint8_t) is not a good way to check for length constraints */
+		namelen = strlen(msg->i.data);
+		if (ext2_lookup(fs, msg->i.create.dir.id, msg->i.data, namelen, &msg->o.create.oid.id, &dev) > 0) {
 			if ((obj = ext2_obj_get(fs, msg->o.create.oid.id)) == NULL) {
 				msg->o.create.err = -EINVAL;
 				break;
@@ -81,7 +84,7 @@ int libext2_handler(void *fdata, msg_t *msg)
 					ext2_obj_put(fs, obj);
 
 					if ((dev.port == fs->oid.port) && (dev.id == msg->o.create.oid.id)) {
-						if (ext2_unlink(fs, msg->i.create.dir.id, msg->i.data, (uint8_t)strlen(msg->i.data)) < 0) {
+						if (ext2_unlink(fs, msg->i.create.dir.id, msg->i.data, namelen) < 0) {
 							msg->o.create.err = -EEXIST;
 							break;
 						}
@@ -101,7 +104,21 @@ int libext2_handler(void *fdata, msg_t *msg)
 			}
 		}
 
-		msg->o.create.err = ext2_create(fs, msg->i.create.dir.id, msg->i.data, (uint8_t)strlen(msg->i.data), &msg->i.create.dev, mode, &msg->o.create.oid.id);
+		msg->o.create.err = ext2_create(fs, msg->i.create.dir.id, msg->i.data, namelen, &msg->i.create.dev, mode, &msg->o.create.oid.id);
+
+		if (msg->o.create.err >= 0 && msg->i.create.type == otSymlink) {
+			const char *target = msg->i.data + namelen + 1;
+			int targetlen = strlen(target);
+			int ret;
+
+			/* not writing trailing '\0', readlink() does not append it */
+			ret = ext2_write(fs, msg->o.create.oid.id, 0, target, targetlen);
+			if (ret < 0) {
+				msg->o.create.err = ret;
+				ext2_destroy(fs, msg->o.create.oid.id);
+				msg->o.create.oid.id = 0;
+			}
+		}
 		break;
 
 	case mtDestroy:
