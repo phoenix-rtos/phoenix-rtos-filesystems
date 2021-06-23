@@ -900,11 +900,11 @@ int jffs2lib_message_handler(void *partition, msg_t *msg)
 		break;
 
 	case mtSetAttr:
-		msg->o.attr.val = jffs2_srv_setattr(p, &msg->i.attr.oid, msg->i.attr.type, msg->i.attr.val, msg->i.data, msg->i.size);
+		msg->o.attr.err = jffs2_srv_setattr(p, &msg->i.attr.oid, msg->i.attr.type, msg->i.attr.val, msg->i.data, msg->i.size);
 		break;
 
 	case mtGetAttr:
-		jffs2_srv_getattr(p, &msg->i.attr.oid, msg->i.attr.type, &msg->o.attr.val);
+		msg->o.attr.err = jffs2_srv_getattr(p, &msg->i.attr.oid, msg->i.attr.type, &msg->o.attr.val);
 		break;
 
 	case mtLookup:
