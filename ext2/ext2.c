@@ -38,6 +38,7 @@ int ext2_create(ext2_t *fs, id_t id, const char *name, uint8_t len, oid_t *dev, 
 	if (ext2_link(fs, id, name, len, obj->id) < 0)
 		return ext2_obj_destroy(fs, obj);
 
+	/* FIXME: FIFO */
 	if (S_ISCHR(obj->inode->mode) || S_ISBLK(obj->inode->mode))
 		memcpy(&obj->dev, dev, sizeof(oid_t));
 
@@ -292,10 +293,14 @@ int ext2_getattr(ext2_t *fs, id_t id, int type, int *attr)
 	case atType:
 		if (S_ISDIR(obj->inode->mode))
 			*attr = otDir;
-		else if (S_ISCHR(obj->inode->mode) || S_ISBLK(obj->inode->mode))
-			*attr = otDev;
-		else
+		else if (S_ISREG(obj->inode->mode))
 			*attr = otFile;
+		else if (S_ISCHR(obj->inode->mode) || S_ISBLK(obj->inode->mode) || S_ISFIFO(obj->inode->mode))
+			*attr = otDev;
+		else if (S_ISLNK(obj->inode->mode))
+			*attr = otSymlink;
+		else
+			*attr = otUnknown;
 		break;
 
 	case atCTime:
