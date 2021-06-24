@@ -429,8 +429,8 @@ int dummyfs_create(oid_t *dir, const char *name, oid_t *oid, uint32_t mode, oid_
 	if (S_ISLNK(mode)) {
 		const char* path = name + strlen(name) + 1;
 		object_lock(o);
-		// TODO: remove symlink if write failed
-		dummyfs_write_internal(o, 0, path, strlen(path) + 1);
+		/* TODO: remove symlink if write failed */
+		dummyfs_write_internal(o, 0, path, strlen(path));
 		object_unlock(o);
 	}
 
