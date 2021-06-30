@@ -329,6 +329,7 @@ int ext2_objs_init(ext2_t *fs)
 	lib_rbInit(&objs->used, ext2_obj_cmp, NULL);
 
 	fs->objs = objs;
+	fs->root = NULL;
 
 	return EOK;
 }
