@@ -30,7 +30,7 @@ int dir_find(dummyfs_object_t *dir, const char *name, oid_t *res)
 	int len;
 
 	if (!S_ISDIR(dir->mode))
-		return -EINVAL;
+		return -ENOTDIR;
 
 	if (e == NULL)
 		return -ENOENT;
@@ -64,7 +64,7 @@ int dir_replace(dummyfs_object_t *dir, const char *name, oid_t *new)
 	char *end = strchr(dirname, '/');
 
 	if (!S_ISDIR(dir->mode))
-		return -EINVAL;
+		return -ENOTDIR;
 
 	if (e == NULL)
 		return -ENOENT;
