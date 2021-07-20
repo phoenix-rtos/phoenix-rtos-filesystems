@@ -18,9 +18,6 @@
 #include "mtd.h"
 
 
-#define MTD_PAGE_SIZE 4096
-#define MTD_BLOCK_SIZE (64 * MTD_PAGE_SIZE)
-
 #define ECC_BITFLIP_THRESHOLD 10
 #define ECCN_BITFLIP_STRENGHT 14
 #define ECC0_BITFLIP_STRENGHT 16
@@ -364,6 +361,7 @@ struct dentry *mount_mtd(struct file_system_type *fs_type, int flags,
 	}
 
 	dma = flashdrv_dmanew();
+	const flashdrv_info_t *info = flashdrv_info();
 
 	if (dma == NULL)
 		return NULL;
@@ -371,13 +369,13 @@ struct dentry *mount_mtd(struct file_system_type *fs_type, int flags,
 	mtd->name = "micron";
 	mtd->dma = dma;
 	mtd->type = MTD_NANDFLASH;
-	mtd->erasesize = MTD_BLOCK_SIZE;
-	mtd->writesize = MTD_PAGE_SIZE;
+	mtd->erasesize = info->erasesz;
+	mtd->writesize = info->writesz;
 	mtd->flags = MTD_WRITEABLE;
-	mtd->size = MTD_BLOCK_SIZE * p->size;
+	mtd->size = info->erasesz * p->size;
 	mtd->oobsize = 16;
 	mtd->oobavail = 16;
-	mtd->start = p->start * 64;
+	mtd->start = p->start * (info->erasesz / info->writesz); /* in eraseblocks */
 
 	mutexCreate(&mtd->lock);
 
