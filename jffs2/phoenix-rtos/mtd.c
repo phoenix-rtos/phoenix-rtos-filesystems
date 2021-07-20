@@ -39,6 +39,7 @@ static int mtd_read_err(int ret, flashdrv_meta_t *meta, int status, void *data)
 			continue;
 		}
 		/* uncorrectable errors but maybe block is erased and we can still use it */
+		/* TODO: check if this actually works */
 		else if (meta->errors[i] == 0xfe) {
 			err = 0;
 			if (i == 0) {
@@ -261,40 +262,52 @@ int mtd_unpoint(struct mtd_info *mtd, loff_t from, size_t len)
 
 int mtd_erase(struct mtd_info *mtd, struct erase_info *instr)
 {
-	int ret;
+	uint32_t addr = mtd->start + (instr->addr / mtd->writesize);
+	uint32_t blockno = mtd->start + (instr->addr / mtd->erasesize);
 
 	if (instr->len != mtd->erasesize || instr->addr % mtd->erasesize) {
 		printf("mtd_erase: Invalid flash erase parametrs\n");
 		return -1;
 	}
 
-	mutexLock(mtd->lock);
-	if ((ret = flashdrv_erase(mtd->dma, (uint32_t)(instr->addr / mtd->writesize) + mtd->start))) {
-		printf("mtd_erase: Flash erase error 0x%d\n", ret);
-		return -1;
-	}
+	/* simulate non-blocking erase (TODO: make it actually non-blocking?) */
+	instr->state = MTD_ERASING;
 
+	mutexLock(mtd->lock);
+	if (!flashdrv_isbad(mtd->dma, addr)) {
+		if (flashdrv_erase(mtd->dma, addr) < 0) {
+			/* will be marked as a badblock by jffs logics eventually */
+			instr->fail_addr = instr->addr;
+			instr->state = MTD_ERASE_FAILED;
+		}
+		else {
+			instr->state = MTD_ERASE_DONE;
+		}
+	}
+	else {
+		/* block is bad - this should never happen, jffs2 maintains it's own badblock list */
+		printf("mtd_erase: tried to erase badblock %u, aborting\n", blockno);
+		instr->fail_addr = instr->addr;
+		instr->state = MTD_ERASE_FAILED;
+	}
 	mutexUnlock(mtd->lock);
 
-	instr->state = MTD_ERASE_DONE;
+	/* always return 0 and report failure via callback */
 	instr->callback(instr);
-
 	return 0;
 }
 
 
 int mtd_block_markbad(struct mtd_info *mtd, loff_t ofs)
 {
+	int ret;
+
 	mutexLock(mtd->lock);
-
-	memset(mtd->data_buf, 0xff, mtd->writesize);
-	memset(mtd->data_buf, 0, 2);
-
-	if (flashdrv_writeraw(mtd->dma, (ofs / mtd->writesize) + mtd->start, mtd->data_buf, mtd->writesize))
-		return -1;
+	/* address in pages, divide by pagesize */
+	ret = flashdrv_markbad(mtd->dma, mtd->start + (ofs / mtd->writesize));
 	mutexUnlock(mtd->lock);
 
-	return 0;
+	return ret;
 }
 
 
@@ -322,19 +335,11 @@ void *mtd_kmalloc_up_to(const struct mtd_info *mtd, size_t *size)
 
 int mtd_block_isbad(struct mtd_info *mtd, loff_t ofs)
 {
-
-	int ret = 0;
+	int ret;
 
 	mutexLock(mtd->lock);
-
-	if (flashdrv_readraw(mtd->dma, (ofs / mtd->writesize) + mtd->start, mtd->data_buf, mtd->writesize)) {
-		mutexUnlock(mtd->lock);
-		return -1;
-	}
-
-	if(!((char *)mtd->data_buf)[0])
-		ret = 1;
-
+	/* address in pages, divide by pagesize */
+	ret = flashdrv_isbad(mtd->dma, mtd->start + (ofs / mtd->writesize));
 	mutexUnlock(mtd->lock);
 
 	return ret;
