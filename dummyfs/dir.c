@@ -19,14 +19,14 @@
 #include <string.h>
 
 #include "dummyfs.h"
+#include "dir.h"
 
 
 int dir_find(dummyfs_object_t *dir, const char *name, oid_t *res)
 {
 
 	dummyfs_dirent_t *e = dir->entries;
-	char *dirname = strdup(name);
-	char *end = strchr(dirname, '/');
+	char *dirname, *end;
 	int len;
 
 	if (!S_ISDIR(dir->mode))
@@ -35,6 +35,8 @@ int dir_find(dummyfs_object_t *dir, const char *name, oid_t *res)
 	if (e == NULL)
 		return -ENOENT;
 
+	dirname = strdup(name);
+	end = strchr(dirname, '/');
 	if (end != NULL)
 		*end = 0;
 
@@ -60,8 +62,7 @@ int dir_replace(dummyfs_object_t *dir, const char *name, oid_t *new)
 {
 
 	dummyfs_dirent_t *e = dir->entries;
-	char *dirname = strdup(name);
-	char *end = strchr(dirname, '/');
+	char *dirname, *end;
 
 	if (!S_ISDIR(dir->mode))
 		return -ENOTDIR;
@@ -69,6 +70,8 @@ int dir_replace(dummyfs_object_t *dir, const char *name, oid_t *new)
 	if (e == NULL)
 		return -ENOENT;
 
+	dirname = strdup(name);
+	end = strchr(dirname, '/');
 	if (end != NULL)
 		*end = 0;
 
@@ -167,9 +170,12 @@ int dir_remove(dummyfs_object_t *dir, const char *name)
 
 	do {
 		if (!strcmp(e->name, (char *)name) && !e->deleted) {
-			dir->size -= strlen(e->name);
+			dir->size -= e->len;
 			e->deleted = 1;
-			dir->dirty = 1;
+
+			if (++dir->dirty > DUMMYFS_DIRTY_DIR_AUTOCLEANUP_THRESH)
+				dir_clean(dir);
+
 			return EOK;
 		}
 		e = e->next;
