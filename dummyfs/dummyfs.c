@@ -370,7 +370,7 @@ int dummyfs_unlink(oid_t *dir, const char *name)
 		object_unlock(d);
 		object_put(d);
 		object_put(o);
-		return -EINVAL;
+		return -ENOTEMPTY;
 	}
 
 	ret = dir_remove(d, name);

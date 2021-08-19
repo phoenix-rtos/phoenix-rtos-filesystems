@@ -57,6 +57,7 @@ dummyfs_object_t *object_create(void)
 	}
 
 	if (dummyfs_incsz(sizeof(dummyfs_object_t)) != EOK) {
+		free(r);
 		mutexUnlock(dummyfs_common.mutex);
 		mutexUnlock(olock);
 		return NULL;

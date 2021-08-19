@@ -23,6 +23,9 @@
 
 #define DUMMYFS_SIZE_MAX 32 * 1024 * 1024
 
+/* threshold for cleaning directory from deleted dirents */
+#define DUMMYFS_DIRTY_DIR_AUTOCLEANUP_THRESH 8
+
 
 typedef struct _dummyfs_dirent_t {
 	char *name;
