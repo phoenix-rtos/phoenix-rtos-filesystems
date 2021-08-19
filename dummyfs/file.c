@@ -135,17 +135,20 @@ int dummyfs_truncate_internal(dummyfs_object_t *o, size_t size)
 				break;
 		} while (chunk != o->chunks);
 
-		if (chunk->offs + chunk->size > size)
-		{
+		if (chunk->offs + chunk->size > size) {
 			chunksz = size - chunk->offs;
 			tmp = realloc(chunk->data, chunksz);
-			if (tmp == NULL)
+			if (chunksz > 0 && tmp == NULL)
 				return -ENOMEM;
 
 			dummyfs_decsz(chunk->size - chunksz);
 			chunk->used = chunk->used > chunksz ? chunksz : chunk->used;
 			chunk->size = chunksz;
 			chunk->data = tmp;
+
+			/* check if this chunk needs to also be removed; deleting first chunk (shrinking to 0) is a special case */
+			if (chunksz == 0 && size != 0)
+				chunk = chunk->prev;
 		}
 
 		/* chunk now points to last area that shuold be preserved - everything after it will be freed. */
