@@ -75,7 +75,7 @@ int ext2_destroy(ext2_t *fs, id_t id)
 
 int ext2_lookup(ext2_t *fs, id_t id, const char *name, uint8_t len, id_t *res, oid_t *dev)
 {
-	ext2_obj_t *dir, *obj;
+	ext2_obj_t *dir, *obj = NULL;
 	uint8_t i, j;
 	int err;
 
@@ -264,7 +264,7 @@ int ext2_truncate(ext2_t *fs, id_t id, size_t size)
 }
 
 
-int ext2_getattr(ext2_t *fs, id_t id, int type, int *attr)
+int ext2_getattr(ext2_t *fs, id_t id, int type, long long *attr)
 {
 	ext2_obj_t *obj;
 
@@ -331,7 +331,7 @@ int ext2_getattr(ext2_t *fs, id_t id, int type, int *attr)
 }
 
 
-int ext2_setattr(ext2_t *fs, id_t id, int type, int attr)
+int ext2_setattr(ext2_t *fs, id_t id, int type, long long attr)
 {
 	ext2_obj_t *obj;
 	int err = EOK;

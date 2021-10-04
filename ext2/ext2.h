@@ -97,11 +97,11 @@ extern int ext2_truncate(ext2_t *fs, id_t id, size_t size);
 
 
 /* Retrives file attributes */
-extern int ext2_getattr(ext2_t *fs, id_t id, int type, int *attr);
+extern int ext2_getattr(ext2_t *fs, id_t id, int type, long long *attr);
 
 
 /* Sets file attributes */
-extern int ext2_setattr(ext2_t *fs, id_t id, int type, int attr);
+extern int ext2_setattr(ext2_t *fs, id_t id, int type, long long attr);
 
 
 /* Adds a link */

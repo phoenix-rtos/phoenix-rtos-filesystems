@@ -46,7 +46,7 @@ int ext2_block_write(ext2_t *fs, uint32_t bno, const void *buff, uint32_t n)
 int ext2_block_destroy(ext2_t *fs, uint32_t bno, uint32_t n)
 {
 	uint32_t group = (bno - 1) / fs->sb->groupBlocks;
-	uint32_t i, j, offset, pgroup = group;
+	uint32_t i, j, pgroup = group, offset = 0;
 	void *bmp;
 	int err;
 
