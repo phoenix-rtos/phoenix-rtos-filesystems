@@ -114,7 +114,7 @@ int dummyfs_lookup(oid_t *dir, const char *name, oid_t *res, oid_t *dev)
 }
 
 
-int dummyfs_setattr(oid_t *oid, int type, int attr, const void *data, size_t size)
+int dummyfs_setattr(oid_t *oid, int type, long long attr, const void *data, size_t size)
 {
 	dummyfs_object_t *o;
 	int ret = EOK;
@@ -161,7 +161,7 @@ int dummyfs_setattr(oid_t *oid, int type, int attr, const void *data, size_t siz
 }
 
 
-int dummyfs_getattr(oid_t *oid, int type, int *attr)
+int dummyfs_getattr(oid_t *oid, int type, long long *attr)
 {
 	dummyfs_object_t *o;
 
@@ -640,7 +640,7 @@ int dummyfs_do_mount(const char *path, oid_t *oid)
 	msg.i.data = oid;
 	msg.i.size = sizeof(oid_t);
 
-	if ((err = msgSend(toid.port, &msg)) < 0)
+	if (((err = msgSend(toid.port, &msg)) < 0) || ((err = msg.o.attr.err) < 0))
 		return err;
 
 	return 0;

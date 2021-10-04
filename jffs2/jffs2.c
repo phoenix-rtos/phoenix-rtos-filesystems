@@ -184,7 +184,7 @@ static int jffs2_srv_lookup(jffs2_partition_t *p, oid_t *dir, const char *name, 
 }
 
 
-static int jffs2_srv_setattr(jffs2_partition_t *p, oid_t *oid, int type, int attr, void *data, ssize_t size)
+static int jffs2_srv_setattr(jffs2_partition_t *p, oid_t *oid, int type, long long attr, void *data, ssize_t size)
 {
 	struct iattr iattr;
 	struct inode *inode;
@@ -248,7 +248,7 @@ static int jffs2_srv_setattr(jffs2_partition_t *p, oid_t *oid, int type, int att
 }
 
 
-static int jffs2_srv_getattr(jffs2_partition_t *p, oid_t *oid, int type, int *attr)
+static int jffs2_srv_getattr(jffs2_partition_t *p, oid_t *oid, int type, long long *attr)
 {
 	struct inode *inode;
 
