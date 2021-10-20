@@ -1,0 +1,9 @@
+#
+# Makefile for Phoenix-RTOS 3 filesystems
+#
+# Zynq-7000 filesystems
+#
+# Copyright 2021 Phoenix Systems
+#
+
+DEFAULT_COMPONENTS := dummyfs
