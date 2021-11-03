@@ -16,7 +16,7 @@
 #include <sys/threads.h>
 #include <string.h>
 
-#include "dummyfs.h"
+#include "dummyfs_internal.h"
 #include "object.h"
 #include "dev.h"
 

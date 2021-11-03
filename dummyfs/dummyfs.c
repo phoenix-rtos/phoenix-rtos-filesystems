@@ -29,7 +29,7 @@
 #include <poll.h>
 #include <phoenix/sysinfo.h>
 
-#include "dummyfs.h"
+#include "dummyfs_internal.h"
 #include "dir.h"
 #include "file.h"
 #include "object.h"

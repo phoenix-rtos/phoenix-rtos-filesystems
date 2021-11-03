@@ -22,7 +22,7 @@
 #include <posix/idtree.h>
 #include <unistd.h>
 
-#include "dummyfs.h"
+#include "dummyfs_internal.h"
 #include "dir.h"
 
 idtree_t dummytree = { 0 };

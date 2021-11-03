@@ -18,7 +18,7 @@
 #include <sys/stat.h>
 #include <string.h>
 
-#include "dummyfs.h"
+#include "dummyfs_internal.h"
 #include "dir.h"
 
 

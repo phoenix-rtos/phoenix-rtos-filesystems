@@ -15,7 +15,7 @@
 #define _DUMMYFS_DEV_H_
 
 #include <sys/msg.h>
-#include "dummyfs.h"
+#include "dummyfs_internal.h"
 #include "object.h"
 
 extern dummyfs_object_t *dev_find(oid_t *oid, int create);

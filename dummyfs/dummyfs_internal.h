@@ -5,15 +5,15 @@
  *
  * Copyright 2012, 2018 Phoenix Systems
  * Copyright 2008 Pawel Pisarczyk
- * Author: Pawel Pisarczyk, Kamil Amanowicz
+ * Author: Pawel Pisarczyk, Kamil Amanowicz, Maciej
  *
  * This file is part of Phoenix-RTOS.
  *
  * %LICENSE%
  */
 
-#ifndef _DUMMYFS_H_
-#define _DUMMYFS_H_
+#ifndef _DUMMYFS_INTERNAL_H_
+#define _DUMMYFS_INTERNAL_H_
 
 #include <errno.h>
 #include <stdint.h>
@@ -101,4 +101,4 @@ static inline void dummyfs_decsz(int size) {
 }
 
 
-#endif
+#endif /* _DUMMYFS_INTERNAL_H_ */
