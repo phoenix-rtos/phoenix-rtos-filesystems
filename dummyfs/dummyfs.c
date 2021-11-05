@@ -590,3 +590,134 @@ int dummyfs_close(dummyfs_t *ctx, oid_t *oid)
 	object_put(ctx, o);
 	return EOK;
 }
+
+
+int dummyfs_truncate(dummyfs_t *ctx, oid_t *oid, size_t size)
+{
+	dummyfs_object_t *o;
+	int ret;
+
+	o = object_get(ctx, oid->id);
+
+	if (o == NULL)
+		return -EINVAL;
+
+	if (!S_ISREG(o->mode)) {
+		object_put(ctx, o);
+		return -EACCES;
+	}
+
+	if (o->size == size) {
+		object_put(ctx, o);
+		return EOK;
+	}
+
+	object_lock(ctx, o);
+
+	ret = dummyfs_truncate_internal(ctx, o, size);
+
+	object_unlock(ctx, o);
+	object_put(ctx, o);
+
+	return ret;
+}
+
+
+
+
+int dummyfs_read(dummyfs_t *ctx, oid_t *oid, offs_t offs, char *buff, size_t len)
+{
+	int ret = EOK;
+	int readsz;
+	int readoffs;
+	dummyfs_chunk_t *chunk;
+	dummyfs_object_t *o;
+
+	o = object_get(ctx, oid->id);
+
+	if (o == NULL)
+		return -EINVAL;
+
+	if (!S_ISREG(o->mode) && !S_ISLNK(o->mode) && o->mode != 0xaBadBabe)
+		ret = -EINVAL;
+
+	if (buff == NULL)
+		ret = -EINVAL;
+
+	if (o->size <= offs) {
+		object_put(ctx, o);
+		return 0;
+	}
+
+	if (ret != EOK) {
+		object_put(ctx, o);
+		return ret;
+	}
+
+	if (len == 0) {
+		object_put(ctx, o);
+		return EOK;
+	}
+
+	object_lock(ctx, o);
+	for (chunk = o->chunks; chunk->next != o->chunks; chunk = chunk->next) {
+		if (chunk->offs + chunk->size > offs) {
+			break;
+		}
+	}
+
+	do {
+		readoffs = offs - chunk->offs;
+		readsz = len > chunk->size - readoffs ? chunk->size - readoffs : len;
+		if (chunk->used)
+			memcpy(buff, chunk->data + readoffs, readsz);
+		else
+			memset(buff, 0, readsz);
+
+		len  -= readsz;
+		buff += readsz;
+		offs += readsz;
+		ret  += readsz;
+
+		chunk = chunk->next;
+
+	} while (len && chunk != o->chunks);
+
+	o->atime = time(NULL);
+	object_unlock(ctx, o);
+	object_put(ctx, o);
+
+	return ret;
+}
+
+
+int dummyfs_write(dummyfs_t *ctx, oid_t *oid, offs_t offs, const char *buff, size_t len)
+{
+	dummyfs_object_t *o;
+	int ret = EOK;
+
+	o = object_get(ctx, oid->id);
+
+	if (o == NULL)
+		return -EINVAL;
+
+	if (!S_ISREG(o->mode))
+		ret = -EINVAL;
+
+	if (buff == NULL)
+		ret = -EINVAL;
+
+	if (ret != EOK) {
+		object_put(ctx, o);
+		return ret;
+	}
+
+	object_lock(ctx, o);
+
+	ret = dummyfs_write_internal(ctx, o, offs, buff, len);
+
+	object_unlock(ctx, o);
+	object_put(ctx, o);
+
+	return ret;
+}
