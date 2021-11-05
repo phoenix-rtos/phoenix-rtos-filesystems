@@ -406,10 +406,31 @@ int dummyfs_unlink(dummyfs_t *ctx, oid_t *dir, const char *name)
 }
 
 
-int dummyfs_create(dummyfs_t *ctx, oid_t *dir, const char *name, oid_t *oid, uint32_t mode, oid_t *dev)
+int dummyfs_create(dummyfs_t *ctx, oid_t *dir, const char *name, oid_t *oid, unsigned mode, int type, oid_t *dev)
 {
 	dummyfs_object_t *o;
 	int ret;
+
+	switch (type) {
+		case otDir:
+			mode |= S_IFDIR;
+			break;
+
+		case otFile:
+			mode |= S_IFREG;
+			break;
+
+		case otDev:
+			if (!(S_ISCHR(mode) || S_ISBLK(mode) || S_ISFIFO(mode))) {
+				mode &= 0x1ff;
+				mode |= S_IFCHR;
+			}
+			break;
+
+		case otSymlink:
+			mode |= S_IFLNK;
+			break;
+	}
 
 	if (S_ISCHR(mode) || S_ISBLK(mode) || S_ISFIFO(mode))
 		o = dev_find(ctx, dev, 1);
@@ -591,7 +612,7 @@ int fetch_modules(dummyfs_t *ctx)
 	int i, progsz;
 
 	progsz = syspageprog(NULL, -1);
-	dummyfs_create(ctx, &root, "syspage", &sysoid, S_IFDIR | 0666, NULL);
+	dummyfs_create(ctx, &root, "syspage", &sysoid, 0666, otDir, NULL);
 
 	for (i = 0; i < progsz; i++) {
 		syspageprog(&prog, i);
@@ -603,7 +624,7 @@ int fetch_modules(dummyfs_t *ctx)
 		if (!prog_addr)
 			continue;
 #endif
-		dummyfs_create(ctx, &sysoid, prog.name, &toid, S_IFREG | 0755, NULL);
+		dummyfs_create(ctx, &sysoid, prog.name, &toid, 0755, otFile, NULL);
 		o = object_get(ctx, toid.id);
 
 		if (!o) {
@@ -714,7 +735,6 @@ int main(int argc, char **argv)
 	const char *remount_path = NULL;
 	int non_fs_namespace = 0;
 	int daemonize = 0;
-	uint32_t mode;
 	int c;
 
 #ifdef TARGET_IMX6ULL
@@ -903,28 +923,7 @@ int main(int argc, char **argv)
 				break;
 
 			case mtCreate:
-				mode = msg.i.create.mode;
-				switch (msg.i.create.type) {
-				case otDir:
-					mode |= S_IFDIR;
-					break;
-
-				case otFile:
-					mode |= S_IFREG;
-					break;
-
-				case otDev:
-					if (!(S_ISCHR(mode) || S_ISBLK(mode) || S_ISFIFO(mode))) {
-						mode &= 0x1ff;
-						mode |= S_IFCHR;
-					}
-					break;
-
-				case otSymlink:
-					mode |= S_IFLNK;
-					break;
-				}
-				msg.o.create.err = dummyfs_create(&ctx, &msg.i.create.dir, msg.i.data, &msg.o.create.oid, mode, &msg.i.create.dev);
+				msg.o.create.err = dummyfs_create(&ctx, &msg.i.create.dir, msg.i.data, &msg.o.create.oid, msg.i.create.mode, msg.i.create.type, &msg.i.create.dev);
 				break;
 
 			case mtDestroy:
