@@ -93,6 +93,5 @@ int dummyfs_incsz(dummyfs_t *ctx, int size);
 
 void dummyfs_decsz(dummyfs_t *ctx, int size);
 
-int dummyfs_destroy(dummyfs_t *ctx, oid_t *oid);
 
 #endif /* _DUMMYFS_INTERNAL_H_ */

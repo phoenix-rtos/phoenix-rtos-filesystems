@@ -15,6 +15,8 @@
 #ifndef _DUMMYFS_DIR_H_
 #define _DUMMYFS_DIR_H_
 
+#include "dummyfs_internal.h"
+
 extern int dir_find(dummyfs_object_t *dir, const char *name, oid_t *res);
 
 

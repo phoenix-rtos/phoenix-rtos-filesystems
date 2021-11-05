@@ -23,6 +23,7 @@
 #include <unistd.h>
 
 #include "dummyfs_internal.h"
+#include "dummyfs.h"
 #include "dir.h"
 
 

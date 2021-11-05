@@ -23,6 +23,7 @@
 
 #include <phoenix/sysinfo.h>
 
+#include "dummyfs_internal.h"
 #include "dummyfs.h"
 #include "object.h"
 #include "dev.h"
