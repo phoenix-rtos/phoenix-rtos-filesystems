@@ -23,38 +23,38 @@
 #include "file.h"
 #include "object.h"
 
-int dummyfs_truncate(oid_t *oid, size_t size)
+int dummyfs_truncate(dummyfs_t *ctx, oid_t *oid, size_t size)
 {
 	dummyfs_object_t *o;
 	int ret;
 
-	o = object_get(oid->id);
+	o = object_get(ctx, oid->id);
 
 	if (o == NULL)
 		return -EINVAL;
 
 	if (!S_ISREG(o->mode)) {
-		object_put(o);
+		object_put(ctx, o);
 		return -EACCES;
 	}
 
 	if (o->size == size) {
-		object_put(o);
+		object_put(ctx, o);
 		return EOK;
 	}
 
-	object_lock(o);
+	object_lock(ctx, o);
 
-	ret = dummyfs_truncate_internal(o, size);
+	ret = dummyfs_truncate_internal(ctx, o, size);
 
-	object_unlock(o);
-	object_put(o);
+	object_unlock(ctx, o);
+	object_put(ctx, o);
 
 	return ret;
 }
 
 
-int dummyfs_truncate_internal(dummyfs_object_t *o, size_t size)
+int dummyfs_truncate_internal(dummyfs_t *ctx, dummyfs_object_t *o, size_t size)
 {
 	dummyfs_chunk_t *chunk, *trash;
 	char *tmp = NULL;
@@ -66,14 +66,14 @@ int dummyfs_truncate_internal(dummyfs_object_t *o, size_t size)
 		/* expansion */
 		if (chunk == NULL) {
 			/* allocate new chunk */
-			if (dummyfs_incsz(sizeof(dummyfs_chunk_t)) != EOK) {
+			if (dummyfs_incsz(ctx, sizeof(dummyfs_chunk_t)) != EOK) {
 				return -ENOMEM;
 			}
 
 			chunk = malloc(sizeof(dummyfs_chunk_t));
 
 			if (chunk == NULL) {
-				dummyfs_decsz(sizeof(dummyfs_chunk_t));
+				dummyfs_decsz(ctx, sizeof(dummyfs_chunk_t));
 				return -ENOMEM;
 			}
 
@@ -89,23 +89,23 @@ int dummyfs_truncate_internal(dummyfs_object_t *o, size_t size)
 			/* reallocate last chunk or alloc new one if reallocation fails */
 			chunk->prev->size += size - o->size;
 			if (chunk->prev->used) {
-				if (dummyfs_incsz(size - o->size) != EOK) {
+				if (dummyfs_incsz(ctx, size - o->size) != EOK) {
 					return -ENOMEM;
 				}
 
 				tmp = realloc(chunk->prev->data, chunk->prev->size);
 				if (tmp == NULL) {
-					dummyfs_decsz(size - o->size);
+					dummyfs_decsz(ctx, size - o->size);
 					chunk->prev->size -= size - o->size;
 
-					if (dummyfs_incsz(sizeof(dummyfs_chunk_t)) != EOK) {
+					if (dummyfs_incsz(ctx, sizeof(dummyfs_chunk_t)) != EOK) {
 						return -ENOMEM;
 					}
 
 					chunk = malloc(sizeof(dummyfs_chunk_t));
 
 					if (chunk == NULL) {
-						dummyfs_decsz(sizeof(dummyfs_chunk_t));
+						dummyfs_decsz(ctx, sizeof(dummyfs_chunk_t));
 						return -ENOMEM;
 					}
 
@@ -141,7 +141,7 @@ int dummyfs_truncate_internal(dummyfs_object_t *o, size_t size)
 			if (chunksz > 0 && tmp == NULL)
 				return -ENOMEM;
 
-			dummyfs_decsz(chunk->size - chunksz);
+			dummyfs_decsz(ctx, chunk->size - chunksz);
 			chunk->used = chunk->used > chunksz ? chunksz : chunk->used;
 			chunk->size = chunksz;
 			chunk->data = tmp;
@@ -157,14 +157,14 @@ int dummyfs_truncate_internal(dummyfs_object_t *o, size_t size)
 		o->chunks->prev = chunk;
 		while (trash != o->chunks) {
 			chunk = trash->next;
-			dummyfs_decsz(sizeof(dummyfs_chunk_t) + trash->size);
+			dummyfs_decsz(ctx, sizeof(dummyfs_chunk_t) + trash->size);
 			free(trash->data);
 			free(trash);
 			trash = chunk;
 		}
 
 		if (size == 0) {
-			dummyfs_decsz(sizeof(dummyfs_chunk_t) + trash->size);
+			dummyfs_decsz(ctx, sizeof(dummyfs_chunk_t) + trash->size);
 			o->chunks = NULL;
 			free(trash->data);
 			free(trash);
@@ -178,7 +178,7 @@ int dummyfs_truncate_internal(dummyfs_object_t *o, size_t size)
 }
 
 
-int dummyfs_read(oid_t *oid, offs_t offs, char *buff, size_t len)
+int dummyfs_read(dummyfs_t *ctx, oid_t *oid, offs_t offs, char *buff, size_t len)
 {
 	int ret = EOK;
 	int readsz;
@@ -186,7 +186,7 @@ int dummyfs_read(oid_t *oid, offs_t offs, char *buff, size_t len)
 	dummyfs_chunk_t *chunk;
 	dummyfs_object_t *o;
 
-	o = object_get(oid->id);
+	o = object_get(ctx, oid->id);
 
 	if (o == NULL)
 		return -EINVAL;
@@ -198,21 +198,21 @@ int dummyfs_read(oid_t *oid, offs_t offs, char *buff, size_t len)
 		ret = -EINVAL;
 
 	if (o->size <= offs) {
-		object_put(o);
+		object_put(ctx, o);
 		return 0;
 	}
 
 	if (ret != EOK) {
-		object_put(o);
+		object_put(ctx, o);
 		return ret;
 	}
 
 	if (len == 0) {
-		object_put(o);
+		object_put(ctx, o);
 		return EOK;
 	}
 
-	object_lock(o);
+	object_lock(ctx, o);
 	for (chunk = o->chunks; chunk->next != o->chunks; chunk = chunk->next) {
 		if (chunk->offs + chunk->size > offs) {
 			break;
@@ -237,19 +237,19 @@ int dummyfs_read(oid_t *oid, offs_t offs, char *buff, size_t len)
 	} while (len && chunk != o->chunks);
 
 	o->atime = time(NULL);
-	object_unlock(o);
-	object_put(o);
+	object_unlock(ctx, o);
+	object_put(ctx, o);
 
 	return ret;
 }
 
 
-int dummyfs_write(oid_t *oid, offs_t offs, const char *buff, size_t len)
+int dummyfs_write(dummyfs_t *ctx, oid_t *oid, offs_t offs, const char *buff, size_t len)
 {
 	dummyfs_object_t *o;
 	int ret = EOK;
 
-	o = object_get(oid->id);
+	o = object_get(ctx, oid->id);
 
 	if (o == NULL)
 		return -EINVAL;
@@ -261,21 +261,21 @@ int dummyfs_write(oid_t *oid, offs_t offs, const char *buff, size_t len)
 		ret = -EINVAL;
 
 	if (ret != EOK) {
-		object_put(o);
+		object_put(ctx, o);
 		return ret;
 	}
 
-	object_lock(o);
+	object_lock(ctx, o);
 
-	ret = dummyfs_write_internal(o, offs, buff, len);
+	ret = dummyfs_write_internal(ctx, o, offs, buff, len);
 
-	object_unlock(o);
-	object_put(o);
+	object_unlock(ctx, o);
+	object_put(ctx, o);
 
 	return ret;
 }
 
-int dummyfs_write_internal(dummyfs_object_t *o, offs_t offs, const char *buff, size_t len)
+int dummyfs_write_internal(dummyfs_t *ctx, dummyfs_object_t *o, offs_t offs, const char *buff, size_t len)
 {
 
 	int writesz, writeoffs;
@@ -287,7 +287,7 @@ int dummyfs_write_internal(dummyfs_object_t *o, offs_t offs, const char *buff, s
 	}
 
 	if (offs + len > o->size) {
-		if ((ret = dummyfs_truncate_internal(o, offs + len)) != EOK)
+		if ((ret = dummyfs_truncate_internal(ctx, o, offs + len)) != EOK)
 			return ret;
 	}
 
@@ -302,14 +302,14 @@ int dummyfs_write_internal(dummyfs_object_t *o, offs_t offs, const char *buff, s
 		writesz = len > chunk->size - writeoffs ? chunk->size - writeoffs : len;
 
 		if (!chunk->used) {
-			if (dummyfs_incsz(chunk->size) != EOK) {
+			if (dummyfs_incsz(ctx, chunk->size) != EOK) {
 				return -ENOMEM;
 			}
 
 			chunk->data = malloc(chunk->size);
 
 			if (chunk->data == NULL) {
-				dummyfs_decsz(chunk->size);
+				dummyfs_decsz(ctx, chunk->size);
 				return -ENOMEM;
 			}
 

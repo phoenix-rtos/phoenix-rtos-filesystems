@@ -28,12 +28,6 @@ typedef struct {
 } dummyfs_dev_t;
 
 
-struct {
-	rbtree_t dev;
-	handle_t mutex;
-} dev_common;
-
-
 static int dev_cmp(rbnode_t *n1, rbnode_t *n2)
 {
 	dummyfs_dev_t *d1 = lib_treeof(dummyfs_dev_t, linkage, n1);
@@ -49,7 +43,7 @@ static int dev_cmp(rbnode_t *n1, rbnode_t *n2)
 }
 
 
-dummyfs_object_t *dev_find(oid_t *oid, int create)
+dummyfs_object_t *dev_find(dummyfs_t *ctx, oid_t *oid, int create)
 {
 	dummyfs_dev_t find, *entry;
 	dummyfs_object_t *o;
@@ -59,22 +53,22 @@ dummyfs_object_t *dev_find(oid_t *oid, int create)
 
 	memcpy(&find.dev, oid, sizeof(oid_t));
 
-	mutexLock(dev_common.mutex);
-	entry = lib_treeof(dummyfs_dev_t, linkage, lib_rbFind(&dev_common.dev, &find.linkage));
+	mutexLock(ctx->devlock);
+	entry = lib_treeof(dummyfs_dev_t, linkage, lib_rbFind(&ctx->devtree, &find.linkage));
 
 	if (!create || entry != NULL) {
-		o = entry != NULL ? object_get(entry->id) : NULL;
-		mutexUnlock(dev_common.mutex);
+		o = entry != NULL ? object_get(ctx, entry->id) : NULL;
+		mutexUnlock(ctx->devlock);
 		return o;
 	}
 
 	if ((entry = malloc(sizeof(dummyfs_dev_t))) == NULL) {
-		mutexUnlock(dev_common.mutex);
+		mutexUnlock(ctx->devlock);
 		return NULL;
 	}
 
-	if ((o = object_create()) == NULL) {
-		mutexUnlock(dev_common.mutex);
+	if ((o = object_create(ctx)) == NULL) {
+		mutexUnlock(ctx->devlock);
 		free(entry);
 		return NULL;
 	}
@@ -82,35 +76,35 @@ dummyfs_object_t *dev_find(oid_t *oid, int create)
 	memcpy(&entry->dev, oid, sizeof(oid_t));
 	memcpy(&o->dev, oid, sizeof(oid_t));
 	entry->id = o->oid.id;
-	lib_rbInsert(&dev_common.dev, &entry->linkage);
-	mutexUnlock(dev_common.mutex);
+	lib_rbInsert(&ctx->devtree, &entry->linkage);
+	mutexUnlock(ctx->devlock);
 	return o;
 }
 
 
-int dev_destroy(oid_t *oid)
+int dev_destroy(dummyfs_t *ctx, oid_t *oid)
 {
 	dummyfs_dev_t find, *entry;
 
 	memcpy(&find.dev, oid, sizeof(oid_t));
 
-	mutexLock(dev_common.mutex);
-	entry = lib_treeof(dummyfs_dev_t, linkage, lib_rbFind(&dev_common.dev, &find.linkage));
+	mutexLock(ctx->devlock);
+	entry = lib_treeof(dummyfs_dev_t, linkage, lib_rbFind(&ctx->devtree, &find.linkage));
 
 	if (entry == NULL) {
-		mutexUnlock(dev_common.mutex);
+		mutexUnlock(ctx->devlock);
 		return -EINVAL;
 	}
 
-	lib_rbRemove(&dev_common.dev, &entry->linkage);
+	lib_rbRemove(&ctx->devtree, &entry->linkage);
 	free(entry);
-	mutexUnlock(dev_common.mutex);
+	mutexUnlock(ctx->devlock);
 	return EOK;
 }
 
 
-void dev_init()
+void dev_init(dummyfs_t *ctx)
 {
-	mutexCreate(&dev_common.mutex);
-	lib_rbInit(&dev_common.dev, dev_cmp, NULL);
+	mutexCreate(&ctx->devlock);
+	lib_rbInit(&ctx->devtree, dev_cmp, NULL);
 }

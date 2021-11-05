@@ -78,27 +78,21 @@ typedef struct _dummyfs_object_t {
 } dummyfs_object_t;
 
 
-struct _dummyfs_common_t{
+typedef struct {
 	uint32_t port;
 	handle_t mutex;
 	int size;
-};
+	idtree_t dummytree;
+	handle_t olock;
+	rbtree_t devtree;
+	handle_t devlock;
+	char *mountpt;
+} dummyfs_t;
 
+int dummyfs_incsz(dummyfs_t *ctx, int size);
 
-extern struct _dummyfs_common_t dummyfs_common;
+void dummyfs_decsz(dummyfs_t *ctx, int size);
 
-
-static inline int dummyfs_incsz(int size) {
-	if (dummyfs_common.size + size > DUMMYFS_SIZE_MAX)
-		return -ENOMEM;
-	dummyfs_common.size += size;
-	return EOK;
-}
-
-
-static inline void dummyfs_decsz(int size) {
-	dummyfs_common.size -= size;
-}
-
+int dummyfs_destroy(dummyfs_t *ctx, oid_t *oid);
 
 #endif /* _DUMMYFS_INTERNAL_H_ */
