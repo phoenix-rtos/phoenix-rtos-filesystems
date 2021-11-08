@@ -156,10 +156,10 @@ static void signal_exit(int sig)
 
 int main(int argc, char **argv)
 {
-	dummyfs_t ctx = { 0 };
+	dummyfs_t *ctx;
 	oid_t root = { 0 };
+	unsigned port;
 	msg_t msg;
-	dummyfs_object_t *o;
 	unsigned long rid;
 	const char *mountpt = NULL;
 	const char *remount_path = NULL;
@@ -170,8 +170,6 @@ int main(int argc, char **argv)
 #ifdef TARGET_IMX6ULL
 	uint32_t reserved;
 #endif
-
-	ctx.size = 0;
 
 	while ((c = getopt(argc, argv, "Dhm:r:N:")) != -1) {
 		switch (c) {
@@ -245,10 +243,10 @@ int main(int argc, char **argv)
 		portCreate(&reserved);
 #endif
 
-		portCreate(&ctx.port);
+		portCreate(&port);
 
 		/* Try to mount fs as root */
-		if (portRegister(ctx.port, "/", &root) < 0) {
+		if (portRegister(port, "/", &root) < 0) {
 			LOG("can't mount as rootfs\n");
 			return -1;
 		}
@@ -262,48 +260,36 @@ int main(int argc, char **argv)
 		if (non_fs_namespace) {
 			while (write(1, "", 0) < 0)
 				usleep(1000);
-			portCreate(&ctx.port);
-			if (portRegister(ctx.port, mountpt, &root) < 0) {
+			portCreate(&port);
+			if (portRegister(port, mountpt, &root) < 0) {
 				LOG("can't mount as %s\n", mountpt);
 				return -1;
 			}
 			mountpt = NULL;
 		}
 		else {
-			portCreate(&ctx.port);
+			portCreate(&port);
 		}
 
 	}
 
-	if (mutexCreate(&ctx.mutex) != EOK) {
-		LOG("could not create mutex\n");
-		return 2;
+	root.port = port;
+	if (dummyfs_mount((void **)&ctx, NULL, 0, &root) != EOK) {
+		printf("dummyfs mount failed\n");
+		return 1;
 	}
 
-	object_init(&ctx);
-	dev_init(&ctx);
-
-	/* Create root directory */
-	o = object_create(&ctx);
-
-	if (o == NULL)
-		return -1;
-
-	o->oid.port = ctx.port;
-	o->mode = S_IFDIR | 0666;
-
-	memcpy(&root, &o->oid, sizeof(oid_t));
-	dir_add(&ctx, o, ".", S_IFDIR | 0666, &root);
-	dir_add(&ctx, o, "..", S_IFDIR | 0666, &root);
-
 	if (!non_fs_namespace && mountpt == NULL) {
-		fetch_modules(&ctx);
+		if (fetch_modules(ctx) != EOK) {
+			printf("dummyfs: fetch_modules failed\n");
+			return 1;
+		}
 		mountpt = remount_path;
 	}
 
 	if (daemonize) {
 		/* mount synchronously */
-		if (!non_fs_namespace && dummyfs_mount_sync(&ctx, mountpt)) {
+		if (!non_fs_namespace && dummyfs_mount_sync(ctx, mountpt)) {
 			LOG("failed to mount, exiting\n");
 			return 1;
 		}
@@ -312,10 +298,10 @@ int main(int argc, char **argv)
 		kill(getppid(), SIGUSR1);
 	}
 	else if (mountpt != NULL) {
-		ctx.mountpt = strdup(mountpt);
-		if (ctx.mountpt == NULL)
+		ctx->mountpt = strdup(mountpt);
+		if (ctx->mountpt == NULL)
 			return 1;
-		beginthread(dummyfs_mount_async, 4, &mtstack, sizeof(mtstack), (void *)&ctx);
+		beginthread(dummyfs_mount_async, 4, &mtstack, sizeof(mtstack), (void *)ctx);
 	}
 
 	/*** MAIN LOOP ***/
@@ -323,29 +309,29 @@ int main(int argc, char **argv)
 	LOG("initialized\n");
 
 	for (;;) {
-		if (msgRecv(ctx.port, &msg, &rid) < 0)
+		if (msgRecv(ctx->port, &msg, &rid) < 0)
 			continue;
 
 		switch (msg.type) {
 
 			case mtOpen:
-				msg.o.io.err = dummyfs_open(&ctx, &msg.i.openclose.oid);
+				msg.o.io.err = dummyfs_open(ctx, &msg.i.openclose.oid);
 				break;
 
 			case mtClose:
-				msg.o.io.err = dummyfs_close(&ctx, &msg.i.openclose.oid);
+				msg.o.io.err = dummyfs_close(ctx, &msg.i.openclose.oid);
 				break;
 
 			case mtRead:
-				msg.o.io.err = dummyfs_read(&ctx, &msg.i.io.oid, msg.i.io.offs, msg.o.data, msg.o.size);
+				msg.o.io.err = dummyfs_read(ctx, &msg.i.io.oid, msg.i.io.offs, msg.o.data, msg.o.size);
 				break;
 
 			case mtWrite:
-				msg.o.io.err = dummyfs_write(&ctx, &msg.i.io.oid, msg.i.io.offs, msg.i.data, msg.i.size);
+				msg.o.io.err = dummyfs_write(ctx, &msg.i.io.oid, msg.i.io.offs, msg.i.data, msg.i.size);
 				break;
 
 			case mtTruncate:
-				msg.o.io.err = dummyfs_truncate(&ctx, &msg.i.io.oid, msg.i.io.len);
+				msg.o.io.err = dummyfs_truncate(ctx, &msg.i.io.oid, msg.i.io.len);
 				break;
 
 			case mtDevCtl:
@@ -353,39 +339,39 @@ int main(int argc, char **argv)
 				break;
 
 			case mtCreate:
-				msg.o.create.err = dummyfs_create(&ctx, &msg.i.create.dir, msg.i.data, &msg.o.create.oid, msg.i.create.mode, msg.i.create.type, &msg.i.create.dev);
+				msg.o.create.err = dummyfs_create(ctx, &msg.i.create.dir, msg.i.data, &msg.o.create.oid, msg.i.create.mode, msg.i.create.type, &msg.i.create.dev);
 				break;
 
 			case mtDestroy:
-				msg.o.io.err = dummyfs_destroy(&ctx, &msg.i.destroy.oid);
+				msg.o.io.err = dummyfs_destroy(ctx, &msg.i.destroy.oid);
 				break;
 
 			case mtSetAttr:
-				msg.o.attr.err = dummyfs_setattr(&ctx, &msg.i.attr.oid, msg.i.attr.type, msg.i.attr.val, msg.i.data, msg.i.size);
+				msg.o.attr.err = dummyfs_setattr(ctx, &msg.i.attr.oid, msg.i.attr.type, msg.i.attr.val, msg.i.data, msg.i.size);
 				break;
 
 			case mtGetAttr:
-				msg.o.attr.err = dummyfs_getattr(&ctx, &msg.i.attr.oid, msg.i.attr.type, &msg.o.attr.val);
+				msg.o.attr.err = dummyfs_getattr(ctx, &msg.i.attr.oid, msg.i.attr.type, &msg.o.attr.val);
 				break;
 
 			case mtLookup:
-				msg.o.lookup.err = dummyfs_lookup(&ctx, &msg.i.lookup.dir, msg.i.data, &msg.o.lookup.fil, &msg.o.lookup.dev);
+				msg.o.lookup.err = dummyfs_lookup(ctx, &msg.i.lookup.dir, msg.i.data, &msg.o.lookup.fil, &msg.o.lookup.dev);
 				break;
 
 			case mtLink:
-				msg.o.io.err = dummyfs_link(&ctx, &msg.i.ln.dir, msg.i.data, &msg.i.ln.oid);
+				msg.o.io.err = dummyfs_link(ctx, &msg.i.ln.dir, msg.i.data, &msg.i.ln.oid);
 				break;
 
 			case mtUnlink:
-				msg.o.io.err = dummyfs_unlink(&ctx, &msg.i.ln.dir, msg.i.data);
+				msg.o.io.err = dummyfs_unlink(ctx, &msg.i.ln.dir, msg.i.data);
 				break;
 
 			case mtReaddir:
-				msg.o.io.err = dummyfs_readdir(&ctx, &msg.i.readdir.dir, msg.i.readdir.offs,
+				msg.o.io.err = dummyfs_readdir(ctx, &msg.i.readdir.dir, msg.i.readdir.offs,
 						msg.o.data, msg.o.size);
 				break;
 		}
-		msgRespond(ctx.port, &msg, rid);
+		msgRespond(ctx->port, &msg, rid);
 	}
 
 	return EOK;

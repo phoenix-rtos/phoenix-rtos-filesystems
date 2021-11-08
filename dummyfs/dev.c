@@ -103,8 +103,12 @@ int dev_destroy(dummyfs_t *ctx, oid_t *oid)
 }
 
 
-void dev_init(dummyfs_t *ctx)
+int dev_init(dummyfs_t *ctx)
 {
-	mutexCreate(&ctx->devlock);
+	if (mutexCreate(&ctx->devlock) != EOK)
+		return -ENOMEM;
+
 	lib_rbInit(&ctx->devtree, dev_cmp, NULL);
+
+	return EOK;
 }

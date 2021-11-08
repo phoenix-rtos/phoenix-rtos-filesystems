@@ -139,8 +139,12 @@ void object_put(dummyfs_t *ctx, dummyfs_object_t *o)
 }
 
 
-void object_init(dummyfs_t *ctx)
+int object_init(dummyfs_t *ctx)
 {
+	if (mutexCreate(&ctx->olock) != EOK)
+		return -ENOMEM;
+
 	idtree_init(&ctx->dummytree);
-	mutexCreate(&ctx->olock);
+
+	return EOK;
 }

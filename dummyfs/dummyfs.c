@@ -18,6 +18,7 @@
 #include <sys/stat.h> /* to set mode for / */
 #include <sys/list.h>
 #include <sys/mount.h>
+#include <sys/threads.h>
 #include <string.h>
 #include <stdlib.h>
 #include <dirent.h>
@@ -734,4 +735,70 @@ int dummyfs_write(void *ctx, oid_t *oid, offs_t offs, const char *buff, size_t l
 	object_put(dummyfs, o);
 
 	return ret;
+}
+
+
+int dummyfs_mount(void **ctx, const char *data, unsigned long mode, oid_t *root)
+{
+	dummyfs_t *dummyfs;
+	dummyfs_object_t *o;
+	oid_t rootdir;
+
+	if ((dummyfs = calloc(1, sizeof(dummyfs_t))) == NULL)
+		return -ENOMEM;
+
+	dummyfs->port = root->port;
+
+	if (mutexCreate(&dummyfs->mutex) != EOK) {
+		free(dummyfs);
+		return -ENOMEM;
+	}
+
+	if (object_init(dummyfs) != EOK) {
+		resourceDestroy(dummyfs->mutex);
+		free(dummyfs);
+		return -ENOMEM;
+	}
+
+	if (dev_init(dummyfs) != EOK) {
+		resourceDestroy(dummyfs->mutex);
+		free(dummyfs);
+		// object_destroy
+		return -ENOMEM;
+	}
+
+
+	/* Create root directory */
+	if ((o = object_create(dummyfs)) == NULL) {
+		/* TODO: destroy devs and objects */
+		resourceDestroy(dummyfs->mutex);
+		free(dummyfs);
+		return -ENOMEM;
+	}
+
+	o->oid.port = dummyfs->port;
+	o->mode = S_IFDIR | 0666;
+
+	memcpy(&rootdir, &o->oid, sizeof(oid_t));
+	if (dir_add(dummyfs, o, ".", S_IFDIR | 0666, &rootdir) != EOK) {
+		resourceDestroy(dummyfs->mutex);
+		free(dummyfs);
+		return -ENOMEM;
+	}
+
+	if (dir_add(dummyfs, o, "..", S_IFDIR | 0666, &rootdir) != EOK) {
+		resourceDestroy(dummyfs->mutex);
+		free(dummyfs);
+		return -ENOMEM;
+	}
+
+	*ctx = dummyfs;
+
+	return EOK;
+}
+
+
+int dummyfs_unmount(void *ctx)
+{
+	return EOK;
 }

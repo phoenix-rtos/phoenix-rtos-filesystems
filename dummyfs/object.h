@@ -40,7 +40,7 @@ extern void object_lock(dummyfs_t *ctx, dummyfs_object_t *o);
 extern void object_unlock(dummyfs_t *ctx, dummyfs_object_t *o);
 
 
-extern void object_init(dummyfs_t *ctx);
+extern int object_init(dummyfs_t *ctx);
 
 
 #endif
