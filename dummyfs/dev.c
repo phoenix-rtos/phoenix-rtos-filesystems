@@ -103,6 +103,23 @@ int dev_destroy(dummyfs_t *ctx, oid_t *oid)
 }
 
 
+void dev_cleanup(dummyfs_t *ctx)
+{
+	dummyfs_dev_t *entry;
+	rbnode_t *n;
+
+	mutexLock(ctx->devlock);
+	while ((n = lib_rbMinimum(ctx->devtree.root)) != NULL) {
+		entry = lib_treeof(dummyfs_dev_t, linkage, n);
+		lib_rbRemove(&ctx->devtree, &entry->linkage);
+		free(entry);
+	}
+	mutexUnlock(ctx->devlock);
+
+	resourceDestroy(ctx->devlock);
+}
+
+
 int dev_init(dummyfs_t *ctx)
 {
 	if (mutexCreate(&ctx->devlock) != EOK)

@@ -148,3 +148,23 @@ int object_init(dummyfs_t *ctx)
 
 	return EOK;
 }
+
+
+void object_cleanup(dummyfs_t *ctx)
+{
+	dummyfs_object_t *o;
+	rbnode_t *n;
+
+	mutexLock(ctx->olock);
+	/* Forcibly destroy all objects, ignore refs and links */
+	while ((n = lib_rbMinimum(ctx->dummytree.root)) != NULL) {
+		o = dummy_node2obj(n);
+		if (S_ISDIR(o->mode))
+			dir_clean(ctx, o);
+		idtree_remove(&ctx->dummytree, &o->node);
+		dummyfs_destroy(ctx, &o->oid);
+	}
+	mutexUnlock(ctx->olock);
+
+	resourceDestroy(ctx->devlock);
+}

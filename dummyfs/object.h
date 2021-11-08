@@ -43,4 +43,7 @@ extern void object_unlock(dummyfs_t *ctx, dummyfs_object_t *o);
 extern int object_init(dummyfs_t *ctx);
 
 
+extern void object_cleanup(dummyfs_t *ctx);
+
+
 #endif

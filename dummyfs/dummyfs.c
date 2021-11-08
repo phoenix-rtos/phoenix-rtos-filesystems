@@ -761,16 +761,16 @@ int dummyfs_mount(void **ctx, const char *data, unsigned long mode, oid_t *root)
 	}
 
 	if (dev_init(dummyfs) != EOK) {
+		object_cleanup(dummyfs);
 		resourceDestroy(dummyfs->mutex);
 		free(dummyfs);
-		// object_destroy
 		return -ENOMEM;
 	}
 
-
 	/* Create root directory */
 	if ((o = object_create(dummyfs)) == NULL) {
-		/* TODO: destroy devs and objects */
+		dev_cleanup(dummyfs);
+		object_cleanup(dummyfs);
 		resourceDestroy(dummyfs->mutex);
 		free(dummyfs);
 		return -ENOMEM;
@@ -781,12 +781,16 @@ int dummyfs_mount(void **ctx, const char *data, unsigned long mode, oid_t *root)
 
 	memcpy(&rootdir, &o->oid, sizeof(oid_t));
 	if (dir_add(dummyfs, o, ".", S_IFDIR | 0666, &rootdir) != EOK) {
+		dev_cleanup(dummyfs);
+		object_cleanup(dummyfs);
 		resourceDestroy(dummyfs->mutex);
 		free(dummyfs);
 		return -ENOMEM;
 	}
 
 	if (dir_add(dummyfs, o, "..", S_IFDIR | 0666, &rootdir) != EOK) {
+		dev_cleanup(dummyfs);
+		object_cleanup(dummyfs);
 		resourceDestroy(dummyfs->mutex);
 		free(dummyfs);
 		return -ENOMEM;
@@ -800,5 +804,14 @@ int dummyfs_mount(void **ctx, const char *data, unsigned long mode, oid_t *root)
 
 int dummyfs_unmount(void *ctx)
 {
+	dummyfs_t *dummyfs = (dummyfs_t *)ctx;
+
+	/* Assume, no other thread uses this filesystem */
+	dev_cleanup(dummyfs);
+	object_cleanup(dummyfs);
+
+	resourceDestroy(dummyfs->mutex);
+	free(dummyfs);
+
 	return EOK;
 }

@@ -26,4 +26,8 @@ extern int dev_destroy(dummyfs_t *ctx, oid_t *oid);
 
 extern int dev_init(dummyfs_t *ctx);
 
+
+extern void dev_cleanup(dummyfs_t *ctx);
+
+
 #endif
