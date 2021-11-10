@@ -5,13 +5,13 @@
 #
 
 LOCAL_PATH := $(call my-dir)
-DUMMYFS_SRCS := $(wildcard $(LOCAL_PATH)*.c)
-
-NAME := dummyfs
-SRCS := $(DUMMYFS_SRCS)
-include $(binary.mk)
 
 NAME := libdummyfs
-SRCS := $(filter-out $(LOCAL_PATH)srv.c, $(DUMMYFS_SRCS))
+SRCS := $(filter-out $(LOCAL_PATH)srv.c, $(wildcard $(LOCAL_PATH)*.c))
 HEADERS := $(LOCAL_PATH)dummyfs.h
 include $(static-lib.mk)
+
+NAME := dummyfs
+SRCS := $(LOCAL_PATH)srv.c
+LIBS := libdummyfs
+include $(binary.mk)
