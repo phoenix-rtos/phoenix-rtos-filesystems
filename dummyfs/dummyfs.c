@@ -738,6 +738,54 @@ int dummyfs_write(void *ctx, oid_t *oid, offs_t offs, const char *buff, size_t l
 }
 
 
+int dummyfs_createMapped(void *ctx, oid_t *dir, const char *name, void *addr, size_t size, oid_t *oid)
+{
+	dummyfs_t *dummyfs = (dummyfs_t *)ctx;
+	dummyfs_object_t *o;
+	dummyfs_chunk_t *chunk;
+
+	if (dummyfs_create(ctx, dir, name, oid, 0755, otFile, NULL) != 0)
+		return -ENOMEM;
+
+	if ((o = object_get(dummyfs, oid->id)) == NULL) {
+		dummyfs_destroy(ctx, oid);
+		return -EINVAL;
+	}
+
+	if ((chunk = malloc(sizeof(dummyfs_chunk_t))) == NULL) {
+		object_put(dummyfs, o);
+		dummyfs_destroy(ctx, oid);
+		return -ENOMEM;
+	}
+
+#ifdef MMU
+	addr = (void *)mmap(NULL, (size + 0xfff) & ~0xfff, 0x1 | 0x2, 0, OID_PHYSMEM, addr);
+	if (addr == MAP_FAILED) {
+		free(chunk);
+		object_put(dummyfs, o);
+		dummyfs_destroy(ctx, oid);
+		return -ENOMEM;
+	}
+#endif
+
+	chunk->offs = 0;
+	chunk->size = size;
+	chunk->used = size;
+	chunk->data = (void *)((uintptr_t)addr & ~0xfff) + ((uintptr_t)addr & 0xfff);
+	chunk->next = chunk;
+	chunk->prev = chunk;
+
+	object_lock(dummyfs, o);
+	o->size = size;
+	o->mode = 0xaBadBabe;
+	o->chunks = chunk;
+	object_unlock(dummyfs, o);
+	object_put(dummyfs, o);
+
+	return EOK;
+}
+
+
 int dummyfs_mount(void **ctx, const char *data, unsigned long mode, oid_t *root)
 {
 	dummyfs_t *dummyfs;

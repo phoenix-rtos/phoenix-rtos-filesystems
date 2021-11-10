@@ -36,43 +36,20 @@ int fetch_modules(dummyfs_t *ctx)
 	oid_t root = {ctx->port, 0};
 	oid_t toid = { 0 };
 	oid_t sysoid = { 0 };
-	dummyfs_object_t *o;
-	void *prog_addr;
 	syspageprog_t prog;
 	int i, progsz;
 
-	progsz = syspageprog(NULL, -1);
-	dummyfs_create(ctx, &root, "syspage", &sysoid, 0666, otDir, NULL);
+	if ((progsz = syspageprog(NULL, -1)) < 0)
+		return -1;
+
+	if (dummyfs_create(ctx, &root, "syspage", &sysoid, 0666, otDir, NULL) != EOK)
+		return -1;
 
 	for (i = 0; i < progsz; i++) {
-		syspageprog(&prog, i);
-#ifdef NOMMU
-		prog_addr = (void *)prog.addr;
-#else
-		prog_addr = (void *)mmap(NULL, (prog.size + 0xfff) & ~0xfff, 0x1 | 0x2, 0, OID_PHYSMEM, prog.addr);
-
-		if (!prog_addr)
+		if (syspageprog(&prog, i) != 0)
 			continue;
-#endif
-		dummyfs_create(ctx, &sysoid, prog.name, &toid, 0755, otFile, NULL);
-		o = object_get(ctx, toid.id);
 
-		if (!o) {
-#ifndef NOMMU
-			munmap(prog_addr, (prog.size + 0xfff) & ~0xfff);
-#endif
-			continue;
-		}
-
-		o->chunks = malloc(sizeof(dummyfs_chunk_t));
-		o->chunks->offs = 0;
-		o->chunks->size = prog.size;
-		o->chunks->used = prog.size;
-		o->chunks->data = (void *)((uintptr_t)prog_addr & ~0xfff) + (prog.addr & 0xfff);
-		o->chunks->next = o->chunks;
-		o->chunks->prev = o->chunks;
-		o->size = prog.size;
-		o->mode = 0xaBadBabe;
+		dummyfs_createMapped(ctx, &sysoid, prog.name, (void *)prog.addr, prog.size, &toid);
 	}
 
 	return EOK;
