@@ -33,7 +33,7 @@
 
 int fetch_modules(dummyfs_t *ctx)
 {
-	oid_t root = {ctx->port, 0};
+	oid_t root = { ctx->port, 0 };
 	oid_t toid = { 0 };
 	oid_t sysoid = { 0 };
 	syspageprog_t prog;
@@ -60,7 +60,7 @@ int dummyfs_do_mount(dummyfs_t *ctx, const char *path, oid_t *oid)
 {
 	struct stat buf;
 	oid_t toid;
-	msg_t msg = {0};
+	msg_t msg = { 0 };
 	int err;
 
 	if (lookup(path, NULL, &toid) < EOK)
@@ -85,7 +85,7 @@ int dummyfs_do_mount(dummyfs_t *ctx, const char *path, oid_t *oid)
 }
 
 
-static int dummyfs_mount_sync(dummyfs_t *ctx, const char* mountpt)
+static int dummyfs_mount_sync(dummyfs_t *ctx, const char *mountpt)
 {
 	oid_t toid;
 	int err;
@@ -103,7 +103,7 @@ static int dummyfs_mount_sync(dummyfs_t *ctx, const char* mountpt)
 	return 0;
 }
 
-char __attribute__((aligned(8))) mtstack[4096];
+static char __attribute__((aligned(8))) mtstack[4096];
 
 void dummyfs_mount_async(void *arg)
 {
@@ -114,14 +114,14 @@ void dummyfs_mount_async(void *arg)
 }
 
 
-static void print_usage(const char* progname)
+static void print_usage(const char *progname)
 {
 	printf("usage: %s [OPTIONS]\n\n"
-		"  -m [mountpoint]    Start dummyfs at a given mountopint (the mount will happen asynchronously)\n"
-		"  -r [mountpoint]    Remount to a given path after spawning modules\n"
-		"  -D                 Daemonize after mounting\n"
-		"  -h                 This help message\n",
-		progname);
+			"  -m [mountpoint]    Start dummyfs at a given mountopint (the mount will happen asynchronously)\n"
+			"  -r [mountpoint]    Remount to a given path after spawning modules\n"
+			"  -D                 Daemonize after mounting\n"
+			"  -h                 This help message\n",
+			progname);
 }
 
 
@@ -193,7 +193,7 @@ int main(int argc, char **argv)
 		}
 
 		if (pid > 0) {
-			/* PARENT: wait for initailization to finish and then exit */
+			/* PARENT: wait for initialization to finish and then exit */
 			sleep(10);
 
 			LOG("failed to communicate with child\n");
@@ -233,7 +233,6 @@ int main(int argc, char **argv)
 #endif
 	}
 	else {
-
 		if (non_fs_namespace) {
 			while (write(1, "", 0) < 0)
 				usleep(1000);
@@ -247,7 +246,6 @@ int main(int argc, char **argv)
 		else {
 			portCreate(&port);
 		}
-
 	}
 
 	root.port = port;

@@ -166,5 +166,5 @@ void object_cleanup(dummyfs_t *ctx)
 	}
 	mutexUnlock(ctx->olock);
 
-	resourceDestroy(ctx->devlock);
+	resourceDestroy(ctx->olock);
 }
