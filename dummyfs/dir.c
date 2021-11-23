@@ -18,7 +18,7 @@
 #include <sys/stat.h>
 #include <string.h>
 
-#include "dummyfs.h"
+#include "dummyfs_internal.h"
 #include "dir.h"
 
 
@@ -91,7 +91,7 @@ int dir_replace(dummyfs_object_t *dir, const char *name, oid_t *new)
 }
 
 
-int dir_add(dummyfs_object_t *dir, const char *name, uint32_t mode, oid_t *oid)
+int dir_add(dummyfs_t *ctx, dummyfs_object_t *dir, const char *name, uint32_t mode, oid_t *oid)
 {
 	oid_t res;
 	dummyfs_dirent_t *n, *e;
@@ -102,27 +102,27 @@ int dir_add(dummyfs_object_t *dir, const char *name, uint32_t mode, oid_t *oid)
 	if (dir_find(dir, name, &res) >= 0)
 		return -EEXIST;
 
-	if (dummyfs_incsz(sizeof(dummyfs_dirent_t)) != EOK)
+	if (dummyfs_incsz(ctx, sizeof(dummyfs_dirent_t)) != EOK)
 		return -ENOMEM;
 
 	n = malloc(sizeof(dummyfs_dirent_t));
 
 	if (n == NULL) {
-		dummyfs_decsz(sizeof(dummyfs_dirent_t));
+		dummyfs_decsz(ctx, sizeof(dummyfs_dirent_t));
 		return -ENOMEM;
 	}
 
 	n->len = strlen(name);
 	n->deleted = 0;
 
-	if (dummyfs_incsz(n->len + 1) != EOK) {
-		dummyfs_decsz(sizeof(dummyfs_dirent_t));
+	if (dummyfs_incsz(ctx, n->len + 1) != EOK) {
+		dummyfs_decsz(ctx, sizeof(dummyfs_dirent_t));
 		free(n);
 		return -ENOMEM;
 	}
 
 	if ((n->name = strdup(name)) == NULL) {
-		dummyfs_decsz(sizeof(dummyfs_dirent_t) + n->len + 1);
+		dummyfs_decsz(ctx, sizeof(dummyfs_dirent_t) + n->len + 1);
 		free(n);
 		return -ENOMEM;
 	}
@@ -161,7 +161,7 @@ int dir_add(dummyfs_object_t *dir, const char *name, uint32_t mode, oid_t *oid)
 }
 
 
-int dir_remove(dummyfs_object_t *dir, const char *name)
+int dir_remove(dummyfs_t *ctx, dummyfs_object_t *dir, const char *name)
 {
 	dummyfs_dirent_t *e = dir->entries;
 
@@ -174,7 +174,7 @@ int dir_remove(dummyfs_object_t *dir, const char *name)
 			e->deleted = 1;
 
 			if (++dir->dirty > DUMMYFS_DIRTY_DIR_AUTOCLEANUP_THRESH)
-				dir_clean(dir);
+				dir_clean(ctx, dir);
 
 			return EOK;
 		}
@@ -185,7 +185,7 @@ int dir_remove(dummyfs_object_t *dir, const char *name)
 }
 
 
-void dir_clean(dummyfs_object_t *dir)
+void dir_clean(dummyfs_t *ctx, dummyfs_object_t *dir)
 {
 	dummyfs_dirent_t *v;
 	dummyfs_dirent_t *e = dir->entries;
@@ -199,7 +199,7 @@ void dir_clean(dummyfs_object_t *dir)
 			e->next->prev = e->prev;
 			if (dir->entries == e)
 				dir->entries = e->next;
-			dummyfs_decsz(e->len + 1 + sizeof(dummyfs_dirent_t));
+			dummyfs_decsz(ctx, e->len + 1 + sizeof(dummyfs_dirent_t));
 			v = e;
 			e = e->next;
 
@@ -212,10 +212,10 @@ void dir_clean(dummyfs_object_t *dir)
 }
 
 
-int dir_empty(dummyfs_object_t *dir)
+int dir_empty(dummyfs_t *ctx, dummyfs_object_t *dir)
 {
 	/* clean dir before checking */
-	dir_clean(dir);
+	dir_clean(ctx, dir);
 
 	if (dir->entries->next->next != dir->entries)
 		return -EBUSY;
@@ -224,9 +224,9 @@ int dir_empty(dummyfs_object_t *dir)
 }
 
 
-void dir_destroy(dummyfs_object_t *dir)
+void dir_destroy(dummyfs_t *ctx, dummyfs_object_t *dir)
 {
-	if (dir_empty(dir) == EOK) {
+	if (dir_empty(ctx, dir) == EOK) {
 		free(dir->entries->next->name);
 		free(dir->entries->next);
 

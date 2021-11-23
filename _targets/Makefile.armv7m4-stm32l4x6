@@ -8,4 +8,4 @@
 
 CFLAGS += -DTARGET_STM32 -DTARGET_STM32L4
 
-DEFAULT_COMPONENTS := dummyfs libmeterfs
+DEFAULT_COMPONENTS := libdummyfs dummyfs libmeterfs

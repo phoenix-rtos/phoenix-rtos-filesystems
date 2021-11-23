@@ -3,102 +3,64 @@
  *
  * dummyfs
  *
- * Copyright 2012, 2018 Phoenix Systems
- * Copyright 2008 Pawel Pisarczyk
- * Author: Pawel Pisarczyk, Kamil Amanowicz
+ * Copyright 2021 Phoenix Systems
+ * Copyright 2007 Pawel Pisarczyk
+ * Author: Maciej Purski
  *
  * This file is part of Phoenix-RTOS.
  *
  * %LICENSE%
  */
-
 #ifndef _DUMMYFS_H_
 #define _DUMMYFS_H_
 
-#include <errno.h>
-#include <stdint.h>
-#include <time.h>
-#include <sys/file.h>
-#include <posix/idtree.h>
 
-#define DUMMYFS_SIZE_MAX 32 * 1024 * 1024
-
-/* threshold for cleaning directory from deleted dirents */
-#define DUMMYFS_DIRTY_DIR_AUTOCLEANUP_THRESH 8
+int dummyfs_open(void *ctx, oid_t *oid);
 
 
-typedef struct _dummyfs_dirent_t {
-	char *name;
-	unsigned int len;
-	uint32_t type;
-	oid_t oid;
-	uint8_t deleted;
-
-	struct _dummyfs_dirent_t *next;
-	struct _dummyfs_dirent_t *prev;
-} dummyfs_dirent_t;
+int dummyfs_close(void *ctx, oid_t *oid);
 
 
-typedef struct _dummyfs_chunk_t {
-	char *data;
-
-	offs_t offs;
-	size_t size;
-	size_t used;
-
-	struct _dummyfs_chunk_t *next;
-	struct _dummyfs_chunk_t *prev;
-} dummyfs_chunk_t;
+int dummyfs_read(void *ctx, oid_t *oid, offs_t offs, char *buff, size_t len);
 
 
-typedef struct _dummyfs_object_t {
-	oid_t oid, dev;
-
-	unsigned int uid;
-	unsigned int gid;
-	uint32_t mode;
-
-	int refs;
-	int nlink;
-
-	idnode_t node;
-	size_t size;
-
-	union {
-		dummyfs_dirent_t *entries;
-		dummyfs_chunk_t *chunks;
-		uint32_t port;
-	};
-
-	time_t atime;
-	time_t mtime;
-	time_t ctime;
-
-	uint8_t dirty;
-} dummyfs_object_t;
+int dummyfs_write(void *ctx, oid_t *oid, offs_t offs, const char *buff, size_t len);
 
 
-struct _dummyfs_common_t{
-	uint32_t port;
-	handle_t mutex;
-	int size;
-};
+int dummyfs_truncate(void *ctx, oid_t *oid, size_t size);
 
 
-extern struct _dummyfs_common_t dummyfs_common;
+int dummyfs_create(void *ctx, oid_t *dir, const char *name, oid_t *oid, unsigned mode, int type, oid_t *dev);
 
 
-static inline int dummyfs_incsz(int size) {
-	if (dummyfs_common.size + size > DUMMYFS_SIZE_MAX)
-		return -ENOMEM;
-	dummyfs_common.size += size;
-	return EOK;
-}
+int dummyfs_destroy(void *ctx, oid_t *oid);
 
 
-static inline void dummyfs_decsz(int size) {
-	dummyfs_common.size -= size;
-}
+int dummyfs_setattr(void *ctx, oid_t *oid, int type, long long attr, const void *data, size_t size);
 
 
-#endif
+int dummyfs_getattr(void *ctx, oid_t *oid, int type, long long *attr);
+
+
+int dummyfs_lookup(void *ctx, oid_t *dir, const char *name, oid_t *res, oid_t *dev);
+
+
+int dummyfs_link(void *ctx, oid_t *dir, const char *name, oid_t *oid);
+
+
+int dummyfs_unlink(void *ctx, oid_t *dir, const char *name);
+
+
+int dummyfs_readdir(void *ctx, oid_t *dir, offs_t offs, struct dirent *dent, unsigned int size);
+
+
+int dummyfs_createMapped(void *ctx, oid_t *dir, const char *name, void *addr, size_t size, oid_t *oid);
+
+
+int dummyfs_mount(void **ctx, const char *data, unsigned long mode, oid_t *root);
+
+
+int dummyfs_unmount(void *ctx);
+
+
+#endif /* _DUMMYFS_H_ */
