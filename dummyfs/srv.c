@@ -117,11 +117,11 @@ void dummyfs_mount_async(void *arg)
 static void print_usage(const char *progname)
 {
 	printf("usage: %s [OPTIONS]\n\n"
-			"  -m [mountpoint]    Start dummyfs at a given mountopint (the mount will happen asynchronously)\n"
-			"  -r [mountpoint]    Remount to a given path after spawning modules\n"
-			"  -D                 Daemonize after mounting\n"
-			"  -h                 This help message\n",
-			progname);
+		   "  -m [mountpoint]    Start dummyfs at a given mountopint (the mount will happen asynchronously)\n"
+		   "  -r [mountpoint]    Remount to a given path after spawning modules\n"
+		   "  -D                 Daemonize after mounting\n"
+		   "  -h                 This help message\n",
+		progname);
 }
 
 

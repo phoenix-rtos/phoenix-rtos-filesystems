@@ -312,7 +312,7 @@ int dummyfs_link(void *ctx, oid_t *dir, const char *name, oid_t *oid)
 	else {
 		ret = dir_replace(d, name, oid);
 		victim_o->nlink--;
-		// object_unlock(dummyfs, victim_o); //FIXME: per-object locking
+		// object_unlock(fs, victim_o); //FIXME: per-object locking
 	}
 
 	if (ret != EOK) {
