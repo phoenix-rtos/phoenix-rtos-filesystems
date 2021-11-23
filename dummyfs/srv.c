@@ -343,7 +343,7 @@ int main(int argc, char **argv)
 
 			case mtReaddir:
 				msg.o.io.err = dummyfs_readdir(ctx, &msg.i.readdir.dir, msg.i.readdir.offs,
-						msg.o.data, msg.o.size);
+					msg.o.data, msg.o.size);
 				break;
 		}
 		msgRespond(ctx->port, &msg, rid);
