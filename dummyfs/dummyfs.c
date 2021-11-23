@@ -640,8 +640,6 @@ int dummyfs_truncate(void *ctx, oid_t *oid, size_t size)
 }
 
 
-
-
 int dummyfs_read(void *ctx, oid_t *oid, offs_t offs, char *buff, size_t len)
 {
 	dummyfs_t *fs = (dummyfs_t *)ctx;
