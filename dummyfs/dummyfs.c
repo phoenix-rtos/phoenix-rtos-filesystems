@@ -19,6 +19,7 @@
 #include <sys/list.h>
 #include <sys/mount.h>
 #include <sys/threads.h>
+#include <sys/mman.h>
 #include <string.h>
 #include <stdlib.h>
 #include <dirent.h>
@@ -496,7 +497,7 @@ int dummyfs_destroy(void *ctx, oid_t *oid)
 
 		else if (o->mode == OBJECT_MODE_MEM) {
 #ifndef NOMMU
-			munmap((void *)((uintptr_t)o->chunks->data & ~0xfff), (o->size + 0xfff) & ~0xfff);
+			munmap((void *)((uintptr_t)o->chunks->data & ~(_PAGE_SIZE - 1)), (o->size + (_PAGE_SIZE - 1)) & ~(_PAGE_SIZE - 1));
 #endif
 			free(o->chunks);
 		}
@@ -762,7 +763,7 @@ int dummyfs_createMapped(void *ctx, oid_t *dir, const char *name, void *addr, si
 	}
 
 #ifndef NOMMU
-	addr = (void *)mmap(NULL, (size + (_PAGE_SIZE - 1)) & ~(_PAGE_SIZE - 1), 0x1 | 0x2, 0, OID_PHYSMEM, addr);
+	addr = mmap(NULL, (size + (_PAGE_SIZE - 1)) & ~(_PAGE_SIZE - 1), 0x1 | 0x2, 0, OID_PHYSMEM, (addr_t)addr);
 	if (addr == MAP_FAILED) {
 		free(chunk);
 		object_put(fs, o);
