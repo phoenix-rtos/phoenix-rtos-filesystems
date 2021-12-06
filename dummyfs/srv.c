@@ -144,9 +144,6 @@ int main(int argc, char **argv)
 	int daemonize = 0;
 	int c;
 
-#ifdef TARGET_IMX6ULL
-	uint32_t reserved;
-#endif
 
 	while ((c = getopt(argc, argv, "Dhm:r:N:")) != -1) {
 		switch (c) {
@@ -212,13 +209,9 @@ int main(int argc, char **argv)
 
 	if (mountpt == NULL) {
 
-#ifndef TARGET_IMX6ULL
 		while (write(1, "", 0) < 0) {
 			usleep(500000);
 		}
-#else
-		portCreate(&reserved);
-#endif
 
 		portCreate(&port);
 
@@ -228,9 +221,6 @@ int main(int argc, char **argv)
 			return -1;
 		}
 
-#ifdef TARGET_IMX6ULL
-		portDestroy(reserved);
-#endif
 	}
 	else {
 		if (non_fs_namespace) {
