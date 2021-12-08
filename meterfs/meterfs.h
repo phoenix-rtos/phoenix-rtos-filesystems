@@ -71,7 +71,7 @@ typedef struct {
 	ssize_t (*read)(unsigned int addr, void *buff, size_t bufflen);
 	ssize_t (*write)(unsigned int addr, void *buff, size_t bufflen);
 	int (*eraseSector)(unsigned int addr);
-	int (*partitionErase)(void);
+	int (*partitionErase)(void); /* Deprecated, TODO: remove all partitionErase() occurrences */
 	void (*powerCtrl)(int state);
 } meterfs_ctx_t;
 
