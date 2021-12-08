@@ -105,10 +105,15 @@ static int meterfs_checkfs(meterfs_ctx_t *ctx)
 
 	if (!valid0 && !valid1) {
 		LOG_INFO("meterfs: No valid filesystem detected. Formating.");
-		if ((err = ctx->partitionErase()) < 0) {
+		if ((err = meterfs_eraseFileTable(0, ctx)) < 0) {
 			meterfs_powerctrl(0, ctx);
 			return err;
 		}
+		if ((err = meterfs_eraseFileTable(1, ctx)) < 0) {
+			meterfs_powerctrl(0, ctx);
+			return err;
+		}
+
 		ctx->filecnt = 0;
 		ctx->hcurrAddr = 0;
 
@@ -885,7 +890,11 @@ int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *
 
 		case meterfs_chiperase:
 			meterfs_powerctrl(1, ctx);
-			if ((err = ctx->partitionErase()) < 0) {
+			if ((err = meterfs_eraseFileTable(0, ctx)) < 0) {
+				meterfs_powerctrl(0, ctx);
+				return err;
+			}
+			if ((err = meterfs_eraseFileTable(1, ctx)) < 0) {
 				meterfs_powerctrl(0, ctx);
 				return err;
 			}
