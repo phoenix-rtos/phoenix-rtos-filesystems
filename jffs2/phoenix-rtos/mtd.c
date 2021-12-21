@@ -135,8 +135,7 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 int mtd_write(struct mtd_info *mtd, loff_t to, size_t len, size_t *retlen,
 		const u_char *buf)
 {
-	int ret, err = 0;
-	flashdrv_meta_t *meta = mtd->meta_buf;
+	int ret;
 	*retlen = 0;
 
 	if (!len)
@@ -149,17 +148,9 @@ int mtd_write(struct mtd_info *mtd, loff_t to, size_t len, size_t *retlen,
 	}
 
 	while (len) {
-		memset(meta->errors, 0, sizeof(meta->errors));
-		ret = flashdrv_read(mtd->dma, (to / mtd->writesize) + mtd->start, NULL, mtd->meta_buf);
-		err = mtd_read_err(ret, mtd->meta_buf, err, mtd->data_buf);
-		if (err == -EBADMSG) {
-			mutexUnlock(mtd->lock);
-			return err;
-		}
-
 		memcpy(mtd->data_buf, buf + *retlen, mtd->writesize);
 
-		if ((ret = flashdrv_write(mtd->dma, (to / mtd->writesize) + mtd->start, mtd->data_buf, mtd->meta_buf))) {
+		if ((ret = flashdrv_write(mtd->dma, (to / mtd->writesize) + mtd->start, mtd->data_buf, NULL))) {
 			mutexUnlock(mtd->lock);
 			printf("mtd_write: Flash write error 0x%x\n to 0x%llx", ret, to);
 			return -1;
