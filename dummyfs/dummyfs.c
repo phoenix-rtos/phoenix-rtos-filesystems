@@ -197,6 +197,15 @@ int dummyfs_getattr(void *ctx, oid_t *oid, int type, long long *attr)
 			*attr = o->size;
 			break;
 
+		case (atBlocks):
+			*attr = (o->size + S_BLKSIZE - 1) / S_BLKSIZE;
+			break;
+
+		case (atIOBlock):
+			/* TODO: determine optimal I/O block size */
+			*attr = 1;
+			break;
+
 		case (atType):
 			if (S_ISDIR(o->mode))
 				*attr = otDir;
