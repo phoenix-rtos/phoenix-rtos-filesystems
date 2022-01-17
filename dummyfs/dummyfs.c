@@ -32,7 +32,8 @@
 #include "dev.h"
 
 
-#define OBJECT_MODE_MEM 0xaBadBabe
+/* higher two bytes used as magic number */
+#define OBJECT_MODE_MEM (0xaBad0000 | S_IFREG | S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)
 
 
 int dummyfs_incsz(dummyfs_t *ctx, int size)
