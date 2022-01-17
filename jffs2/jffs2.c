@@ -282,6 +282,15 @@ static int jffs2_srv_getattr(jffs2_partition_t *p, oid_t *oid, int type, long lo
 			*attr = inode->i_size;
 			break;
 
+		case (atBlocks):
+			*attr = inode->i_blocks;
+			break;
+
+		case (atIOBlock):
+			/* TODO: determine optimal I/O block size */
+			*attr = 1;
+			break;
+
 		case (atType): /* type */
 			if (S_ISDIR(inode->i_mode))
 				*attr = otDir;

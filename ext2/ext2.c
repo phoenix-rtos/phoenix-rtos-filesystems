@@ -290,6 +290,16 @@ int ext2_getattr(ext2_t *fs, id_t id, int type, long long *attr)
 		*attr = obj->inode->size;
 		break;
 
+	case atBlocks:
+		*attr = obj->inode->blocks;
+		break;
+
+	case atIOBlock:
+		/* TODO: determine optimal I/O block size */
+		/* fs->blocksz seems reasonable for now */
+		*attr = fs->blocksz;
+		break;
+
 	case atType:
 		if (S_ISDIR(obj->inode->mode))
 			*attr = otDir;
