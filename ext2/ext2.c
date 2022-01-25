@@ -353,7 +353,7 @@ int ext2_setattr(ext2_t *fs, id_t id, int type, long long attr)
 
 	switch(type) {
 	case atMode:
-		obj->inode->mode |= (attr & 0x1ff);
+		obj->inode->mode = (obj->inode->mode & ~ALLPERMS) | (attr & ALLPERMS);
 		break;
 
 	case atUid:
