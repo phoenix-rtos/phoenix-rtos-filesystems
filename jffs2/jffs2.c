@@ -207,7 +207,7 @@ static int jffs2_srv_setattr(jffs2_partition_t *p, oid_t *oid, int type, long lo
 
 		case (atMode): /* mode */
 			iattr.ia_valid = ATTR_MODE;
-			iattr.ia_mode = (inode->i_mode & ~0xffff) | (attr & 0xffff);
+			iattr.ia_mode = (inode->i_mode & ~ALLPERMS) | (attr & ALLPERMS);
 			break;
 
 		case (atUid): /* uid */

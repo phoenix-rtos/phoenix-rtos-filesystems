@@ -143,7 +143,7 @@ int dummyfs_setattr(void *ctx, oid_t *oid, int type, long long attr, const void 
 			break;
 
 		case (atMode):
-			o->mode = attr;
+			o->mode = (o->mode & ~ALLPERMS) | (attr & ALLPERMS);
 			break;
 
 		case (atSize):
