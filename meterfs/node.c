@@ -45,7 +45,8 @@ int node_add(file_t *file, id_t id, rbtree_t *tree)
 {
 	node_t *r;
 
-	if ((r = malloc(sizeof(node_t))) == NULL)
+	r = malloc(sizeof(node_t));
+	if (r == NULL)
 		return -ENOMEM;
 
 	r->id = id;
@@ -59,9 +60,7 @@ int node_add(file_t *file, id_t id, rbtree_t *tree)
 
 file_t *node_getByName(const char *name, id_t *id, rbtree_t *tree)
 {
-	node_t *p;
-
-	p = lib_treeof(node_t, linkage, lib_rbMinimum(tree->root));
+	node_t *p = lib_treeof(node_t, linkage, lib_rbMinimum(tree->root));
 
 	while (p != NULL) {
 		if (strncmp(name, p->file.header.name, sizeof(p->file.header.name)) == 0) {
@@ -78,11 +77,12 @@ file_t *node_getByName(const char *name, id_t *id, rbtree_t *tree)
 
 file_t *node_getById(id_t id, rbtree_t *tree)
 {
-	node_t *p, t;
+	node_t t, *p;
 
 	t.id = id;
+	p = lib_treeof(node_t, linkage, lib_rbFind(tree, &t.linkage));
 
-	if ((p = lib_treeof(node_t, linkage, lib_rbFind(tree, &t.linkage))) == NULL)
+	if (p == NULL)
 		return NULL;
 
 	return &p->file;
@@ -91,20 +91,21 @@ file_t *node_getById(id_t id, rbtree_t *tree)
 
 void node_cleanAll(rbtree_t *tree)
 {
-	node_t *p;
+	node_t *p = lib_treeof(node_t, linkage, tree->root);
 
-	while ((p = lib_treeof(node_t, linkage, tree->root)) != NULL) {
+	while (p != NULL) {
 		lib_rbRemove(tree, &p->linkage);
 		free(p);
+		p = lib_treeof(node_t, linkage, tree->root);
 	}
 }
 
 
 int node_getMaxId(rbtree_t *tree)
 {
-	node_t *p;
+	node_t *p = lib_treeof(node_t, linkage, lib_rbMaximum(tree->root));
 
-	if ((p = lib_treeof(node_t, linkage, lib_rbMaximum(tree->root))) != NULL)
+	if (p != NULL)
 		return p->id;
 	else
 		return 0;

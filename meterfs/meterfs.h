@@ -16,7 +16,7 @@
 
 #include <sys/rb.h>
 
-#define MAX_NAME_LEN	8
+#define MAX_NAME_LEN 8
 
 
 enum { meterfs_allocate = 0, meterfs_resize, meterfs_info, meterfs_chiperase };
@@ -69,7 +69,7 @@ typedef struct {
 	uint32_t offset;
 
 	ssize_t (*read)(unsigned int addr, void *buff, size_t bufflen);
-	ssize_t (*write)(unsigned int addr, void *buff, size_t bufflen);
+	ssize_t (*write)(unsigned int addr, const void *buff, size_t bufflen);
 	int (*eraseSector)(unsigned int addr);
 	int (*partitionErase)(void); /* Deprecated, TODO: remove all partitionErase() occurrences */
 	void (*powerCtrl)(int state);

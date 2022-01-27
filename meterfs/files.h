@@ -38,12 +38,14 @@ typedef struct {
 typedef struct {
 	index_t id;
 	uint32_t filecnt;
+	uint32_t checksum;
 	unsigned char magic[4];
 } __attribute__((packed)) header_t;
 
 
 typedef struct {
 	index_t id;
+	uint32_t checksum;
 	unsigned char data[];
 } __attribute__((packed)) entry_t;
 
