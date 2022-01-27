@@ -501,7 +501,7 @@ int ext2_unlink(ext2_t *fs, id_t id, const char *name, uint8_t len)
 			}
 
 			if (S_ISDIR(obj->inode->mode) && !_ext2_dir_empty(fs, obj)) {
-				err = -EACCES;
+				err = -ENOTEMPTY;
 				break;
 			}
 
