@@ -29,7 +29,7 @@
 #define SECTORS(f, sectorsz) (((TOTAL_SIZE(f) + (sectorsz) - 1) / (sectorsz)) + 1)
 
 /* clang-format off */
-#define LOG_INFO(str, ...) do { if(0) printf(str "\n", ##__VA_ARGS__); } while(0)
+#define LOG_INFO(str, ...) do { if(1) printf(str "\n", ##__VA_ARGS__); } while(0)
 #define LOG_DEBUG(str, ...) do { if(0) printf(str "\n", ##__VA_ARGS__); } while(0)
 /* clang-format on */
 
