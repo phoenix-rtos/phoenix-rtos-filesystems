@@ -33,10 +33,9 @@
 #define LOG_DEBUG(str, ...) do { if(0) printf(str "\n", ##__VA_ARGS__); } while(0)
 /* clang-format on */
 
-#define MIN_PARTITIONS_SECTORS_NB 8
-#define HEADER_SIZE               (HGRAIN + MAX_FILE_CNT * HGRAIN)
-#define JOURNAL_OFFSET            (2 * HEADER_SIZE)
-#define SPARE_SECTOR_OFFSET(ssz)  (JOURNAL_OFFSET + (ssz))
+#define MIN_PARTITIONS_SECTORS_NB (2 * HEADER_SECTOR_CNT + 2)
+#define JOURNAL_OFFSET(ssz)       (2 * HEADER_SIZE(ssz))
+#define SPARE_SECTOR_OFFSET(ssz)  (JOURNAL_OFFSET(ssz) + (ssz))
 
 #define UNRELIABLE_WRITE 0 /* DEBUG ONLY! */
 #if UNRELIABLE_WRITE
@@ -160,7 +159,7 @@ static int meterfs_doPartialErase(meterfs_ctx_t *ctx)
 	struct partialEraseJournal_s journal;
 
 	do {
-		err = ctx->read(ctx->offset + JOURNAL_OFFSET, &journal, sizeof(journal));
+		err = ctx->read(ctx->offset + JOURNAL_OFFSET(ctx->sectorsz), &journal, sizeof(journal));
 		if (err < 0)
 			break;
 
@@ -184,7 +183,7 @@ static int meterfs_doPartialErase(meterfs_ctx_t *ctx)
 		if (err < 0)
 			break;
 
-		err = ctx->eraseSector(ctx->offset + JOURNAL_OFFSET);
+		err = ctx->eraseSector(ctx->offset + JOURNAL_OFFSET(ctx->sectorsz));
 	} while (0);
 
 	if (err >= 0)
@@ -217,7 +216,7 @@ static int meterfs_startPartialErase(uint32_t addr, meterfs_ctx_t *ctx)
 		(void)meterfs_doPartialErase(ctx);
 
 		/* Should be erased, just in case */
-		err = ctx->eraseSector(ctx->offset + JOURNAL_OFFSET);
+		err = ctx->eraseSector(ctx->offset + JOURNAL_OFFSET(ctx->sectorsz));
 		if (err < 0)
 			break;
 
@@ -235,7 +234,7 @@ static int meterfs_startPartialErase(uint32_t addr, meterfs_ctx_t *ctx)
 		/* Prepare and store journal */
 		memcpy(journal.magic, magicConst, sizeof(journal.magic));
 
-		err = meterfs_writeVerify(ctx->offset + JOURNAL_OFFSET, &journal, sizeof(journal), ctx);
+		err = meterfs_writeVerify(ctx->offset + JOURNAL_OFFSET(ctx->sectorsz), &journal, sizeof(journal), ctx);
 		if (err < 0)
 			break;
 
@@ -283,18 +282,15 @@ static ssize_t meterfs_safeWrite(unsigned int addr, void *buff, size_t bufflen, 
 static int meterfs_eraseFileTable(unsigned int n, meterfs_ctx_t *ctx)
 {
 	uint32_t addr;
-	size_t sectorcnt, i;
+	size_t i;
 	int err;
 
 	if (n != 0 && n != 1)
 		return -EINVAL;
 
 	addr = (n == 0) ? 0 : ctx->h1Addr;
-	sectorcnt = HEADER_SIZE;
-	sectorcnt += ctx->sectorsz - 1;
-	sectorcnt /= ctx->sectorsz;
 
-	for (i = 0; i < sectorcnt; ++i) {
+	for (i = 0; i < HEADER_SECTOR_CNT; ++i) {
 		err = ctx->eraseSector(ctx->offset + addr + i * ctx->sectorsz);
 		if (err < 0)
 			return err;
@@ -346,7 +342,7 @@ static int meterfs_checkfs(meterfs_ctx_t *ctx)
 		}
 
 		/* Check next header */
-		ctx->h1Addr = HEADER_SIZE;
+		ctx->h1Addr = HEADER_SIZE(ctx->sectorsz);
 
 		err = ctx->read(ctx->offset + ctx->h1Addr, &u.h, sizeof(u.h));
 		if (err < 0) {
@@ -1025,7 +1021,7 @@ int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size
 		return err;
 	}
 
-	if (h.filecnt >= MAX_FILE_CNT) {
+	if (h.filecnt >= MAX_FILE_CNT(ctx->sectorsz)) {
 		meterfs_powerctrl(0, ctx);
 		return -ENOMEM;
 	}
