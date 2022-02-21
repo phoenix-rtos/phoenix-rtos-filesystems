@@ -160,9 +160,19 @@ int dummyfs_setattr(void *ctx, oid_t *oid, int type, long long attr, const void 
 			/* TODO: add mouting capabilities */
 			ret = -EINVAL;
 			break;
+
+		case (atMTime):
+			o->mtime = attr;
+			break;
+
+		case (atATime):
+			o->atime = attr;
+			break;
 	}
 
-	o->mtime = time(NULL);
+	/* FIXME: mtime and atime are always set together */
+	if (type != atMTime && type != atATime)
+		o->mtime = time(NULL);
 
 	object_unlock(fs, o);
 	object_put(fs, o);
