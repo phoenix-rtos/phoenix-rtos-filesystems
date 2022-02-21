@@ -235,6 +235,18 @@ static int jffs2_srv_setattr(jffs2_partition_t *p, oid_t *oid, int type, long lo
 			inode_unlock(inode);
 			iput(inode);
 			return 0;
+
+		case (atMTime):
+			iattr.ia_valid = ATTR_MTIME;
+			iattr.ia_mtime.tv_sec = attr;
+			iattr.ia_mtime.tv_nsec = 0;
+			break;
+
+		case (atATime):
+			iattr.ia_valid = ATTR_ATIME;
+			iattr.ia_atime.tv_sec = attr;
+			iattr.ia_atime.tv_nsec = 0;
+			break;
 	}
 
 	d_instantiate(&dentry, inode);
