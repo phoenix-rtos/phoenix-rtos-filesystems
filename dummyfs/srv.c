@@ -335,6 +335,10 @@ int main(int argc, char **argv)
 				msg.o.io.err = dummyfs_readdir(ctx, &msg.i.readdir.dir, msg.i.readdir.offs,
 					msg.o.data, msg.o.size);
 				break;
+
+			case mtStat:
+				msg.o.io.err = dummyfs_statfs(ctx, msg.o.data, msg.o.size);
+				break;
 		}
 		msgRespond(ctx->port, &msg, rid);
 	}

@@ -173,6 +173,10 @@ int libext2_handler(void *fdata, msg_t *msg)
 	case mtUnlink:
 		msg->o.io.err = ext2_unlink(fs, msg->i.ln.dir.id, msg->i.data, (uint8_t)strlen(msg->i.data));
 		break;
+
+	case mtStat:
+		msg->o.io.err = ext2_statfs(fs, msg->o.data, msg->o.size);
+		break;
 	}
 
 	return EOK;

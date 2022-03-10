@@ -57,6 +57,9 @@ int dummyfs_readdir(void *ctx, oid_t *dir, offs_t offs, struct dirent *dent, uns
 int dummyfs_createMapped(void *ctx, oid_t *dir, const char *name, void *addr, size_t size, oid_t *oid);
 
 
+int dummyfs_statfs(void *ctx, void *buf, size_t len);
+
+
 int dummyfs_mount(void **ctx, const char *data, unsigned long mode, oid_t *root);
 
 
