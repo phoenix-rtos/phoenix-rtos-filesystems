@@ -27,6 +27,7 @@
 #include <stdarg.h>
 #include <poll.h>
 #include <sys/mount.h>
+#include <sys/statvfs.h>
 
 #include "phoenix-rtos.h"
 #include "phoenix-rtos/object.h"
@@ -885,6 +886,38 @@ static int jffs2_srv_truncate(jffs2_partition_t *p, oid_t *oid, unsigned long le
 }
 
 
+static int jffs2_srv_statfs(jffs2_partition_t *p, void *buf, size_t len)
+{
+	struct super_block *sb = p->sb;
+	struct jffs2_sb_info *c = JFFS2_SB_INFO(sb);
+	struct statvfs *st = buf;
+	fsblkcnt_t avail, resv;
+
+	if ((st == NULL) || (len != sizeof(*st))) {
+		return -EINVAL;
+	}
+
+	spin_lock(&c->erase_completion_lock);
+
+	avail = c->dirty_size + c->free_size;
+	resv = c->resv_blocks_write * c->sector_size;
+
+	spin_unlock(&c->erase_completion_lock);
+
+	st->f_bsize = st->f_frsize = sb->s_blocksize;
+	st->f_blocks = c->flash_size >> sb->s_blocksize_bits;
+	st->f_bavail = st->f_bfree = (avail > resv) ? (avail - resv) >> sb->s_blocksize_bits : 0;
+	st->f_files = 0;
+	st->f_ffree = 0;
+	st->f_favail = 0;
+	st->f_fsid = c->mtd->index;
+	st->f_flag = sb->s_flags;
+	st->f_namemax = JFFS2_MAX_NAME_LEN;
+
+	return EOK;
+}
+
+
 int jffs2lib_message_handler(void *partition, msg_t *msg)
 {
 	jffs2_partition_t *p = partition;
@@ -945,6 +978,10 @@ int jffs2lib_message_handler(void *partition, msg_t *msg)
 	case mtReaddir:
 		msg->o.io.err = jffs2_srv_readdir(p, &msg->i.readdir.dir, msg->i.readdir.offs,
 				msg->o.data, msg->o.size);
+		break;
+
+	case mtStat:
+		msg->o.io.err = jffs2_srv_statfs(p, msg->o.data, msg->o.size);
 		break;
 
 	case mtSync:

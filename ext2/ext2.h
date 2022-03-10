@@ -24,6 +24,7 @@
 
 /* Misc definitions */
 #define ROOT_INO    2   /* Root inode number */
+#define MAX_NAMELEN 255 /* Max filename length */
 #define MAX_OBJECTS 512 /* Max number of filesystem objects in use */
 
 
@@ -110,6 +111,10 @@ extern int ext2_link(ext2_t *fs, id_t id, const char *name, uint8_t len, id_t li
 
 /* Removes a link */
 extern int ext2_unlink(ext2_t *fs, id_t id, const char *name, uint8_t len);
+
+
+/* Retrieves filesystem statistics */
+extern int ext2_statfs(ext2_t *fs, void *buf, size_t len);
 
 
 /* Bitmap bit operations */

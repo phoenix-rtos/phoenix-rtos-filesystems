@@ -20,6 +20,7 @@
 
 #include <sys/file.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
 #include <sys/threads.h>
 
 #include "dir.h"
@@ -526,4 +527,28 @@ int ext2_unlink(ext2_t *fs, id_t id, const char *name, uint8_t len)
 	ext2_obj_put(fs, dir);
 
 	return err;
+}
+
+
+int ext2_statfs(ext2_t *fs, void *buf, size_t len)
+{
+	ext2_sb_t *sb = fs->sb;
+	struct statvfs *st = buf;
+
+	if ((st == NULL) || (len != sizeof(*st))) {
+		return -EINVAL;
+	}
+
+	/* TODO: superblock access should be protected with a lock */
+	st->f_bsize = st->f_frsize = fs->blocksz;
+	st->f_blocks = sb->blocks;
+	st->f_bfree = sb->freeBlocks;
+	st->f_bavail = (sb->freeBlocks > sb->resBlocks) ? sb->freeBlocks - sb->resBlocks : 0;
+	st->f_files = sb->inodes;
+	st->f_favail = st->f_ffree = sb->freeInodes;
+	st->f_fsid = (unsigned long)fs; /* TODO: filesystem ID should be generated at mount time */
+	st->f_flag = 0;                 /* TODO: mount options should be saved at mount time */
+	st->f_namemax = MAX_NAMELEN;
+
+	return EOK;
 }

@@ -16,6 +16,7 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <sys/stat.h> /* to set mode for / */
+#include <sys/statvfs.h>
 #include <sys/list.h>
 #include <sys/mount.h>
 #include <sys/threads.h>
@@ -803,6 +804,30 @@ int dummyfs_createMapped(void *ctx, oid_t *dir, const char *name, void *addr, si
 	o->chunks = chunk;
 	object_unlock(fs, o);
 	object_put(fs, o);
+
+	return EOK;
+}
+
+
+int dummyfs_statfs(void *ctx, void *buf, size_t len)
+{
+	dummyfs_t *fs = ctx;
+	struct statvfs *st = buf;
+
+	if ((st == NULL) || (len != sizeof(*st))) {
+		return -EINVAL;
+	}
+
+	/* TODO: fs->size access should be protected with a lock */
+	st->f_bsize = st->f_frsize = 1;
+	st->f_blocks = DUMMYFS_SIZE_MAX;
+	st->f_bavail = st->f_bfree = st->f_blocks - fs->size;
+	st->f_files = 0;
+	st->f_ffree = 0;
+	st->f_favail = 0;
+	st->f_fsid = (unsigned long)fs; /* TODO: filesystem ID should be generated at mount time */
+	st->f_flag = 0;                 /* TODO: mount options should be saved at mount time */
+	st->f_namemax = 255;            /* TODO: define max filename limit, use 255 limit for now */
 
 	return EOK;
 }
