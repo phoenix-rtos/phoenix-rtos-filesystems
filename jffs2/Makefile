@@ -5,7 +5,7 @@
 #
 
 NAME := libjffs2
-LOCAL_HEADERS := libjffs2.h
+LOCAL_HEADERS_DIR := include
 
 # disable some warnings for jffs2 code
 LOCAL_CFLAGS := -Wno-pointer-sign -Wno-discarded-qualifiers -Wno-unused-value -Wno-strict-prototypes
@@ -21,7 +21,7 @@ LOCAL_SRCS := compr.c dir.c file.c ioctl.c nodelist.c malloc.c read.c nodemgmt.c
 # phoenix-rtos specific files
 LOCAL_SRCS += phoenix-rtos/fs.c phoenix-rtos/completion.c phoenix-rtos/slab.c \
 	phoenix-rtos/dev.c phoenix-rtos/crc32.c phoenix-rtos/rb.c phoenix-rtos/dentry.c \
-	phoenix-rtos/wait.c phoenix-rtos/phoenix-rtos.c phoenix-rtos/locks.c jffs2.c \
+	phoenix-rtos/wait.c phoenix-rtos/phoenix-rtos.c phoenix-rtos/locks.c libjffs2.c \
 	phoenix-rtos/object.c
 
 ifeq ($(MTD_EM), 1)
@@ -58,5 +58,7 @@ endif
 ifeq ($(CONFIG_JFFS2_LZO), 1)
   LOCAL_SRCS += compr_lzo.c
 endif
+
+LIBS := libstorage libmtd
 
 include $(static-lib.mk)
