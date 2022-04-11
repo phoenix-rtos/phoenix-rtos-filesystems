@@ -61,12 +61,6 @@ struct path {
 };
 
 
-struct kvec {
-	void *iov_base;
-	size_t iov_len;
-};
-
-
 struct seq_file
 {
 };
