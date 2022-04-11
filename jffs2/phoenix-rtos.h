@@ -28,19 +28,19 @@
 #include <signal.h>
 #include <syslog.h>
 
-#include "linux/list.h"
-#include "linux/magic.h"
+#include <mtd/mtd.h>
 
+#include "linux/list.h"
+
+#include "phoenix-rtos/types.h"
 #include "phoenix-rtos/kernel.h"
 #include "phoenix-rtos/completion.h"
 #include "phoenix-rtos/dev.h"
 #include "phoenix-rtos/rb.h"
-#include "phoenix-rtos/types.h"
 #include "phoenix-rtos/locks.h"
 #include "phoenix-rtos/dentry.h"
 #include "phoenix-rtos/fs.h"
 #include "phoenix-rtos/object.h"
-#include "phoenix-rtos/errno.h"
 #include "phoenix-rtos/crc32.h"
 #include "phoenix-rtos/slab.h"
 #include "phoenix-rtos/capability.h"
@@ -53,6 +53,8 @@
 #ifndef __PHOENIX
 #define __PHOENIX
 #endif
+
+#define JFFS2_SUPER_MAGIC 0x72b6
 
 #define SECTOR_ADDR(x) ( (((unsigned long)(x) / c->sector_size) * c->sector_size) )
 
@@ -432,15 +434,13 @@ void rcu_barrier(void);
 
 typedef struct _jffs2_partition_t {
 	uint32_t port;
-	uint32_t start;
-	uint32_t size;
 	int flags;
 	int root;
+	storage_t *strg;
+
 	struct super_block *sb;
 	void *objects;
 	void *devs;
-	char *mountpt;
-	void *stack;
 } jffs2_partition_t;
 
 typedef struct _jffs2_common_t {
