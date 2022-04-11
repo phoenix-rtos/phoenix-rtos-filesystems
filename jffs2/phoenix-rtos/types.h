@@ -62,8 +62,5 @@ typedef int gfp_t;
 
 typedef unsigned int slab_flags_t;
 
-typedef uint32_t phys_addr_t;
-
-typedef phys_addr_t resource_size_t;
 
 #endif /* _OS_PHOENIX_TYPES_H_ */
