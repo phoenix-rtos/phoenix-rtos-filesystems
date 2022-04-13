@@ -342,7 +342,7 @@ struct dentry *mount_mtd(struct file_system_type *fs_type, int flags,
 		int (*fill_super)(struct super_block *, void *, int))
 {
 	struct mtd_info *mtd;
-	flashdrv_dma_t *dma;
+	flashdrv_dmaBuff_t *dma;
 	jffs2_partition_t *p = (jffs2_partition_t *)data;
 
 	mtd = malloc(sizeof(struct mtd_info));
