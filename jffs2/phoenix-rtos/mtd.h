@@ -79,7 +79,7 @@ struct mtd_info {
 	uint64_t size;
 	uint32_t oobsize;
 	uint32_t oobavail;
-	flashdrv_dma_t *dma;
+	flashdrv_dmaBuff_t *dma;
 	void *data_buf;
 	void *meta_buf;
 	uint32_t start;
