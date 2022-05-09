@@ -596,11 +596,6 @@ static int libjffs2_create(void *info, oid_t *dir, const char *name, oid_t *oid,
 				dev_find_oid(p->devs, dev, d_inode(dentry)->i_ino, 1);
 			break;
 		case otSymlink:
-			/* empty target check */
-			if (dentry->d_name.len >= namelen) {
-				ret = -ENOENT;
-				break;
-			}
 			mode = S_IFLNK | S_IRWXU | S_IRWXG | S_IRWXO;
 			ret = idir->i_op->symlink(idir, dentry, name + dentry->d_name.len + 1);
 			break;
