@@ -39,24 +39,25 @@ struct dentry *mount_mtd(struct file_system_type *fs_type, int flags,
 
 	/* Initialize MTD */
 	if (p->strg->dev->mtd->type == mtd_norFlash) {
-		mtd->name = p->strg->dev->mtd->name;
 		mtd->type = MTD_NORFLASH;
-		mtd->erasesize = p->strg->dev->mtd->erasesz;
-		mtd->writesize = p->strg->dev->mtd->writesz;
-		mtd->flags = MTD_WRITEABLE;
-		mtd->size = p->strg->size;
-
-		mtd->index = 0;
-		mtd->oobsize = 0;
-		mtd->oobavail = 0;
-		mtd->storage = p->strg;
 	}
 	else if (p->strg->dev->mtd->type == mtd_nandFlash) {
-		/* TODO */
+		mtd->type = MTD_NANDFLASH;
 	}
 	else {
 		return NULL;
 	}
+
+	mtd->name = p->strg->dev->mtd->name;
+	mtd->erasesize = p->strg->dev->mtd->erasesz;
+	mtd->writesize = p->strg->dev->mtd->writesz;
+	mtd->flags = MTD_WRITEABLE;
+	mtd->size = p->strg->size;
+
+	mtd->index = 0;
+	mtd->oobsize = p->strg->dev->mtd->oobSize;
+	mtd->oobavail = p->strg->dev->mtd->oobAvail;
+	mtd->storage = p->strg;
 
 	/* Inialize superblock */
 	sb->s_mtd = mtd;
