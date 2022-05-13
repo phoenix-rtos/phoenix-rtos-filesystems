@@ -843,90 +843,70 @@ static int meterfs_readRecord(file_t *f, void *buff, size_t bufflen, unsigned in
 {
 	/* This function assumes that f contains valid firstidx and firstoff */
 	unsigned int addr, pos, retry = 0;
-	unsigned char fbuff[32];
 	entry_t *eptr;
-	ssize_t rread, stat;
-	uint32_t checksum, echecksum;
-	void *checkbuff;
+	ssize_t stat, err = -ENOENT;
+	unsigned char *tmpptr;
 
-	if (f->firstidx.nvalid || idx > f->recordcnt)
+	/* Static buffer, realloced to fit the biggest record */
+	static unsigned char *rbuff = NULL;
+	static size_t rbuffsz = 0;
+
+	if (f->firstidx.nvalid || idx > f->recordcnt) {
 		return -ENOENT;
+	}
 
 	/* Calculate record position in a storage */
 	pos = (f->firstoff / (f->header.recordsz + sizeof(entry_t))) + idx;
 	pos = pos % ((f->header.sectorcnt * ctx->sectorsz) / (f->header.recordsz + sizeof(entry_t)));
 	addr = pos * (f->header.recordsz + sizeof(entry_t)) + f->header.sector * ctx->sectorsz;
 
-	if (bufflen > f->header.recordsz - offset)
+	if (bufflen > f->header.recordsz - offset) {
 		bufflen = f->header.recordsz - offset;
+	}
 
-	do {
-		if (retry != 0)
+	if (f->header.recordsz + sizeof(entry_t) > rbuffsz) {
+		LOG_DEBUG("rbuff realloc, oldsz %zu, newsz %zu\n", rbuffsz, f->header.recordsz + sizeof(entry_t));
+		tmpptr = realloc(rbuff, f->header.recordsz + sizeof(entry_t));
+		if (tmpptr == NULL) {
+			LOG_DEBUG("rbuff realloc fail\n");
+			return -ENOMEM;
+		}
+		rbuff = tmpptr;
+		rbuffsz = f->header.recordsz + sizeof(entry_t);
+	}
+
+	while (err != 0 && retry++ < 3) {
+		if (retry != 0) {
 			LOG_DEBUG("Read retry #%d\n", retry);
-
-		rread = 0;
-		eptr = (entry_t *)fbuff;
-
-		if (f->header.recordsz + sizeof(entry_t) <= sizeof(fbuff)) {
-			stat = ctx->read(ctx->offset + addr, fbuff, f->header.recordsz + sizeof(entry_t));
-			if (stat < 0)
-				return stat;
-			else
-				rread = stat - sizeof(entry_t);
-
-			if (eptr->id.nvalid || eptr->id.no != f->firstidx.no + idx)
-				return -ENOENT;
-			echecksum = eptr->checksum;
-
-			memcpy(buff, fbuff + sizeof(entry_t) + offset, bufflen);
-
-			checksum = meterfs_calcChecksum(buff, bufflen);
 		}
-		else {
-			stat = ctx->read(ctx->offset + addr + offsetof(entry_t, id), eptr, sizeof(*eptr));
-			if (stat < 0)
-				return stat;
 
-			if (eptr->id.nvalid || eptr->id.no != f->firstidx.no + idx)
-				return -ENOENT;
-			echecksum = eptr->checksum;
-
-			/* Read data */
-			rread = ctx->read(ctx->offset + addr + sizeof(entry_t) + offset, buff, bufflen);
-			if (rread < 0)
-				return rread;
-
-			checksum = meterfs_calcChecksum(buff, bufflen);
-
-			/* Did we get the whole record? */
-			if (bufflen < f->header.recordsz) {
-				if (f->header.recordsz - bufflen <= sizeof(fbuff)) {
-					checkbuff = fbuff;
-				}
-				else {
-					checkbuff = malloc(f->header.recordsz - bufflen);
-					if (checkbuff == NULL)
-						return -ENOMEM;
-				}
-
-				do {
-					stat = ctx->read(ctx->offset + addr + sizeof(entry_t) + offset + bufflen, checkbuff, f->header.recordsz - bufflen);
-					if (stat < 0)
-						break;
-
-					checksum ^= meterfs_calcChecksum(checkbuff, f->header.recordsz - bufflen);
-				} while (0);
-
-				if (checkbuff != fbuff)
-					free(checkbuff);
-
-				if (stat < 0)
-					return stat;
-			}
+		stat = ctx->read(ctx->offset + addr, rbuff, f->header.recordsz + sizeof(entry_t));
+		if (stat < 0) {
+			LOG_DEBUG("Read fail\n");
+			err = stat;
+			continue; /* Retry */
 		}
-	} while (checksum != echecksum && retry++ < 3);
 
-	return (checksum == echecksum) ? rread : -EIO;
+		eptr = (entry_t *)rbuff;
+
+		if (eptr->id.nvalid || eptr->id.no != f->firstidx.no + idx) {
+			LOG_DEBUG("ENOENT\n");
+			err = -ENOENT;
+			break;
+		}
+
+		if (eptr->checksum != meterfs_calcChecksum(rbuff + sizeof(entry_t), f->header.recordsz)) {
+			LOG_DEBUG("Read checksum fail\n");
+			err = -EIO;
+			continue; /* Retry */
+		}
+
+		memcpy(buff, rbuff + sizeof(entry_t) + offset, bufflen);
+
+		err = 0;
+	}
+
+	return (err == 0) ? bufflen : err;
 }
 
 
