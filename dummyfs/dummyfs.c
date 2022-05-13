@@ -337,12 +337,13 @@ int dummyfs_link(void *ctx, oid_t *dir, const char *name, oid_t *oid)
 	}
 
 	if (ret != EOK) {
-		object_unlock(fs, d);
+		object_unlock(fs, d); /* FIXME: remove after adding per-object locking */
 		object_lock(fs, o);
 		o->nlink--;
 		if (S_ISDIR(o->mode))
 			o->nlink--;
 		object_unlock(fs, o);
+		object_lock(fs, d); /* FIXME: remove after adding per-object locking */
 	}
 
 	d->mtime = d->atime = o->mtime = time(NULL);
