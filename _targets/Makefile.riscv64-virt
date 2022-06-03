@@ -1,9 +1,0 @@
-#
-# Makefile for Phoenix-RTOS 3 filesystems
-#
-# ia32/QEMU drivers
-#
-# Copyright 2020 Phoenix Systems
-#
-
-DEFAULT_COMPONENTS := dummyfs libext2
