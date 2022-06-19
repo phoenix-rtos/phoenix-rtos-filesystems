@@ -1,0 +1,11 @@
+#
+# Makefile for Phoenix-RTOS 3 filesystems
+#
+# NRF91 drivers
+#
+# Copyright 2020 Phoenix Systems
+#
+
+CFLAGS += -DTARGET_NRF91 -DTARGET_NRF91
+
+DEFAULT_COMPONENTS := libdummyfs dummyfs
