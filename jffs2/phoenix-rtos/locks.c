@@ -17,88 +17,66 @@
 #include "locks.h"
 
 
-void up_read(struct rw_semaphore *sem)
-{
-	mutexLock(sem->lock);
-
-	if (sem->cnt < 0x7fffffff) sem->cnt++;
-
-	if (sem->wwait)
-		condSignal(sem->wcond);
-	else if (sem->rwait)
-		condSignal(sem->rcond);
-
-	mutexUnlock(sem->lock);
-}
+/* Note: current mutex-based RW semaphore implementation has 2 significant drawbacks: */
+/* 1. the writers may get starved by the readers */
+/* 2. the current writer may inherit priority from the first reader only */
+/* To be fixed by RW semaphore implementation in kernel */
 
 
 void down_read(struct rw_semaphore *sem)
 {
-	mutexLock(sem->lock);
+	mutexLock(sem->rlock);
 
-	sem->rwait++;
-	while (sem->wwait)
-		condWait(sem->rcond, sem->lock, 0);
+	if (++sem->rcnt == 1) {
+		mutexLock(sem->wlock);
+	}
 
-	while (!sem->cnt)
-		condWait(sem->rcond, sem->lock, 0);
-
-	sem->rwait--;
-	if (sem->cnt) sem->cnt--;
-
-	mutexUnlock(sem->lock);
+	mutexUnlock(sem->rlock);
 }
 
 
-void up_write(struct rw_semaphore *sem)
+void up_read(struct rw_semaphore *sem)
 {
-	mutexLock(sem->lock);
-	sem->cnt = 0x7fffffff;
+	mutexLock(sem->rlock);
 
-	if (sem->wwait)
-		condSignal(sem->wcond);
-	else if (sem->rwait)
-		condSignal(sem->rcond);
+	if (--sem->rcnt == 0) {
+		mutexUnlock(sem->wlock);
+	}
 
-	mutexUnlock(sem->lock);
+	mutexUnlock(sem->rlock);
 }
 
 
 void down_write(struct rw_semaphore *sem)
 {
-	mutexLock(sem->lock);
-
-	sem->wwait++;
-	while (sem->cnt != 0x7fffffff)
-		condWait(sem->wcond, sem->lock, 0);
-
-	sem->wwait--;
-	sem->cnt = 0;
-
-	mutexUnlock(sem->lock);
+	mutexLock(sem->wlock);
 }
 
 
-void init_rwsem(struct rw_semaphore *sem)
+void up_write(struct rw_semaphore *sem)
 {
-	if (sem == NULL)
-		return;
-
-	mutexCreate(&sem->lock);
-	condCreate(&sem->wcond);
-	condCreate(&sem->rcond);
-	sem->cnt = 0x7fffffff;
-	sem->rwait = 0;
-	sem->wwait = 0;
+	mutexUnlock(sem->wlock);
 }
 
 
 void exit_rwsem(struct rw_semaphore *sem)
 {
-	if (sem == NULL)
+	if (sem == NULL) {
 		return;
+	}
 
-	resourceDestroy(sem->lock);
-	resourceDestroy(sem->wcond);
-	resourceDestroy(sem->rcond);
+	resourceDestroy(sem->rlock);
+	resourceDestroy(sem->wlock);
+}
+
+
+void init_rwsem(struct rw_semaphore *sem)
+{
+	if (sem == NULL) {
+		return;
+	}
+
+	mutexCreate(&sem->rlock);
+	mutexCreate(&sem->wlock);
+	sem->rcnt = 0;
 }
