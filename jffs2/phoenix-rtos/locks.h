@@ -48,12 +48,7 @@ static inline bool mutex_is_locked(struct mutex *lock)
 
 
 struct rw_semaphore {
-	handle_t	lock;
-	handle_t	rcond;
-	handle_t	wcond;
-	uint32_t		cnt;
-	uint32_t		rwait;
-	uint32_t		wwait;
+	handle_t lock;
 };
 
 extern void up_read(struct rw_semaphore *sem);
