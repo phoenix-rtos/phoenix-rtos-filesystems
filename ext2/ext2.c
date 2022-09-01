@@ -268,6 +268,7 @@ int ext2_truncate(ext2_t *fs, id_t id, size_t size)
 int ext2_getattr(ext2_t *fs, id_t id, int type, long long *attr)
 {
 	ext2_obj_t *obj;
+	int ret = EOK;
 
 	if ((obj = ext2_obj_get(fs, id)) < 0)
 		return -EINVAL;
@@ -333,12 +334,16 @@ int ext2_getattr(ext2_t *fs, id_t id, int type, long long *attr)
 	case atPollStatus:
 		*attr = POLLIN | POLLRDNORM | POLLOUT | POLLWRNORM;
 		break;
+
+	default:
+		ret = -EINVAL;
+		break;
 	}
 
 	mutexUnlock(obj->lock);
 	ext2_obj_put(fs, obj);
 
-	return EOK;
+	return ret;
 }
 
 
@@ -375,9 +380,14 @@ int ext2_setattr(ext2_t *fs, id_t id, int type, long long attr)
 		if ((err = ext2_sb_sync(fs)) < 0)
 			break;
 		break;
+
+	default:
+		/* unknown / invalid attribute to set */
+		err = -EINVAL;
+		break;
 	}
 
-	if (!err) {
+	if (err == EOK) {
 		obj->inode->mtime = obj->inode->atime = time(NULL);
 		obj->flags |= OFLAG_DIRTY;
 		err = _ext2_obj_sync(fs, obj);

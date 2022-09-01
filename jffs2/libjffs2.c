@@ -182,7 +182,7 @@ static int libjffs2_setattr(void *info, oid_t *oid, int type, long long attr, vo
 	struct iattr iattr;
 	struct inode *inode;
 	struct dentry dentry;
-	int ret;
+	int ret = EOK;
 	struct jffs2_sb_info *c;
 	jffs2_partition_t *p = (jffs2_partition_t *)info;
 
@@ -232,9 +232,7 @@ static int libjffs2_setattr(void *info, oid_t *oid, int type, long long attr, vo
 		case (atDev):
 			if (data != NULL && size == sizeof(oid_t))
 				dev_find_oid(p->devs, data, inode->i_ino, 1);
-			inode_unlock(inode);
-			iput(inode);
-			return 0;
+			goto end;
 
 		case (atMTime):
 			iattr.ia_valid = ATTR_MTIME;
@@ -247,12 +245,16 @@ static int libjffs2_setattr(void *info, oid_t *oid, int type, long long attr, vo
 			iattr.ia_atime.tv_sec = attr;
 			iattr.ia_atime.tv_nsec = 0;
 			break;
+		default:
+			/* unknown / invalid attribute to set */
+			ret = -EINVAL;
+			goto end;
 	}
 
 	d_instantiate(&dentry, inode);
-
-
 	ret = inode->i_op->setattr(&dentry, &iattr);
+
+end:
 	inode_unlock(inode);
 	iput(inode);
 
@@ -264,6 +266,7 @@ static int libjffs2_getattr(void *info, oid_t *oid, int type, long long *attr)
 {
 	struct inode *inode;
 	jffs2_partition_t *p = (jffs2_partition_t *)info;
+	int ret = EOK;
 
 	if (info == NULL) {
 		return -EINVAL;
@@ -331,12 +334,16 @@ static int libjffs2_getattr(void *info, oid_t *oid, int type, long long *attr)
 			// trivial implementation: assume read/write is always possible
 			*attr = POLLIN|POLLRDNORM|POLLOUT|POLLWRNORM;
 			break;
+
+		default:
+			ret = -EINVAL;
+			break;
 	}
 
 	inode_unlock_shared(inode);
 	iput(inode);
 
-	return EOK;
+	return ret;
 }
 
 

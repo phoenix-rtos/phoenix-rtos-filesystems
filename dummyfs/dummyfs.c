@@ -169,10 +169,14 @@ int dummyfs_setattr(void *ctx, oid_t *oid, int type, long long attr, const void 
 		case (atATime):
 			o->atime = attr;
 			break;
+
+		default:
+			ret = -EINVAL;
+			break;
 	}
 
 	/* FIXME: mtime and atime are always set together */
-	if (type != atMTime && type != atATime)
+	if (ret == EOK && type != atMTime && type != atATime)
 		o->mtime = time(NULL);
 
 	object_unlock(fs, o);
@@ -186,6 +190,7 @@ int dummyfs_getattr(void *ctx, oid_t *oid, int type, long long *attr)
 {
 	dummyfs_t *fs = (dummyfs_t *)ctx;
 	dummyfs_object_t *o;
+	int ret = EOK;
 
 	if ((o = dummyfs_get(fs, oid)) == NULL)
 		return -ENOENT;
@@ -255,12 +260,16 @@ int dummyfs_getattr(void *ctx, oid_t *oid, int type, long long *attr)
 			// trivial implementation: assume read/write is always possible
 			*attr = POLLIN|POLLRDNORM|POLLOUT|POLLWRNORM;
 			break;
+
+		default:
+			ret = -EINVAL;
+			break;
 	}
 
 	object_unlock(fs, o);
 	object_put(fs, o);
 
-	return EOK;
+	return ret;
 }
 
 // allow overriding files by link() to support naive rename() implementation
