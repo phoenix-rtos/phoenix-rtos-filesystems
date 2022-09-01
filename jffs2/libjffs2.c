@@ -185,6 +185,7 @@ static int libjffs2_setattr(void *info, oid_t *oid, int type, long long attr, vo
 	int ret = EOK;
 	struct jffs2_sb_info *c;
 	jffs2_partition_t *p = (jffs2_partition_t *)info;
+	int done = 0;
 
 	if (info == NULL) {
 		return -EINVAL;
@@ -230,9 +231,16 @@ static int libjffs2_setattr(void *info, oid_t *oid, int type, long long attr, vo
 			break;
 
 		case (atDev):
-			if (data != NULL && size == sizeof(oid_t))
-				dev_find_oid(p->devs, data, inode->i_ino, 1);
-			goto end;
+			if (data != NULL && size == sizeof(oid_t)) {
+				if (dev_find_oid(p->devs, data, inode->i_ino, 1) == NULL) {
+					ret = -ENOMEM;
+				}
+			}
+			else {
+				ret = -EINVAL;
+			}
+			done = 1;
+			break;
 
 		case (atMTime):
 			iattr.ia_valid = ATTR_MTIME;
@@ -248,13 +256,15 @@ static int libjffs2_setattr(void *info, oid_t *oid, int type, long long attr, vo
 		default:
 			/* unknown / invalid attribute to set */
 			ret = -EINVAL;
-			goto end;
+			done = 1;
+			break;
 	}
 
-	d_instantiate(&dentry, inode);
-	ret = inode->i_op->setattr(&dentry, &iattr);
+	if (done == 0) {
+		d_instantiate(&dentry, inode);
+		ret = inode->i_op->setattr(&dentry, &iattr);
+	}
 
-end:
 	inode_unlock(inode);
 	iput(inode);
 
@@ -266,11 +276,14 @@ static int libjffs2_getattr(void *info, oid_t *oid, int type, long long *attr)
 {
 	struct inode *inode;
 	jffs2_partition_t *p = (jffs2_partition_t *)info;
+	struct jffs2_sb_info *c;
 	int ret = EOK;
 
 	if (info == NULL) {
 		return -EINVAL;
 	}
+
+	c = JFFS2_SB_INFO(p->sb);
 
 	if (!oid->id)
 		return -EINVAL;
@@ -300,6 +313,13 @@ static int libjffs2_getattr(void *info, oid_t *oid, int type, long long *attr)
 
 		case (atSize): /* size */
 			*attr = inode->i_size;
+			break;
+		case (atBlocks):
+			*attr = inode->i_blocks;
+			break;
+
+		case (atIOBlock):
+			*attr = c->mtd->writesize;
 			break;
 
 		case (atType): /* type */
