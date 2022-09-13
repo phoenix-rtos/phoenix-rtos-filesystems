@@ -157,14 +157,19 @@ ssize_t _ext2_file_write(ext2_t *fs, ext2_obj_t *obj, offs_t offs, const char *b
 
 int _ext2_file_truncate(ext2_t *fs, ext2_obj_t *obj, size_t size)
 {
-	uint32_t *bno, block, start = size / fs->blocksz, end = obj->inode->size / fs->blocksz, lbno = 0, n = 0;
+	uint32_t *bno, block, lbno = 0, n = 0;
+	uint32_t start = (size + fs->blocksz - 1) / fs->blocksz;
+	uint32_t end = (obj->inode->size + fs->blocksz - 1) / fs->blocksz;
 	int err;
+
+	/* FIXME: truncation for files with unallocated blocks might fail */
 
 	if (obj->inode->size > size) {
 		for (block = start; block < end; block++) {
 			if ((err = ext2_block_get(fs, obj, block, &bno)) < 0)
 				return err;
 
+			/* count consecutive blocks to destroy them with one call */
 			if (!lbno || (*bno == lbno + 1)) {
 				n++;
 			}
@@ -178,30 +183,16 @@ int _ext2_file_truncate(ext2_t *fs, ext2_obj_t *obj, size_t size)
 			lbno = *bno;
 		}
 
-		if (n && (err = ext2_block_destroy(fs, lbno + 1 - n, n)) < 0)
+		if ((n > 0) && (err = ext2_block_destroy(fs, lbno + 1 - n, n)) < 0)
 			return err;
 
 		if ((err = ext2_iblock_destroy(fs, obj, start, end - start)) < 0)
 			return err;
-
-		if (!size) {
-			if ((err = ext2_block_get(fs, obj, 0, &bno)) < 0)
-				return err;
-
-			if ((err = ext2_block_destroy(fs, *bno, 1)) < 0)
-				return err;
-
-			if ((err = ext2_iblock_destroy(fs, obj, 0, 1)) < 0)
-				return err;
-
-			obj->inode->blocks = 0;
-		}
-		else {
-			obj->inode->blocks -= (end - start) * fs->blocksz / fs->sectorsz;
-		}
 	}
 
 	obj->inode->size = size;
+	/* FIXME: blocks counting is broken, move it to iblock_destroy */
+	obj->inode->blocks -= (end - start) * fs->blocksz / fs->sectorsz;
 	obj->inode->mtime = obj->inode->atime = time(NULL);
 	obj->flags |= OFLAG_DIRTY;
 
