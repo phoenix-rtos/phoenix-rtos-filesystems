@@ -43,7 +43,7 @@ static int dev_cmp(rbnode_t *n1, rbnode_t *n2)
 }
 
 
-dummyfs_object_t *dev_find(dummyfs_t *ctx, oid_t *oid, int create)
+dummyfs_object_t *dev_find(dummyfs_t *ctx, oid_t *oid, unsigned long ino, int create)
 {
 	dummyfs_dev_t find, *entry;
 	dummyfs_object_t *o;
@@ -67,15 +67,20 @@ dummyfs_object_t *dev_find(dummyfs_t *ctx, oid_t *oid, int create)
 		return NULL;
 	}
 
-	if ((o = object_create(ctx)) == NULL) {
+	if ((ino == 0) && (o = object_create(ctx)) == NULL) {
 		mutexUnlock(ctx->devlock);
 		free(entry);
 		return NULL;
 	}
 
 	memcpy(&entry->dev, oid, sizeof(oid_t));
-	memcpy(&o->dev, oid, sizeof(oid_t));
-	entry->id = o->oid.id;
+	if (ino == 0) {
+		memcpy(&o->dev, oid, sizeof(oid_t));
+		entry->id = o->oid.id;
+	}
+	else
+		entry->id = ino;
+
 	lib_rbInsert(&ctx->devtree, &entry->linkage);
 	mutexUnlock(ctx->devlock);
 	return o;
