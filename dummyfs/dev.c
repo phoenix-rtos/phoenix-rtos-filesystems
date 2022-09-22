@@ -43,42 +43,49 @@ static int dev_cmp(rbnode_t *n1, rbnode_t *n2)
 }
 
 
-dummyfs_object_t *dev_find(dummyfs_t *ctx, oid_t *oid, int create)
+dummyfs_object_t *dev_find(dummyfs_t *ctx, oid_t *oid)
 {
 	dummyfs_dev_t find, *entry;
 	dummyfs_object_t *o;
 
-	if (oid == NULL)
+	if (oid == NULL) {
 		return NULL;
+	}
 
 	memcpy(&find.dev, oid, sizeof(oid_t));
 
 	mutexLock(ctx->devlock);
 	entry = lib_treeof(dummyfs_dev_t, linkage, lib_rbFind(&ctx->devtree, &find.linkage));
-
-	if (!create || entry != NULL) {
-		o = entry != NULL ? object_get(ctx, entry->id) : NULL;
-		mutexUnlock(ctx->devlock);
-		return o;
-	}
-
-	if ((entry = malloc(sizeof(dummyfs_dev_t))) == NULL) {
-		mutexUnlock(ctx->devlock);
-		return NULL;
-	}
-
-	if ((o = object_create(ctx)) == NULL) {
-		mutexUnlock(ctx->devlock);
-		free(entry);
-		return NULL;
-	}
-
-	memcpy(&entry->dev, oid, sizeof(oid_t));
-	memcpy(&o->dev, oid, sizeof(oid_t));
-	entry->id = o->oid.id;
-	lib_rbInsert(&ctx->devtree, &entry->linkage);
+	o = entry != NULL ? object_get(ctx, entry->id) : NULL;
 	mutexUnlock(ctx->devlock);
+
 	return o;
+}
+
+int dev_create(dummyfs_t *ctx, oid_t *oid, dummyfs_object_t *obj)
+{
+	dummyfs_dev_t *entry;
+
+	if (oid == NULL || obj == NULL) {
+		return -EINVAL;
+	}
+
+	entry = malloc(sizeof(dummyfs_dev_t));
+	if (entry == NULL) {
+		return -ENOMEM;
+	}
+
+	/* Update object and device parameters, so they point to each other */
+	mutexLock(ctx->devlock);
+	object_lock(ctx, obj);
+	entry->id = obj->oid.id;
+	entry->dev = *oid;
+	obj->dev = *oid;
+	lib_rbInsert(&ctx->devtree, &entry->linkage);
+
+	object_unlock(ctx, obj);
+	mutexUnlock(ctx->devlock);
+	return EOK;
 }
 
 
