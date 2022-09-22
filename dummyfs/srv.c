@@ -63,8 +63,9 @@ int dummyfs_do_mount(dummyfs_t *ctx, const char *path, oid_t *oid)
 	msg_t msg = { 0 };
 	int err;
 
-	if (lookup(path, NULL, &toid) < EOK)
+	if (lookup(path, &toid, NULL) < EOK) {
 		return -ENOENT;
+	}
 
 	if ((err = stat(path, &buf)))
 		return err;
@@ -87,19 +88,28 @@ int dummyfs_do_mount(dummyfs_t *ctx, const char *path, oid_t *oid)
 
 static int dummyfs_mount_sync(dummyfs_t *ctx, const char *mountpt)
 {
+	char *abspath = NULL;
 	oid_t toid;
 	int err;
+
+	abspath = resolve_path(mountpt, NULL, 1, 0);
+	if (abspath == NULL) {
+		return -1;
+	}
+
 	toid.port = ctx->port;
 	while (lookup("/", NULL, &toid) < 0 || toid.port == ctx->port)
 		usleep(100000);
 
 	toid.id = 0;
 	toid.port = ctx->port;
-	if ((err = dummyfs_do_mount(ctx, mountpt, &toid))) {
-		LOG("failed to mount at %s - error %d\n", mountpt, err);
+	if ((err = dummyfs_do_mount(ctx, abspath, &toid))) {
+		LOG("failed to mount at %s - error %d\n", abspath, err);
+		free(abspath);
 		return -1;
 	}
 
+	free(abspath);
 	return 0;
 }
 
@@ -239,7 +249,7 @@ int main(int argc, char **argv)
 	}
 
 	root.port = port;
-	if (dummyfs_mount((void **)&ctx, NULL, 0, &root) != EOK) {
+	if (dummyfs_mount((void **)&ctx, mountpt, 0, &root) != EOK) {
 		printf("dummyfs mount failed\n");
 		return 1;
 	}

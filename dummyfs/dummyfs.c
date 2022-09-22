@@ -57,9 +57,15 @@ static inline int dummyfs_device(dummyfs_t *ctx, oid_t *oid)
 }
 
 
+static inline int dummyfs_root(oid_t *oid)
+{
+	return oid->id == 0;
+}
+
+
 static inline dummyfs_object_t *dummyfs_get(dummyfs_t *ctx, oid_t *oid)
 {
-	return dummyfs_device(ctx, oid) ? dev_find(ctx, oid, 0) : object_get(ctx, oid->id);
+	return dummyfs_device(ctx, oid) ? dev_find(ctx, oid) : object_get(ctx, oid->id);
 }
 
 
@@ -69,6 +75,7 @@ int dummyfs_lookup(void *ctx, oid_t *dir, const char *name, oid_t *res, oid_t *d
 	dummyfs_object_t *o, *d;
 	int len = 0;
 	int err = -ENOENT;
+	char *completePath, *end;
 
 	if (dir == NULL)
 		d = object_get(fs, 0);
@@ -82,26 +89,76 @@ int dummyfs_lookup(void *ctx, oid_t *dir, const char *name, oid_t *res, oid_t *d
 		return -ENOTDIR;
 	}
 
+	completePath = strdup(name);
+	if (completePath == NULL) {
+		object_put(fs, d);
+		return -ENOMEM;
+	}
+
 	object_lock(fs, d);
 	while (name[len] != '\0') {
 		while (name[len] == '/')
 			len++;
 
-		err = dir_find(d, name + len, res);
-
-		if (err <= 0)
+		/* check again for path ending */
+		if (name[len] == '\0') {
 			break;
+		}
+
+		end = strchr(completePath + len, '/');
+		if (end != NULL) {
+			*end = 0;
+		}
+
+		if (!strcmp(completePath + len, ".")) {
+			*res = d->oid;
+			len++;
+			continue;
+		}
+		else if (!strcmp(completePath + len, "..")) {
+			if (dummyfs_root(&d->oid) != 0) {
+				*res = fs->parent;
+				*dev = fs->parent;
+				free(completePath);
+				object_unlock(fs, d);
+				object_put(fs, d);
+				return len - 1;
+			}
+			err = dir_find(d, completePath + len, res);
+			len += err;
+			object_unlock(fs, d);
+			object_put(fs, d);
+			d = object_get(fs, res->id);
+			object_lock(fs, d);
+			continue;
+		}
+
+		/* check if mountpoint */
+		if (S_ISDIR(d->mode) && (d->oid.port != d->dev.port)) {
+			*res = d->oid;
+			len--;
+			break;
+		}
+
+		err = dir_find(d, completePath + len, res);
+
+		if (err <= 0) {
+			break;
+		}
 
 		len += err;
 		object_unlock(fs, d);
 		object_put(fs, d);
 
-		if (dummyfs_device(fs, res))
+		if (dummyfs_device(fs, res)) {
 			break;
+		}
 
 		d = object_get(fs, res->id);
 		object_lock(fs, d);
 	}
+
+	free(completePath);
 
 	if (err < 0) {
 		object_unlock(fs, d);
@@ -110,11 +167,7 @@ int dummyfs_lookup(void *ctx, oid_t *dir, const char *name, oid_t *res, oid_t *d
 	}
 
 	o = dummyfs_get(fs, res);
-
-	if (S_ISCHR(d->mode) || S_ISBLK(d->mode) || S_ISFIFO(d->mode))
-		memcpy(dev, &o->dev, sizeof(oid_t));
-	else
-		memcpy(dev, res, sizeof(oid_t));
+	*dev = o->dev;
 
 	object_put(fs, o);
 	object_unlock(fs, d);
@@ -158,8 +211,14 @@ int dummyfs_setattr(void *ctx, oid_t *oid, int type, long long attr, const void 
 			break;
 
 		case (atDev):
-			/* TODO: add mouting capabilities */
-			ret = -EINVAL;
+			if (data != NULL && size == sizeof(oid_t) && S_ISDIR(o->mode) && dummyfs_device(fs, &o->dev) == 0) {
+				object_unlock(fs, o);
+				ret = dev_create(fs, (oid_t *)data, o);
+				object_lock(fs, o);
+			}
+			else {
+				ret = -EINVAL;
+			}
 			break;
 
 		case (atMTime):
@@ -466,23 +525,39 @@ int dummyfs_create(void *ctx, oid_t *dir, const char *name, oid_t *oid, unsigned
 			break;
 	}
 
-	if (S_ISCHR(mode) || S_ISBLK(mode) || S_ISFIFO(mode))
-		o = dev_find(fs, dev, 1);
-	else
+	if (S_ISCHR(mode) || S_ISBLK(mode) || S_ISFIFO(mode)) {
+		o = dev_find(fs, dev);
+		if (o == NULL) {
+			o = object_create(fs);
+			if (o == NULL) {
+				return -ENOMEM;
+			}
+		}
+		ret = dev_create(fs, dev, o);
+		if (ret != EOK) {
+			return ret;
+		}
+	}
+	else {
 		o = object_create(fs);
+		if (o == NULL) {
+			return -ENOMEM;
+		}
+	}
 
-	if (o == NULL)
-		return -ENOMEM;
 
 	object_lock(fs, o);
 	o->oid.port = fs->port;
 	o->mode = mode;
 	o->atime = o->mtime = o->ctime = time(NULL);
 
-	if (S_ISCHR(mode) || S_ISBLK(mode) || S_ISFIFO(mode))
-		memcpy(oid, dev, sizeof(oid_t));
-	else
-		memcpy(oid, &o->oid, sizeof(oid_t));
+	if (S_ISCHR(mode) || S_ISBLK(mode) || S_ISFIFO(mode)) {
+		*oid = *dev;
+	}
+	else {
+		o->dev = o->oid;
+		*oid = o->oid;
+	}
 
 	object_unlock(fs, o);
 
@@ -500,7 +575,7 @@ int dummyfs_create(void *ctx, oid_t *dir, const char *name, oid_t *oid, unsigned
 	}
 
 	object_put(fs, o);
-	return EOK;
+	return ret;
 }
 
 
@@ -521,8 +596,13 @@ int dummyfs_destroy(void *ctx, oid_t *oid)
 			dummyfs_truncate_internal(fs, o, 0);
 			object_unlock(fs, o);
 		}
-		else if (S_ISDIR(o->mode))
+		else if (S_ISDIR(o->mode)) {
+			/* check if mountpoint */
+			if (o->oid.id != o->dev.id) {
+				dev_destroy(fs, &o->dev);
+			}
 			dir_destroy(fs, o);
+		}
 		else if (S_ISCHR(o->mode) || S_ISBLK(o->mode) || S_ISFIFO(o->mode))
 			dev_destroy(fs, &o->dev);
 
@@ -840,10 +920,12 @@ int dummyfs_mount(void **ctx, const char *data, unsigned long mode, oid_t *root)
 	dummyfs_t *fs;
 	dummyfs_object_t *o;
 	oid_t rootdir;
+	char *abspath = NULL;
 
 	if ((fs = calloc(1, sizeof(dummyfs_t))) == NULL)
 		return -ENOMEM;
 
+	fs->mountpt = NULL;
 	fs->port = root->port;
 
 	if (mutexCreate(&fs->mutex) != EOK) {
@@ -876,8 +958,34 @@ int dummyfs_mount(void **ctx, const char *data, unsigned long mode, oid_t *root)
 	o->oid.port = fs->port;
 	o->mode = S_IFDIR | 0666;
 
-	memcpy(&rootdir, &o->oid, sizeof(oid_t));
+	rootdir = o->oid;
+	fs->parent = rootdir;
+
+	if (data != NULL) {
+		abspath = resolve_path(data, NULL, 1, 0);
+		if (lookup(abspath, &fs->parent, NULL) < EOK) {
+			free(abspath);
+			dev_cleanup(fs);
+			object_cleanup(fs);
+			resourceDestroy(fs->mutex);
+			free(fs);
+			return -ENOENT;
+		}
+
+		fs->mountpt = strdup(abspath);
+		free(abspath);
+		if (fs->mountpt == NULL) {
+			dev_cleanup(fs);
+			object_cleanup(fs);
+			resourceDestroy(fs->mutex);
+			free(fs);
+			return -ENOMEM;
+		}
+	}
+	o->dev = o->oid;
+
 	if (dir_add(fs, o, ".", S_IFDIR | 0666, &rootdir) != EOK) {
+		free(fs->mountpt);
 		dev_cleanup(fs);
 		object_cleanup(fs);
 		resourceDestroy(fs->mutex);
@@ -886,6 +994,7 @@ int dummyfs_mount(void **ctx, const char *data, unsigned long mode, oid_t *root)
 	}
 
 	if (dir_add(fs, o, "..", S_IFDIR | 0666, &rootdir) != EOK) {
+		free(fs->mountpt);
 		dev_cleanup(fs);
 		object_cleanup(fs);
 		resourceDestroy(fs->mutex);
@@ -902,6 +1011,8 @@ int dummyfs_mount(void **ctx, const char *data, unsigned long mode, oid_t *root)
 int dummyfs_unmount(void *ctx)
 {
 	dummyfs_t *fs = (dummyfs_t *)ctx;
+
+	free(fs->mountpt);
 
 	/* Assume, no other thread uses this filesystem */
 	dev_cleanup(fs);

@@ -87,6 +87,7 @@ typedef struct {
 	rbtree_t devtree;
 	handle_t devlock;
 	char *mountpt;
+	oid_t parent;
 } dummyfs_t;
 
 int dummyfs_incsz(dummyfs_t *ctx, int size);

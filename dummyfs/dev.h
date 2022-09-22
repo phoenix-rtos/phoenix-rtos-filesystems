@@ -18,7 +18,10 @@
 #include "dummyfs_internal.h"
 #include "object.h"
 
-extern dummyfs_object_t *dev_find(dummyfs_t *ctx, oid_t *oid, int create);
+extern dummyfs_object_t *dev_find(dummyfs_t *ctx, oid_t *oid);
+
+
+extern int dev_create(dummyfs_t *ctx, oid_t *oid, dummyfs_object_t *obj);
 
 
 extern int dev_destroy(dummyfs_t *ctx, oid_t *oid);
