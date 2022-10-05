@@ -381,6 +381,14 @@ int ext2_setattr(ext2_t *fs, id_t id, int type, long long attr)
 			break;
 		break;
 
+	case atMTime:
+		obj->inode->mtime = attr;
+		break;
+
+	case atATime:
+		obj->inode->atime = attr;
+		break;
+
 	default:
 		/* unknown / invalid attribute to set */
 		err = -EINVAL;
@@ -388,7 +396,10 @@ int ext2_setattr(ext2_t *fs, id_t id, int type, long long attr)
 	}
 
 	if (err == EOK) {
-		obj->inode->mtime = obj->inode->atime = time(NULL);
+		if (type != atMTime && type != atATime) {
+			obj->inode->mtime = obj->inode->atime = time(NULL);
+		}
+
 		obj->flags |= OFLAG_DIRTY;
 		err = _ext2_obj_sync(fs, obj);
 	}
