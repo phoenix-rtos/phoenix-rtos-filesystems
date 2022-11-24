@@ -165,6 +165,7 @@ static inline int dir_print(struct dir_context *ctx, const char *name, int len, 
 			break;
 		case DT_CHR:
 		case DT_BLK:
+		case DT_FIFO:
 			ctx->dent->d_type = otDev;
 			break;
 		case DT_LNK:
