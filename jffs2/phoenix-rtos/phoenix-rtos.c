@@ -266,7 +266,7 @@ void *kmemdup(const void *src, size_t len, unsigned gfp)
 
 unsigned long get_seconds(void)
 {
-	return 0;
+	return time(NULL);
 }
 
 bool kthread_should_stop(void)
