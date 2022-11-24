@@ -327,7 +327,7 @@ static int libjffs2_getattr(void *info, oid_t *oid, int type, long long *attr)
 				*attr = otDir;
 			else if (S_ISREG(inode->i_mode))
 				*attr = otFile;
-			else if (S_ISCHR(inode->i_mode))
+			else if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode) || S_ISFIFO(inode->i_mode))
 				*attr = otDev;
 			else if (S_ISLNK(inode->i_mode))
 				*attr = otSymlink;
@@ -609,21 +609,33 @@ static int libjffs2_create(void *info, oid_t *dir, const char *name, oid_t *oid,
 
 	switch (type) {
 		case otFile:
-			mode = S_IFREG | S_IRWXU | S_IRWXG | S_IRWXO;
+			if (!S_ISREG(mode)) {
+				mode &= ALLPERMS;
+				mode |= S_IFREG;
+			}
 			ret = idir->i_op->create(idir, dentry, mode, 0);
 			break;
 		case otDir:
-			mode = S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO;
+			if (!S_ISDIR(mode)) {
+				mode &= ALLPERMS;
+				mode |= S_IFDIR;
+			}
 			ret = idir->i_op->mkdir(idir, dentry, mode);
 			break;
 		case otDev:
-			mode = S_IFCHR | S_IRWXU | S_IRWXG | S_IRWXO;
+			if (!(S_ISCHR(mode) || S_ISBLK(mode) || S_ISFIFO(mode))) {
+				mode &= ALLPERMS;
+				mode |= S_IFCHR;
+			}
 			ret = idir->i_op->mknod(idir, dentry, mode, dev->port);
 			if (!ret)
 				dev_find_oid(p->devs, dev, d_inode(dentry)->i_ino, 1);
 			break;
 		case otSymlink:
-			mode = S_IFLNK | S_IRWXU | S_IRWXG | S_IRWXO;
+			if (!S_ISLNK(mode)) {
+				mode &= ALLPERMS;
+				mode |= S_IFLNK;
+			}
 			ret = idir->i_op->symlink(idir, dentry, name + dentry->d_name.len + 1);
 			break;
 		default:
