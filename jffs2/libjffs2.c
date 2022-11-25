@@ -434,9 +434,6 @@ static int libjffs2_link(void *info, oid_t *dir, const char *name, oid_t *oid)
 	ret = idir->i_op->link(old, idir, new);
 	inode_unlock(idir);
 
-	if (ret && S_ISCHR(inode->i_mode))
-		dev_inc(p->devs, oid);
-
 	iput(idir);
 	iput(inode);
 
@@ -517,9 +514,6 @@ static int libjffs2_unlink(void *info, oid_t *dir, const char *name)
 		ret = idir->i_op->rmdir(idir, dentry);
 	else
 		ret = idir->i_op->unlink(idir, dentry);
-
-	if (!ret && S_ISCHR(inode->i_mode))
-		dev_dec(p->devs, &oid);
 	inode_unlock(idir);
 
 	iput(idir);
