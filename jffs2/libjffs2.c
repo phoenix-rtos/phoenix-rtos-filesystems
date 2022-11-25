@@ -186,6 +186,7 @@ static int libjffs2_setattr(void *info, oid_t *oid, int type, long long attr, vo
 	struct jffs2_sb_info *c;
 	jffs2_partition_t *p = (jffs2_partition_t *)info;
 	int done = 0;
+	oid_t *dev;
 
 	if (info == NULL) {
 		return -EINVAL;
@@ -232,7 +233,13 @@ static int libjffs2_setattr(void *info, oid_t *oid, int type, long long attr, vo
 
 		case (atDev):
 			if (data != NULL && size == sizeof(oid_t)) {
-				if (dev_find_oid(p->devs, data, inode->i_ino, 1) == NULL) {
+				dev = (oid_t *)data;
+				/* Detach device */
+				if ((dev->port == oid->port) && (dev->id == oid->id)) {
+					dev_destroy(p->devs, dev_find_ino(p->devs, inode->i_ino));
+				}
+				/* Attach device */
+				else if (dev_find_oid(p->devs, dev, inode->i_ino, 1) == NULL) {
 					ret = -ENOMEM;
 				}
 			}
