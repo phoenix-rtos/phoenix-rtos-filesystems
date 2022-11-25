@@ -231,13 +231,15 @@ static int libjffs2_setattr(void *info, oid_t *oid, int type, long long attr, vo
 			break;
 
 		case (atDev):
+			/* Attach device */
 			if (data != NULL && size == sizeof(oid_t)) {
 				if (dev_find_oid(p->devs, data, inode->i_ino, 1) == NULL) {
 					ret = -ENOMEM;
 				}
 			}
+			/* Detach device */
 			else {
-				ret = -EINVAL;
+				dev_destroy(p->devs, dev_find_ino(p->devs, inode->i_ino));
 			}
 			done = 1;
 			break;
