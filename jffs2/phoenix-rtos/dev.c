@@ -66,6 +66,7 @@ static int dev_cmp_oid(rbnode_t *n1, rbnode_t *n2)
 	return 0;
 }
 
+
 static int dev_cmp_ino(rbnode_t *n1, rbnode_t *n2)
 {
 	jffs2_dev_t *d1 = lib_treeof(jffs2_dev_t, linkage_ino, n1);
@@ -77,6 +78,7 @@ static int dev_cmp_ino(rbnode_t *n1, rbnode_t *n2)
 	return 0;
 }
 
+
 jffs2_dev_t *dev_find_oid(void *ptr, oid_t *oid, unsigned long ino, int create)
 {
 	jffs2_dev_t find, *entry;
@@ -85,6 +87,7 @@ jffs2_dev_t *dev_find_oid(void *ptr, oid_t *oid, unsigned long ino, int create)
 	memcpy(&find.dev, oid, sizeof(oid_t));
 
 	mutexLock(dev_common->mutex);
+
 	entry = lib_treeof(jffs2_dev_t, linkage_oid, lib_rbFind(&dev_common->dev_oid, &find.linkage_oid));
 
 	if (!create || entry != NULL) {
@@ -97,14 +100,16 @@ jffs2_dev_t *dev_find_oid(void *ptr, oid_t *oid, unsigned long ino, int create)
 		return NULL;
 	}
 
-	entry->nlink = 1;
 	entry->ino = ino;
 	memcpy(&entry->dev, oid, sizeof(oid_t));
 	lib_rbInsert(&dev_common->dev_ino, &entry->linkage_ino);
 	lib_rbInsert(&dev_common->dev_oid, &entry->linkage_oid);
+
 	mutexUnlock(dev_common->mutex);
+
 	return entry;
 }
+
 
 jffs2_dev_t *dev_find_ino(void *ptr, unsigned long ino)
 {
@@ -114,78 +119,55 @@ jffs2_dev_t *dev_find_ino(void *ptr, unsigned long ino)
 	find.ino = ino;
 
 	mutexLock(dev_common->mutex);
+
 	entry = lib_treeof(jffs2_dev_t, linkage_ino, lib_rbFind(&dev_common->dev_ino, &find.linkage_ino));
 
 	mutexUnlock(dev_common->mutex);
+
 	return entry;
 }
 
 
-void dev_inc(void *ptr, oid_t *oid)
+static void _dev_destroy(dev_common_t *dev_common, jffs2_dev_t *dev)
 {
-	jffs2_dev_t find, *entry;
-	dev_common_t *dev_common = ptr;
-
-	memcpy(&find.dev, oid, sizeof(oid_t));
-
-	mutexLock(dev_common->mutex);
-	entry = lib_treeof(jffs2_dev_t, linkage_oid, lib_rbFind(&dev_common->dev_oid, &find.linkage_oid));
-
-	if (entry != NULL)
-		entry->nlink++;
-
-	mutexUnlock(dev_common->mutex);
+	lib_rbRemove(&dev_common->dev_ino, &dev->linkage_ino);
+	lib_rbRemove(&dev_common->dev_oid, &dev->linkage_oid);
+	free(dev);
 }
 
 
-void dev_dec(void *ptr, oid_t *oid)
+void dev_destroy(void *ptr, jffs2_dev_t *dev)
 {
-	jffs2_dev_t find, *entry;
 	dev_common_t *dev_common = ptr;
 
-	memcpy(&find.dev, oid, sizeof(oid_t));
+	if (dev != NULL) {
+		mutexLock(dev_common->mutex);
 
-	mutexLock(dev_common->mutex);
-	entry = lib_treeof(jffs2_dev_t, linkage_oid, lib_rbFind(&dev_common->dev_oid, &find.linkage_oid));
+		_dev_destroy(dev_common, dev);
 
-	if (entry != NULL) {
-		entry->nlink--;
-	} else {
 		mutexUnlock(dev_common->mutex);
-		return;
 	}
-
-	if (!entry->nlink) {
-		mutexUnlock(dev_common->mutex);
-		dev_destroy(ptr, oid);
-		return;
-	}
-	mutexUnlock(dev_common->mutex);
 }
 
 
-void dev_destroy(void *ptr, oid_t *oid)
+void dev_done(void *ptr)
 {
-	jffs2_dev_t find, *entry;
-	dev_common_t *dev_common = ptr;
+	dev_common_t *dev_common = (dev_common_t *)ptr;
+	rbnode_t *node, *next;
+	jffs2_dev_t *dev;
 
-	memcpy(&find.dev, oid, sizeof(oid_t));
+	node = lib_rbMinimum(dev_common->dev_ino.root);
+	while (node != NULL) {
+		dev = lib_treeof(jffs2_dev_t, linkage_ino, node);
+		next = lib_rbNext(node);
 
-	mutexLock(dev_common->mutex);
-	entry = lib_treeof(jffs2_dev_t, linkage_oid, lib_rbFind(&dev_common->dev_oid, &find.linkage_oid));
+		_dev_destroy(dev_common, dev);
 
-	if (entry == NULL) {
-		mutexUnlock(dev_common->mutex);
-		return;
+		node = next;
 	}
 
-	if (entry->nlink <= 0) {
-		lib_rbRemove(&dev_common->dev_ino, &entry->linkage_ino);
-		lib_rbRemove(&dev_common->dev_oid, &entry->linkage_oid);
-	}
-
-	free(entry);
-	mutexUnlock(dev_common->mutex);
+	resourceDestroy(dev_common->mutex);
+	free(dev_common);
 }
 
 

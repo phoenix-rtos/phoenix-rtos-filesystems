@@ -24,7 +24,6 @@ typedef struct _jffs2_dev_t {
 	rbnode_t linkage_oid;
 	rbnode_t linkage_ino;
 	unsigned long ino;
-	unsigned long nlink;
 	oid_t dev;
 } jffs2_dev_t;
 
@@ -46,15 +45,13 @@ extern jffs2_dev_t *dev_find_oid(void *ptr, oid_t *oid, unsigned long ino, int c
 extern jffs2_dev_t *dev_find_ino(void *ptr, unsigned long ino);
 
 
-extern void dev_destroy(void *ptr, oid_t *oid);
+extern void dev_destroy(void *ptr, jffs2_dev_t *dev);
 
 
-extern void dev_inc(void *ptr, oid_t *oid);
-
-
-extern void dev_dec(void *ptr, oid_t *oid);
+extern void dev_done(void *ptr);
 
 
 extern void dev_init(void **ptr);
+
 
 #endif /* _OS_PHOENIX_DEV_H_ */
