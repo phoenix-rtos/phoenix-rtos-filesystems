@@ -1056,6 +1056,7 @@ int libjffs2_mount(storage_t *strg, storage_fs_t *fs, const char *data, unsigned
 	/* Set root id used by jffs2 */
 	root->id = 1;
 
+	part->stop_gc = 0;
 	part->flags = mode;
 	part->strg = strg;
 	part->port = root->port;
