@@ -20,8 +20,9 @@ static void jffs2_garbage_collect_thread(void *);
 void jffs2_garbage_collect_trigger(struct jffs2_sb_info *c)
 {
 	assert_spin_locked(&c->erase_completion_lock);
-	if (c->gc_task && jffs2_thread_should_wake(c))
-		send_sig(SIGHUP, c->gc_task, 1);
+	if (c->gc_task && jffs2_thread_should_wake(c)) {
+		condSignal(c->erase_wait.cond);
+	}
 }
 
 /* This must only ever be called when no GC thread is currently running */
@@ -53,11 +54,13 @@ int jffs2_start_garbage_collect_thread(struct jffs2_sb_info *c)
 
 void jffs2_stop_garbage_collect_thread(struct jffs2_sb_info *c)
 {
+	jffs2_partition_t *part = (jffs2_partition_t *)(OFNI_BS_2SFFJ(c)->s_part);
 	int wait = 0;
 	spin_lock(&c->erase_completion_lock);
 	if (c->gc_task) {
 		jffs2_dbg(1, "Killing GC task %d\n", c->gc_task->pid);
-		send_sig(SIGKILL, c->gc_task, 1);
+		part->stop_gc = 1;
+		condSignal(c->erase_wait.cond);
 		wait = 1;
 	}
 	spin_unlock(&c->erase_completion_lock);
@@ -68,14 +71,18 @@ void jffs2_stop_garbage_collect_thread(struct jffs2_sb_info *c)
 static void jffs2_garbage_collect_thread(void *_c)
 {
 	struct jffs2_sb_info *c = _c;
+	jffs2_partition_t *part = (jffs2_partition_t *)(OFNI_BS_2SFFJ(c)->s_part);
 	sigset_t hupmask;
+	struct task_struct gc_task;
+	int stop_gc;
 
 	siginitset(&hupmask, sigmask(SIGHUP));
 	allow_signal(SIGKILL);
 	allow_signal(SIGSTOP);
 	allow_signal(SIGHUP);
 
-	c->gc_task = current;
+	gc_task.pid = getpid();
+	c->gc_task = &gc_task;
 	complete(&c->gc_thread_start);
 
 	set_user_nice(current, 10);
@@ -85,7 +92,8 @@ static void jffs2_garbage_collect_thread(void *_c)
 		sigprocmask(SIG_UNBLOCK, &hupmask, NULL);
 	again:
 		spin_lock(&c->erase_completion_lock);
-		if (!jffs2_thread_should_wake(c)) {
+		stop_gc = part->stop_gc;
+		if (!stop_gc && !jffs2_thread_should_wake(c)) {
 			set_current_state (TASK_INTERRUPTIBLE);
 			spin_unlock(&c->erase_completion_lock);
 			jffs2_dbg(1, "%s(): sleeping...\n", __func__);
@@ -94,6 +102,10 @@ static void jffs2_garbage_collect_thread(void *_c)
 			mutexUnlock(c->erase_wait.lock);
 		} else {
 			spin_unlock(&c->erase_completion_lock);
+		}
+
+		if (stop_gc) {
+			goto die;
 		}
 		/* Problem - immediately after bootup, the GCD spends a lot
 		 * of time in places like jffs2_kill_fragtree(); so much so

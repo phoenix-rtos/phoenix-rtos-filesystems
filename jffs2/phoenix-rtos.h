@@ -436,6 +436,7 @@ typedef struct _jffs2_partition_t {
 	uint32_t port;
 	int flags;
 	int root;
+	int stop_gc;
 	storage_t *strg;
 
 	struct super_block *sb;
