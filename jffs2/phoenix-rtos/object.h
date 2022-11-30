@@ -26,19 +26,19 @@ typedef struct _jffs2_object_t {
 } jffs2_object_t;
 
 
-void object_init(void *part);
-
-
 int object_insert(void *part, struct inode *inode);
 
 
 jffs2_object_t *object_get(void *part, unsigned int id, int create);
 
 
-void object_destroy(void *part, jffs2_object_t *o);
-
-
 void object_put(void *part, unsigned int id);
+
+
+void object_done(void *part);
+
+
+void object_init(void *part);
 
 
 #endif /* _OS_PHOENIX_OBJECT_H_ */
