@@ -75,11 +75,25 @@ struct dentry *mount_mtd(struct file_system_type *fs_type, int flags,
 }
 
 
-/* TODO: implement umount for jffs2 */
 void kill_mtd_super(struct super_block *sb)
 {
+	struct jffs2_sb_info *c;
+
 	if (sb != NULL) {
-		if (sb->s_mtd != NULL)
-			free(sb->s_mtd);
+		c = JFFS2_SB_INFO(sb);
+
+		/* Destroy subperblock info and sync fs */
+		sb->s_op->put_super(sb);
+
+		/* Destroy superblock locks */
+		spin_lock_destroy(&c->inocache_lock);
+		spin_lock_destroy(&c->erase_completion_lock);
+		destroy_waitqueue_head(&c->inocache_wq);
+		destroy_waitqueue_head(&c->erase_wait);
+		mutex_destroy(&c->erase_free_sem);
+		mutex_destroy(&c->alloc_sem);
+
+		free(sb->s_mtd);
+		free(sb);
 	}
 }
