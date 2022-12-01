@@ -30,11 +30,19 @@ void wake_up(wait_queue_head_t *wq_head)
 	mutexUnlock(wq_head->lock);
 }
 
+
 void init_waitqueue_head(wait_queue_head_t *wq_head)
 {
 	mutexCreate(&wq_head->lock);
 	condCreate(&wq_head->cond);
 	wq_head->cnt = 0;
+}
+
+
+void destroy_waitqueue_head(wait_queue_head_t *wq_head)
+{
+	resourceDestroy(wq_head->cond);
+	resourceDestroy(wq_head->lock);
 }
 
 

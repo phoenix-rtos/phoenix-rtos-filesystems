@@ -1083,8 +1083,29 @@ int libjffs2_mount(storage_t *strg, storage_fs_t *fs, const char *data, unsigned
 }
 
 
-/* TODO: implement umount for jffs2 */
 int libjffs2_umount(storage_fs_t *fs)
 {
-	return -ENOSYS;
+	jffs2_partition_t *part;
+
+	if ((fs == NULL) || (jffs2_common.fs == NULL)) {
+		return -EINVAL;
+	}
+	part = (jffs2_partition_t *)fs->info;
+
+	/* TODO: is it safe to unmount? */
+	/* Check for open files, mountpoints within the filesystem etc. */
+
+	/* End gc thread, sync fs, destroy superblock and mtd context */
+	jffs2_common.fs->kill_sb(part->sb);
+
+	/* Destroy in-memory objects */
+	dev_done(part->devs);
+	object_done(part);
+	free(part);
+
+	/* No need to destroy jffs2_common and call exit_jffs2_fs() on last unmounted jffs2 partition */
+	/* Objects initialized by init_jffs2_fs() may stay in memory */
+	/* delayed_work_starter thread and system_long_wq are still running (they're treated as part of the server) */
+
+	return EOK;
 }

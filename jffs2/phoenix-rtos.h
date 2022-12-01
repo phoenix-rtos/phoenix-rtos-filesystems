@@ -49,6 +49,7 @@
 
 #include "jffs2.h"
 #include "jffs2_fs_i.h"
+#include "jffs2_fs_sb.h"
 
 #ifndef __PHOENIX
 #define __PHOENIX
@@ -337,8 +338,6 @@ int init_jffs2_fs(void);
 
 void exit_jffs2_fs(void);
 
-
-struct jffs2_inode_info;
 
 extern struct workqueue_struct *system_long_wq;
 
