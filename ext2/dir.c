@@ -129,9 +129,16 @@ int _ext2_dir_read(ext2_t *fs, ext2_obj_t *dir, offs_t offs, struct dirent *res,
 	if ((entry = (ext2_dirent_t *)malloc(len)) == NULL)
 		return -ENOMEM;
 
-	if ((ret = _ext2_file_read(fs, dir, offs, (char *)entry, len)) != len) {
+	ret = _ext2_file_read(fs, dir, offs, (char *)entry, len);
+
+	if (ret < (ssize_t)sizeof(ext2_dirent_t)) {
 		free(entry);
 		return (ret < 0) ? (int)ret : -ENOENT;
+	}
+
+	if (ret < (ssize_t)(sizeof(ext2_dirent_t) + entry->len)) {
+		free(entry);
+		return -ENOENT;
 	}
 
 	if (!entry->len) {
