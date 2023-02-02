@@ -16,4 +16,4 @@ else ifneq (, $(findstring 106, $(TARGET)))
   CFLAGS += -DTARGET_IMXRT1060
 endif
 
-DEFAULT_COMPONENTS := dummyfs libmeterfs libptable
+DEFAULT_COMPONENTS := dummyfs libmeterfs
