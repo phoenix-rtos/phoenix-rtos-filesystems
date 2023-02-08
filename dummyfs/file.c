@@ -156,7 +156,7 @@ int dummyfs_write_internal(dummyfs_t *ctx, dummyfs_object_t *o, offs_t offs, con
 	int ret = EOK;
 
 	if (len == 0) {
-		return EOK;
+		return 0;
 	}
 
 	if (offs + len > o->size) {

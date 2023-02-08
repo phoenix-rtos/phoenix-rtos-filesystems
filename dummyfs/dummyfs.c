@@ -681,29 +681,18 @@ int dummyfs_read(void *ctx, oid_t *oid, offs_t offs, char *buff, size_t len)
 	dummyfs_object_t *o;
 
 	o = object_get(fs, oid->id);
-
-	if (o == NULL)
+	if (o == NULL) {
 		return -EINVAL;
+	}
 
-	if (!S_ISREG(o->mode) && !S_ISLNK(o->mode) && o->mode != OBJECT_MODE_MEM)
-		ret = -EINVAL;
+	if (!S_ISREG(o->mode) && !S_ISLNK(o->mode) && o->mode != OBJECT_MODE_MEM) {
+		object_put(fs, o);
+		return -EINVAL;
+	}
 
-	if (buff == NULL)
-		ret = -EINVAL;
-
-	if (o->size <= offs) {
+	if (((offs_t)o->size <= offs) || (len == 0)) {
 		object_put(fs, o);
 		return 0;
-	}
-
-	if (ret != EOK) {
-		object_put(fs, o);
-		return ret;
-	}
-
-	if (len == 0) {
-		object_put(fs, o);
-		return EOK;
 	}
 
 	object_lock(fs, o);
@@ -716,10 +705,12 @@ int dummyfs_read(void *ctx, oid_t *oid, offs_t offs, char *buff, size_t len)
 	do {
 		readoffs = offs - chunk->offs;
 		readsz = len > chunk->size - readoffs ? chunk->size - readoffs : len;
-		if (chunk->used)
+		if (chunk->used) {
 			memcpy(buff, chunk->data + readoffs, readsz);
-		else
+		}
+		else {
 			memset(buff, 0, readsz);
+		}
 
 		len -= readsz;
 		buff += readsz;
@@ -745,19 +736,13 @@ int dummyfs_write(void *ctx, oid_t *oid, offs_t offs, const char *buff, size_t l
 	int ret = EOK;
 
 	o = object_get(fs, oid->id);
-
-	if (o == NULL)
+	if (o == NULL) {
 		return -EINVAL;
+	}
 
-	if (!S_ISREG(o->mode))
-		ret = -EINVAL;
-
-	if (buff == NULL)
-		ret = -EINVAL;
-
-	if (ret != EOK) {
+	if (!S_ISREG(o->mode)) {
 		object_put(fs, o);
-		return ret;
+		return -EINVAL;
 	}
 
 	object_lock(fs, o);
