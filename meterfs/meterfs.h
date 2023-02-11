@@ -3,8 +3,8 @@
  *
  * Meterfs data types definitions
  *
- * Copyright 2017, 2018, 2020, 2021 Phoenix Systems
- * Author: Aleksander Kaminski, Hubert Buczynski, Tomasz Korniluk
+ * Copyright 2017, 2018, 2020, 2021, 2023 Phoenix Systems
+ * Author: Aleksander Kaminski, Hubert Buczynski, Tomasz Korniluk, Hubert Badocha
  *
  * This file is part of Phoenix-RTOS.
  *
@@ -21,6 +21,7 @@
 /* clang-format off */
 enum { meterfs_allocate = 0, meterfs_resize, meterfs_info, meterfs_chiperase, meterfs_fsInfo };
 /* clang-format on */
+
 
 typedef struct {
 	int type;
@@ -62,6 +63,9 @@ typedef struct {
 } meterfs_o_devctl_t;
 
 
+struct _meterfs_devCtx_t;
+
+
 typedef struct {
 	/* meterfs internals */
 	unsigned int h1Addr;
@@ -76,11 +80,12 @@ typedef struct {
 
 	uint32_t offset;
 
-	ssize_t (*read)(unsigned int addr, void *buff, size_t bufflen);
-	ssize_t (*write)(unsigned int addr, const void *buff, size_t bufflen);
-	int (*eraseSector)(unsigned int addr);
-	int (*partitionErase)(void); /* Deprecated, TODO: remove all partitionErase() occurrences */
-	void (*powerCtrl)(int state);
+	struct _meterfs_devCtx_t *devCtx;
+
+	ssize_t (*read)(struct _meterfs_devCtx_t *devCtx, off_t offs, void *buff, size_t bufflen);
+	ssize_t (*write)(struct _meterfs_devCtx_t *devCtx, off_t offs, const void *buff, size_t bufflen);
+	int (*eraseSector)(struct _meterfs_devCtx_t *devCtx, off_t offs);
+	void (*powerCtrl)(struct _meterfs_devCtx_t *devCtx, int state);
 } meterfs_ctx_t;
 
 
