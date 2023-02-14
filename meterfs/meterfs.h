@@ -19,7 +19,7 @@
 #define MAX_NAME_LEN 8
 
 
-enum { meterfs_allocate = 0, meterfs_resize, meterfs_info, meterfs_devInfo, meterfs_chiperase };
+enum { meterfs_allocate = 0, meterfs_resize, meterfs_info, meterfs_fsInfo, meterfs_chiperase };
 
 
 typedef struct {
@@ -108,7 +108,7 @@ int meterfs_readFile(id_t id, off_t off, char *buff, size_t bufflen, meterfs_ctx
 int meterfs_writeFile(id_t id, const char *buff, size_t bufflen, meterfs_ctx_t *ctx);
 
 
-int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *ctx);
+int meterfs_devctl(const meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *ctx);
 
 
 #endif

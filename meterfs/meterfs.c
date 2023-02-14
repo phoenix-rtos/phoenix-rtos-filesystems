@@ -1190,8 +1190,7 @@ int meterfs_writeFile(id_t id, const char *buff, size_t bufflen, meterfs_ctx_t *
 	return err;
 }
 
-
-int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *ctx)
+static int meterfs_doDevctl(const meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *ctx)
 {
 	fileheader_t h;
 	file_t *p;
@@ -1199,39 +1198,46 @@ int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *
 
 	switch (i->type) {
 		case meterfs_allocate:
-			if (!i->allocate.filesz || !i->allocate.recordsz)
+			if (!i->allocate.filesz || !i->allocate.recordsz) {
 				return -EINVAL;
+			}
 
-			if (i->allocate.filesz < i->allocate.recordsz)
+			if (i->allocate.filesz < i->allocate.recordsz) {
 				return -EINVAL;
+			}
 
 			h.filesz = i->allocate.filesz;
 			h.recordsz = i->allocate.recordsz;
 
-			if (SECTORS(&h, ctx->sectorsz) > i->allocate.sectors)
+			if (SECTORS(&h, ctx->sectorsz) > i->allocate.sectors) {
 				return -EINVAL;
+			}
 
 			err = meterfs_allocateFile(i->allocate.name, i->allocate.sectors, i->allocate.filesz, i->allocate.recordsz, ctx);
-			if (err < 0)
+			if (err < 0) {
 				return err;
+			}
 
 			break;
 
 		case meterfs_resize:
 			p = node_getById(i->resize.id, &ctx->nodesTree);
-			if (p == NULL)
+			if (p == NULL) {
 				return -ENOENT;
+			}
 
 			err = meterfs_resizeFile(p->header.name, i->resize.filesz, i->resize.recordsz, ctx);
-			if (err < 0)
+			if (err < 0) {
 				return err;
+			}
 
 			p->header.filesz = i->resize.filesz;
 			p->header.recordsz = i->resize.recordsz;
 
 			err = meterfs_getFileInfoName(p->header.name, &p->header, ctx);
-			if (err < 0)
+			if (err < 0) {
 				return err;
+			}
 
 			meterfs_powerctrl(1, ctx);
 			err = meterfs_getFilePos(p, ctx);
@@ -1245,8 +1251,9 @@ int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *
 
 		case meterfs_info:
 			p = node_getById(i->id, &ctx->nodesTree);
-			if (p == NULL)
+			if (p == NULL) {
 				return -ENOENT;
+			}
 
 			o->info.sectors = p->header.sectorcnt;
 			o->info.filesz = p->header.filesz;
@@ -1255,7 +1262,7 @@ int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *
 
 			break;
 
-		case meterfs_devInfo:
+		case meterfs_fsInfo:
 			o->fsInfo.sectorsz = ctx->sectorsz;
 			o->fsInfo.sz = ctx->sz;
 			o->fsInfo.filecnt = ctx->filecnt;
@@ -1278,8 +1285,9 @@ int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *
 			meterfs_powerctrl(0, ctx);
 			node_cleanAll(&ctx->nodesTree);
 			err = meterfs_checkfs(ctx);
-			if (err < 0)
+			if (err < 0) {
 				return err;
+			}
 			break;
 
 		default:
@@ -1288,6 +1296,18 @@ int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *
 	}
 
 	return err;
+}
+
+
+int meterfs_devctl(const meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *ctx)
+{
+	/*
+	 *  	Due to problems with current version of message passing we have to duplicate the error.
+	 *
+	 *		TODO Remove err from meterfs_o_devctl_t.
+	 */
+	o->err = meterfs_doDevctl(i, o, ctx);
+	return o->err;
 }
 
 
