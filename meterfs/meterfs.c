@@ -26,7 +26,7 @@
 #include "node.h"
 
 #define TOTAL_SIZE(f)        (((f)->filesz / (f)->recordsz) * ((f)->recordsz + sizeof(entry_t)))
-#define SECTORS(f, sectorsz) (((TOTAL_SIZE(f) + (sectorsz) - 1) / (sectorsz)) + 1)
+#define SECTORS(f, sectorsz) (((TOTAL_SIZE(f) + (sectorsz)-1) / (sectorsz)) + 1)
 
 /* clang-format off */
 #define LOG_INFO(str, ...) do { if(1) printf(str "\n", ##__VA_ARGS__); } while(0)
@@ -664,7 +664,7 @@ static int meterfs_getFilePos(file_t *f, meterfs_ctx_t *ctx)
 		return 0;
 
 	/* Find newest record */
-	for (interval = totalrecord - 1; interval != 0; ) {
+	for (interval = totalrecord - 1; interval != 0;) {
 		idx = ((f->lastoff / (f->header.recordsz + sizeof(entry_t))) + interval) % totalrecord;
 		offset = idx * (f->header.recordsz + sizeof(entry_t));
 		err = ctx->read(ctx->offset + baddr + offset + offsetof(entry_t, id), &id, sizeof(id));
@@ -689,7 +689,7 @@ static int meterfs_getFilePos(file_t *f, meterfs_ctx_t *ctx)
 	diff -= maxrecord;
 
 	/* Find oldest record */
-	for (interval = diff; interval != 0 && diff != 0; ) {
+	for (interval = diff; interval != 0 && diff != 0;) {
 		idx = (int)(f->firstoff / (f->header.recordsz + sizeof(entry_t))) + interval;
 		if (idx < 0)
 			idx += totalrecord;
@@ -1252,6 +1252,14 @@ int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *
 			o->info.filesz = p->header.filesz;
 			o->info.recordsz = p->header.recordsz;
 			o->info.recordcnt = p->recordcnt;
+
+			break;
+
+		case meterfs_devInfo:
+			o->fsInfo.sectorsz = ctx->sectorsz;
+			o->fsInfo.sz = ctx->sz;
+			o->fsInfo.filecnt = ctx->filecnt;
+			o->fsInfo.fileLimit = MAX_FILE_CNT(ctx->sectorsz);
 
 			break;
 

@@ -19,7 +19,7 @@
 #define MAX_NAME_LEN 8
 
 
-enum { meterfs_allocate = 0, meterfs_resize, meterfs_info, meterfs_chiperase };
+enum { meterfs_allocate = 0, meterfs_resize, meterfs_info, meterfs_devInfo, meterfs_chiperase };
 
 
 typedef struct {
@@ -45,12 +45,20 @@ typedef struct {
 
 typedef struct {
 	int err;
+	
 	struct _info {
 		size_t sectors;
 		size_t filesz;
 		size_t recordsz;
 		size_t recordcnt;
 	} info;
+
+	struct {
+		size_t sz;
+		size_t sectorsz;
+		size_t fileLimit;
+		size_t filecnt;
+	} fsInfo;
 } meterfs_o_devctl_t;
 
 
