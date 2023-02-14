@@ -18,9 +18,9 @@
 
 #define MAX_NAME_LEN 8
 
-
-enum { meterfs_allocate = 0, meterfs_resize, meterfs_info, meterfs_fsInfo, meterfs_chiperase };
-
+/* clang-format off */
+enum { meterfs_allocate = 0, meterfs_resize, meterfs_info, meterfs_chiperase, meterfs_fsInfo };
+/* clang-format on */
 
 typedef struct {
 	int type;
@@ -45,7 +45,7 @@ typedef struct {
 
 typedef struct {
 	int err;
-	
+
 	struct _info {
 		size_t sectors;
 		size_t filesz;

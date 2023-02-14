@@ -25,10 +25,10 @@
 #include "files.h"
 #include "node.h"
 
-#define TOTAL_SIZE(f)        (((f)->filesz / (f)->recordsz) * ((f)->recordsz + sizeof(entry_t)))
-#define SECTORS(f, sectorsz) (((TOTAL_SIZE(f) + (sectorsz)-1) / (sectorsz)) + 1)
-
 /* clang-format off */
+#define TOTAL_SIZE(f)        (((f)->filesz / (f)->recordsz) * ((f)->recordsz + sizeof(entry_t)))
+#define SECTORS(f, sectorsz) (((TOTAL_SIZE(f) + (sectorsz) - 1) / (sectorsz)) + 1)
+
 #define LOG_INFO(str, ...) do { if(1) printf(str "\n", ##__VA_ARGS__); } while(0)
 #define LOG_DEBUG(str, ...) do { if(0) printf(str "\n", ##__VA_ARGS__); } while(0)
 /* clang-format on */
@@ -1189,6 +1189,7 @@ int meterfs_writeFile(id_t id, const char *buff, size_t bufflen, meterfs_ctx_t *
 
 	return err;
 }
+
 
 static int meterfs_doDevctl(const meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *ctx)
 {
