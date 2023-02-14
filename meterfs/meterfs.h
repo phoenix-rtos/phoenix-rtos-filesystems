@@ -18,9 +18,9 @@
 
 #define MAX_NAME_LEN 8
 
-
-enum { meterfs_allocate = 0, meterfs_resize, meterfs_info, meterfs_chiperase };
-
+/* clang-format off */
+enum { meterfs_allocate = 0, meterfs_resize, meterfs_info, meterfs_chiperase, meterfs_fsInfo };
+/* clang-format on */
 
 typedef struct {
 	int type;
@@ -45,12 +45,20 @@ typedef struct {
 
 typedef struct {
 	int err;
+
 	struct _info {
 		size_t sectors;
 		size_t filesz;
 		size_t recordsz;
 		size_t recordcnt;
 	} info;
+
+	struct {
+		size_t sz;
+		size_t sectorsz;
+		size_t fileLimit;
+		size_t filecnt;
+	} fsInfo;
 } meterfs_o_devctl_t;
 
 
@@ -100,7 +108,7 @@ int meterfs_readFile(id_t id, off_t off, char *buff, size_t bufflen, meterfs_ctx
 int meterfs_writeFile(id_t id, const char *buff, size_t bufflen, meterfs_ctx_t *ctx);
 
 
-int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *ctx);
+int meterfs_devctl(const meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *ctx);
 
 
 #endif

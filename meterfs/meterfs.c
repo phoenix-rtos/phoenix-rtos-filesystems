@@ -25,10 +25,10 @@
 #include "files.h"
 #include "node.h"
 
+/* clang-format off */
 #define TOTAL_SIZE(f)        (((f)->filesz / (f)->recordsz) * ((f)->recordsz + sizeof(entry_t)))
 #define SECTORS(f, sectorsz) (((TOTAL_SIZE(f) + (sectorsz) - 1) / (sectorsz)) + 1)
 
-/* clang-format off */
 #define LOG_INFO(str, ...) do { if(1) printf(str "\n", ##__VA_ARGS__); } while(0)
 #define LOG_DEBUG(str, ...) do { if(0) printf(str "\n", ##__VA_ARGS__); } while(0)
 /* clang-format on */
@@ -664,7 +664,7 @@ static int meterfs_getFilePos(file_t *f, meterfs_ctx_t *ctx)
 		return 0;
 
 	/* Find newest record */
-	for (interval = totalrecord - 1; interval != 0; ) {
+	for (interval = totalrecord - 1; interval != 0;) {
 		idx = ((f->lastoff / (f->header.recordsz + sizeof(entry_t))) + interval) % totalrecord;
 		offset = idx * (f->header.recordsz + sizeof(entry_t));
 		err = ctx->read(ctx->offset + baddr + offset + offsetof(entry_t, id), &id, sizeof(id));
@@ -689,7 +689,7 @@ static int meterfs_getFilePos(file_t *f, meterfs_ctx_t *ctx)
 	diff -= maxrecord;
 
 	/* Find oldest record */
-	for (interval = diff; interval != 0 && diff != 0; ) {
+	for (interval = diff; interval != 0 && diff != 0;) {
 		idx = (int)(f->firstoff / (f->header.recordsz + sizeof(entry_t))) + interval;
 		if (idx < 0)
 			idx += totalrecord;
@@ -1191,7 +1191,7 @@ int meterfs_writeFile(id_t id, const char *buff, size_t bufflen, meterfs_ctx_t *
 }
 
 
-int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *ctx)
+static int meterfs_doDevctl(const meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *ctx)
 {
 	fileheader_t h;
 	file_t *p;
@@ -1199,39 +1199,46 @@ int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *
 
 	switch (i->type) {
 		case meterfs_allocate:
-			if (!i->allocate.filesz || !i->allocate.recordsz)
+			if (!i->allocate.filesz || !i->allocate.recordsz) {
 				return -EINVAL;
+			}
 
-			if (i->allocate.filesz < i->allocate.recordsz)
+			if (i->allocate.filesz < i->allocate.recordsz) {
 				return -EINVAL;
+			}
 
 			h.filesz = i->allocate.filesz;
 			h.recordsz = i->allocate.recordsz;
 
-			if (SECTORS(&h, ctx->sectorsz) > i->allocate.sectors)
+			if (SECTORS(&h, ctx->sectorsz) > i->allocate.sectors) {
 				return -EINVAL;
+			}
 
 			err = meterfs_allocateFile(i->allocate.name, i->allocate.sectors, i->allocate.filesz, i->allocate.recordsz, ctx);
-			if (err < 0)
+			if (err < 0) {
 				return err;
+			}
 
 			break;
 
 		case meterfs_resize:
 			p = node_getById(i->resize.id, &ctx->nodesTree);
-			if (p == NULL)
+			if (p == NULL) {
 				return -ENOENT;
+			}
 
 			err = meterfs_resizeFile(p->header.name, i->resize.filesz, i->resize.recordsz, ctx);
-			if (err < 0)
+			if (err < 0) {
 				return err;
+			}
 
 			p->header.filesz = i->resize.filesz;
 			p->header.recordsz = i->resize.recordsz;
 
 			err = meterfs_getFileInfoName(p->header.name, &p->header, ctx);
-			if (err < 0)
+			if (err < 0) {
 				return err;
+			}
 
 			meterfs_powerctrl(1, ctx);
 			err = meterfs_getFilePos(p, ctx);
@@ -1245,13 +1252,22 @@ int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *
 
 		case meterfs_info:
 			p = node_getById(i->id, &ctx->nodesTree);
-			if (p == NULL)
+			if (p == NULL) {
 				return -ENOENT;
+			}
 
 			o->info.sectors = p->header.sectorcnt;
 			o->info.filesz = p->header.filesz;
 			o->info.recordsz = p->header.recordsz;
 			o->info.recordcnt = p->recordcnt;
+
+			break;
+
+		case meterfs_fsInfo:
+			o->fsInfo.sectorsz = ctx->sectorsz;
+			o->fsInfo.sz = ctx->sz;
+			o->fsInfo.filecnt = ctx->filecnt;
+			o->fsInfo.fileLimit = MAX_FILE_CNT(ctx->sectorsz);
 
 			break;
 
@@ -1270,8 +1286,9 @@ int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *
 			meterfs_powerctrl(0, ctx);
 			node_cleanAll(&ctx->nodesTree);
 			err = meterfs_checkfs(ctx);
-			if (err < 0)
+			if (err < 0) {
 				return err;
+			}
 			break;
 
 		default:
@@ -1280,6 +1297,18 @@ int meterfs_devctl(meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *
 	}
 
 	return err;
+}
+
+
+int meterfs_devctl(const meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *ctx)
+{
+	/*
+	 *  	Due to problems with current version of message passing we have to duplicate the error.
+	 *
+	 *		TODO Remove err from meterfs_o_devctl_t.
+	 */
+	o->err = meterfs_doDevctl(i, o, ctx);
+	return o->err;
 }
 
 
