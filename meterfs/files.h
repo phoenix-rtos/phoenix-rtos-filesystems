@@ -16,8 +16,8 @@
 
 #include <stdint.h>
 
-#define HGRAIN            32 /* Must be able divide sector size */
-#define HEADER_SECTOR_CNT 2
+#define HGRAIN            32u /* Must be able divide sector size */
+#define HEADER_SECTOR_CNT 2u
 #define HEADER_SIZE(ssz)  (HEADER_SECTOR_CNT * (ssz))
 #define MAX_FILE_CNT(ssz) ((HEADER_SIZE(ssz) - HGRAIN) / HGRAIN)
 
