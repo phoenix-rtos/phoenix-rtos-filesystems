@@ -59,7 +59,7 @@ int dummyfs_truncate_internal(dummyfs_t *ctx, dummyfs_object_t *o, size_t size)
 			/* reallocate last chunk or alloc new one if reallocation fails */
 			changesz = size - o->size;
 			chunk->prev->size += changesz;
-			if (chunk->prev->used) {
+			if (chunk->prev->used != 0u) {
 				if (dummyfs_incsz(ctx, changesz) != EOK) {
 					return -ENOMEM;
 				}
@@ -100,29 +100,33 @@ int dummyfs_truncate_internal(dummyfs_t *ctx, dummyfs_object_t *o, size_t size)
 		chunk = chunk->prev;
 
 		do {
-			if (chunk->offs >= size)
+			if (chunk->offs >= size) {
 				chunk = chunk->prev;
-			else
+			}
+			else {
 				break;
+			}
 		} while (chunk != o->chunks);
 
-		if (chunk->offs + chunk->size > size) {
+		if ((chunk->offs + chunk->size) > size) {
 			chunksz = size - chunk->offs;
 			tmp = realloc(chunk->data, chunksz);
-			if (chunksz > 0 && tmp == NULL)
+			if ((chunksz > 0u) && (tmp == NULL)) {
 				return -ENOMEM;
+			}
 
 			dummyfs_decsz(ctx, chunk->size - chunksz);
-			chunk->used = chunk->used > chunksz ? chunksz : chunk->used;
+			chunk->used = (chunk->used > chunksz) ? chunksz : chunk->used;
 			chunk->size = chunksz;
 			chunk->data = tmp;
 
 			/* check if this chunk needs to also be removed; deleting first chunk (shrinking to 0) is a special case */
-			if (chunksz == 0 && size != 0)
+			if ((chunksz == 0u) && (size != 0u)) {
 				chunk = chunk->prev;
+			}
 		}
 
-		/* chunk now points to last area that shuold be preserved - everything after it will be freed. */
+		/* chunk now points to last area that should be preserved - everything after it will be freed. */
 		trash = chunk->next;
 		chunk->next = o->chunks;
 		o->chunks->prev = chunk;
@@ -134,7 +138,7 @@ int dummyfs_truncate_internal(dummyfs_t *ctx, dummyfs_object_t *o, size_t size)
 			trash = chunk;
 		}
 
-		if (size == 0) {
+		if (size == 0u) {
 			dummyfs_decsz(ctx, sizeof(dummyfs_chunk_t) + trash->size);
 			o->chunks = NULL;
 			free(trash->data);
@@ -143,7 +147,8 @@ int dummyfs_truncate_internal(dummyfs_t *ctx, dummyfs_object_t *o, size_t size)
 	}
 
 	o->size = size;
-	o->mtime = o->atime = time(NULL);
+	o->atime = time(NULL);
+	o->mtime = o->atime;
 
 	return EOK;
 }
@@ -156,24 +161,27 @@ int dummyfs_write_internal(dummyfs_t *ctx, dummyfs_object_t *o, offs_t offs, con
 	dummyfs_chunk_t *chunk;
 	int ret = EOK;
 
-	if (len == 0) {
+	if (len == 0u) {
 		return 0;
 	}
 
-	if (offs + len > o->size) {
-		if ((ret = dummyfs_truncate_internal(ctx, o, offs + len)) != EOK)
+	if ((offs + len) > o->size) {
+		ret = dummyfs_truncate_internal(ctx, o, offs + len);
+		if (ret != EOK) {
 			return ret;
+		}
 	}
 
 	for (chunk = o->chunks; chunk->next != o->chunks; chunk = chunk->next) {
-		if ((chunk->offs + chunk->size) > offs)
+		if ((chunk->offs + chunk->size) > offs) {
 			break; /* found appropriate chunk */
+		}
 	}
 
 	ret = 0;
 	do {
 		writeoffs = offs - chunk->offs;
-		writesz = len > chunk->size - writeoffs ? chunk->size - writeoffs : len;
+		writesz = (len > (chunk->size - writeoffs)) ? (chunk->size - writeoffs) : len;
 
 		if (!chunk->used) {
 			if (dummyfs_incsz(ctx, chunk->size) != EOK) {
@@ -181,32 +189,32 @@ int dummyfs_write_internal(dummyfs_t *ctx, dummyfs_object_t *o, offs_t offs, con
 			}
 
 			chunk->data = malloc(chunk->size);
-
 			if (chunk->data == NULL) {
 				dummyfs_decsz(ctx, chunk->size);
 				return -ENOMEM;
 			}
 
-			memset(chunk->data, 0, writeoffs);
-			memset(chunk->data + writeoffs +  writesz, 0, chunk->size - writesz - writeoffs);
+			(void)memset(chunk->data, 0, writeoffs);
+			(void)memset(chunk->data + writeoffs + writesz, 0, chunk->size - writesz - writeoffs);
 			chunk->used = writesz;
 		}
 		else {
 			chunk->used += writesz;
 		}
 
-		memcpy(chunk->data + writeoffs, buff, writesz);
+		(void)memcpy(chunk->data + writeoffs, buff, writesz);
 
-		len  -= writesz;
+		len -= writesz;
 		offs += writesz;
 		buff += writesz;
-		ret  += writesz;
+		ret += writesz;
 
 		chunk = chunk->next;
 
-	} while (len && chunk != o->chunks);
+	} while ((len != 0u) && (chunk != o->chunks));
 
-	o->mtime = o->atime = time(NULL);
+	o->mtime = time(NULL);
+	o->atime = o->mtime;
 
 	return ret;
 }
