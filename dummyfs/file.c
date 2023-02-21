@@ -29,6 +29,7 @@ int dummyfs_truncate_internal(dummyfs_t *ctx, dummyfs_object_t *o, size_t size)
 	dummyfs_chunk_t *chunk, *trash;
 	char *tmp = NULL;
 	unsigned int chunksz;
+	size_t changesz;
 
 	chunk = o->chunks;
 
@@ -40,8 +41,7 @@ int dummyfs_truncate_internal(dummyfs_t *ctx, dummyfs_object_t *o, size_t size)
 				return -ENOMEM;
 			}
 
-			chunk = malloc(sizeof(dummyfs_chunk_t));
-
+			chunk = calloc(1, sizeof(dummyfs_chunk_t));
 			if (chunk == NULL) {
 				dummyfs_decsz(ctx, sizeof(dummyfs_chunk_t));
 				return -ENOMEM;
@@ -57,30 +57,30 @@ int dummyfs_truncate_internal(dummyfs_t *ctx, dummyfs_object_t *o, size_t size)
 		}
 		else {
 			/* reallocate last chunk or alloc new one if reallocation fails */
-			chunk->prev->size += size - o->size;
+			changesz = size - o->size;
+			chunk->prev->size += changesz;
 			if (chunk->prev->used) {
-				if (dummyfs_incsz(ctx, size - o->size) != EOK) {
+				if (dummyfs_incsz(ctx, changesz) != EOK) {
 					return -ENOMEM;
 				}
 
 				tmp = realloc(chunk->prev->data, chunk->prev->size);
 				if (tmp == NULL) {
-					dummyfs_decsz(ctx, size - o->size);
-					chunk->prev->size -= size - o->size;
+					dummyfs_decsz(ctx, changesz);
+					chunk->prev->size -= changesz;
 
 					if (dummyfs_incsz(ctx, sizeof(dummyfs_chunk_t)) != EOK) {
 						return -ENOMEM;
 					}
 
-					chunk = malloc(sizeof(dummyfs_chunk_t));
-
+					chunk = calloc(1, sizeof(dummyfs_chunk_t));
 					if (chunk == NULL) {
 						dummyfs_decsz(ctx, sizeof(dummyfs_chunk_t));
 						return -ENOMEM;
 					}
 
 					chunk->offs = o->size;
-					chunk->size = size - o->size;
+					chunk->size = changesz;
 					chunk->used = 0;
 					chunk->data = NULL;
 					chunk->next = o->chunks;
@@ -89,6 +89,7 @@ int dummyfs_truncate_internal(dummyfs_t *ctx, dummyfs_object_t *o, size_t size)
 					o->chunks->prev = chunk;
 				}
 				else {
+					(void)memset(tmp + (chunk->prev->size - changesz), 0, changesz);
 					chunk->prev->data = tmp;
 				}
 			}
