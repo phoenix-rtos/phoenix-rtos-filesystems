@@ -238,15 +238,21 @@ int ext2_truncate(ext2_t *fs, id_t id, size_t size)
 	ext2_obj_t *obj;
 	int err;
 
-	if ((obj = ext2_obj_get(fs, id)) == NULL)
+	if ((obj = ext2_obj_get(fs, id)) == NULL) {
 		return -EINVAL;
+	}
 
 	do {
 		mutexLock(obj->lock);
 
 		if (!S_ISREG(obj->inode->mode)) {
+			if (S_ISDIR(obj->inode->mode)) {
+				err = -EISDIR;
+			}
+			else {
+				err = -EINVAL;
+			}
 			mutexUnlock(obj->lock);
-			err = -EINVAL;
 			break;
 		}
 

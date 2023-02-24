@@ -647,12 +647,19 @@ int dummyfs_truncate(void *ctx, oid_t *oid, size_t size)
 
 	o = object_get(fs, oid->id);
 
-	if (o == NULL)
+	if (o == NULL) {
 		return -EINVAL;
+	}
 
 	if (!S_ISREG(o->mode)) {
+		if (S_ISDIR(o->mode)) {
+			ret = -EISDIR;
+		}
+		else {
+			ret = -EACCES;
+		}
 		object_put(fs, o);
-		return -EACCES;
+		return ret;
 	}
 
 	if (o->size == size) {
