@@ -13,6 +13,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <inttypes.h>
 #include <unistd.h>
 #include <stdint.h>
 #include <errno.h>
@@ -20,6 +21,7 @@
 #include <stddef.h>
 #include <meterfs.h>
 #include <sys/threads.h>
+#include <mtd/mtd.h>
 
 #include "meterfs_storage.h"
 
@@ -28,7 +30,13 @@
 /* clang-format on */
 
 struct _meterfs_devCtx_t {
-	storage_t *storage;
+	struct mtd_info mtd;
+	struct {
+		struct erase_info instr;
+		handle_t lock;
+		handle_t cond;
+		volatile int res;
+	} erase;
 };
 
 
@@ -141,7 +149,7 @@ static ssize_t meterfsAdapter_read(struct _meterfs_devCtx_t *devCtx, off_t offs,
 	size_t retlen;
 	int err;
 
-	err = devCtx->storage->dev->mtd->ops->read(devCtx->storage, offs, buff, bufflen, &retlen);
+	err = mtd_read(&devCtx->mtd, offs, bufflen, &retlen, (unsigned char *)buff);
 	if (err < 0) {
 		return err;
 	}
@@ -154,7 +162,7 @@ static ssize_t meterfsAdapter_write(struct _meterfs_devCtx_t *devCtx, off_t offs
 	size_t retlen;
 	int err;
 
-	err = devCtx->storage->dev->mtd->ops->write(devCtx->storage, offs, buff, bufflen, &retlen);
+	err = mtd_write(&devCtx->mtd, offs, bufflen, &retlen, (unsigned char *)buff);
 	if (err < 0) {
 		return err;
 	}
@@ -162,9 +170,46 @@ static ssize_t meterfsAdapter_write(struct _meterfs_devCtx_t *devCtx, off_t offs
 }
 
 
+static void meterfsAdapter_eraseSectorCallback(struct erase_info *instr)
+{
+	struct _meterfs_devCtx_t *devCtx = (struct _meterfs_devCtx_t *)instr->priv;
+
+	if (instr->state != MTD_ERASE_DONE) {
+		LOG_INFO("meterfs_mtd: Erase at %#10" PRIx64 " finished, but state != MTD_ERASE_DONE. State is 0x%x instead.\n",
+			instr->addr, instr->state);
+		devCtx->erase.res = -EIO;
+	}
+	else {
+		devCtx->erase.res = 0;
+	}
+	(void)condSignal(devCtx->erase.cond);
+}
+
+
 static int meterfsAdapter_eraseSector(struct _meterfs_devCtx_t *devCtx, off_t offs)
 {
-	return devCtx->storage->dev->mtd->ops->erase(devCtx->storage, offs, devCtx->storage->dev->mtd->erasesz);
+	int err;
+
+	(void)memset(&devCtx->erase.instr, 0, sizeof(devCtx->erase.instr));
+
+	devCtx->erase.instr.mtd = &devCtx->mtd;
+	devCtx->erase.instr.addr = offs;
+	devCtx->erase.instr.len = devCtx->mtd.erasesize;
+	devCtx->erase.instr.callback = meterfsAdapter_eraseSectorCallback;
+	devCtx->erase.instr.priv = (u_long)devCtx;
+
+	devCtx->erase.res = 1;
+	err = mtd_erase(&devCtx->mtd, &devCtx->erase.instr);
+	if (err < 0) {
+		return err;
+	}
+	(void)mutexLock(devCtx->erase.lock);
+	while (devCtx->erase.res == 1) {
+		(void)condWait(devCtx->erase.cond, devCtx->erase.lock, 0);
+	}
+	(void)mutexUnlock(devCtx->erase.lock);
+
+	return devCtx->erase.res;
 }
 
 
@@ -174,17 +219,13 @@ static void meterfsAdapter_powerCtrl(struct _meterfs_devCtx_t *devCtx, int state
 
 	switch (state) {
 		case 0:
-			if (devCtx->storage->dev->mtd->ops->suspend != NULL) {
-				err = devCtx->storage->dev->mtd->ops->suspend(devCtx->storage);
-				if (err < 0) {
-					LOG_INFO("meterfs_mtd: Error suspending device, code: %d.", err);
-				}
+			err = mtd_suspend(&devCtx->mtd);
+			if ((err < 0) && (err != -EOPNOTSUPP)) {
+				LOG_INFO("meterfs_mtd: Error suspending device, code: %d.", err);
 			}
 			break;
 		case 1:
-			if (devCtx->storage->dev->mtd->ops->resume != NULL) {
-				devCtx->storage->dev->mtd->ops->resume(devCtx->storage);
-			}
+			mtd_resume(&devCtx->mtd);
 			break;
 		default:
 			LOG_INFO("meterfs_mtd: powerCtrl adapter encountered unexpected state: %d.", state);
@@ -238,10 +279,32 @@ int meterfs_mount(storage_t *storage, storage_fs_t *fs, const char *data, unsign
 		free(ctx);
 		return -ENOMEM;
 	}
+	err = mutexCreate(&ctx->devCtx.erase.lock);
+	if (err < 0) {
+		free(ctx);
+		return -ENOMEM;
+	}
+	err = condCreate(&ctx->devCtx.erase.cond);
+	if (err < 0) {
+		(void)resourceDestroy(ctx->devCtx.erase.lock);
+		(void)resourceDestroy(ctx->lock);
+		free(ctx);
+		return -ENOMEM;
+	}
 
-	ctx->devCtx.storage = storage;
+	ctx->devCtx.mtd.name = storage->dev->mtd->name;
+	ctx->devCtx.mtd.erasesize = storage->dev->mtd->erasesz;
+	ctx->devCtx.mtd.writesize = storage->dev->mtd->writesz;
+	ctx->devCtx.mtd.flags = MTD_WRITEABLE;
+	ctx->devCtx.mtd.size = storage->size;
+
+	ctx->devCtx.mtd.index = 0;
+	ctx->devCtx.mtd.oobsize = storage->dev->mtd->oobSize;
+	ctx->devCtx.mtd.oobavail = storage->dev->mtd->oobAvail;
+	ctx->devCtx.mtd.storage = storage;
+
 	ctx->meterfsCtx.sz = storage->size;
-	ctx->meterfsCtx.offset = storage->start;
+	ctx->meterfsCtx.offset = 0;
 	ctx->meterfsCtx.sectorsz = storage->dev->mtd->erasesz;
 	ctx->meterfsCtx.read = meterfsAdapter_read;
 	ctx->meterfsCtx.write = meterfsAdapter_write;
@@ -251,7 +314,9 @@ int meterfs_mount(storage_t *storage, storage_fs_t *fs, const char *data, unsign
 
 	err = meterfs_init(&ctx->meterfsCtx);
 	if (err < 0) {
-		resourceDestroy(ctx->lock);
+		(void)resourceDestroy(ctx->devCtx.erase.cond);
+		(void)resourceDestroy(ctx->devCtx.erase.lock);
+		(void)resourceDestroy(ctx->lock);
 		free(ctx);
 		return -EINVAL;
 	}
