@@ -526,6 +526,10 @@ static int libjffs2_unlink(void *info, oid_t *dir, const char *name)
 	iput(idir);
 	iput(inode);
 
+	if (!ret) {
+		iput(inode);
+	}
+
 	free(dentry->d_name.name);
 	free(dentry);
 
@@ -577,6 +581,7 @@ static int libjffs2_create(void *info, oid_t *dir, const char *name, oid_t *oid,
 
 	dentry = malloc(sizeof(struct dentry));
 	if (dentry == NULL) {
+		iput(idir);
 		return -ENOMEM;
 	}
 
@@ -584,6 +589,7 @@ static int libjffs2_create(void *info, oid_t *dir, const char *name, oid_t *oid,
 	dentry->d_name.name = strdup(name);
 	if (dentry->d_name.name == NULL) {
 		free(dentry);
+		iput(idir);
 		return -ENOMEM;
 	}
 
@@ -636,7 +642,6 @@ static int libjffs2_create(void *info, oid_t *dir, const char *name, oid_t *oid,
 
 	if (!ret) {
 		oid->id = d_inode(dentry)->i_ino;
-		iput(d_inode(dentry));
 	}
 
 	free(dentry->d_name.name);
