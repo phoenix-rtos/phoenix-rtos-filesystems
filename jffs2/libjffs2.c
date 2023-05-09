@@ -441,6 +441,11 @@ static int libjffs2_link(void *info, oid_t *dir, const char *name, oid_t *oid)
 	ret = idir->i_op->link(old, idir, new);
 	inode_unlock(idir);
 
+	if (!ret) {
+		/* cancel i_count increment done by link() */
+		iput(inode);
+	}
+
 	iput(idir);
 	iput(inode);
 
@@ -525,10 +530,6 @@ static int libjffs2_unlink(void *info, oid_t *dir, const char *name)
 
 	iput(idir);
 	iput(inode);
-
-	if (!ret) {
-		iput(inode);
-	}
 
 	free(dentry->d_name.name);
 	free(dentry);
@@ -642,6 +643,7 @@ static int libjffs2_create(void *info, oid_t *dir, const char *name, oid_t *oid,
 
 	if (!ret) {
 		oid->id = d_inode(dentry)->i_ino;
+		iput(d_inode(dentry));
 	}
 
 	free(dentry->d_name.name);
