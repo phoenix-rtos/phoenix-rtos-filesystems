@@ -59,6 +59,4 @@ ifeq ($(CONFIG_JFFS2_LZO), 1)
   LOCAL_SRCS += compr_lzo.c
 endif
 
-LIBS := libstorage libmtd
-
 include $(static-lib.mk)
