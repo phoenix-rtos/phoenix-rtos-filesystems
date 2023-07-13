@@ -6,14 +6,5 @@
 # Copyright 2020 Phoenix Systems
 #
 #
-CFLAGS += -DTARGET_IMXRT
-
-ifneq (, $(findstring 117, $(TARGET)))
-  CFLAGS += -DTARGET_IMXRT1170
-else ifneq (, $(findstring 105, $(TARGET)))
-  CFLAGS += -DTARGET_IMXRT1050
-else ifneq (, $(findstring 106, $(TARGET)))
-  CFLAGS += -DTARGET_IMXRT1060
-endif
 
 DEFAULT_COMPONENTS := dummyfs libdummyfs libmeterfs
