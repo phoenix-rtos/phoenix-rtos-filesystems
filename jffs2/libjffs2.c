@@ -1011,12 +1011,6 @@ static int libjffs2_statfs(void *info, void *buf, size_t len)
 }
 
 
-static int libjffs2_devctl(void *info, oid_t *oid, const void *in, void *out)
-{
-	return -ENOSYS;
-}
-
-
 static int libjffs2_sync(void *info, oid_t *oid)
 {
 	jffs2_partition_t *partition = (jffs2_partition_t *)info;
@@ -1037,7 +1031,7 @@ const static storage_fsops_t fsOps = {
 	.setattr = libjffs2_setattr,
 	.getattr = libjffs2_getattr,
 	.truncate = libjffs2_truncate,
-	.devctl = libjffs2_devctl,
+	.devctl = NULL,
 	.create = libjffs2_create,
 	.destroy = libjffs2_destroy,
 	.lookup = libjffs2_lookup,
