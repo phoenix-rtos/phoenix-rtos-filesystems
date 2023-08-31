@@ -92,7 +92,7 @@ struct jffs2_sum_unknown_mem
 {
 	union jffs2_sum_mem *next;
 	jint16_t nodetype;	/* node type */
-};
+} __attribute__((packed));
 
 struct jffs2_sum_inode_mem
 {
