@@ -100,7 +100,7 @@ static ssize_t fsOpAdapter_write(void *info, oid_t *oid, offs_t offs, const void
 }
 
 
-static int fsOpAdapter_devctl(void *info, oid_t *oid, const void *i, void *o)
+static void fsOpAdapter_devctl(void *info, oid_t *oid, const void *i, void *o)
 {
 	meterfs_partition_t *ctx = (meterfs_partition_t *)info;
 	const meterfs_i_devctl_t *in = (const meterfs_i_devctl_t *)i;
@@ -113,7 +113,6 @@ static int fsOpAdapter_devctl(void *info, oid_t *oid, const void *i, void *o)
 	out->err = meterfs_devctl(in, out, &ctx->meterfsCtx);
 
 	(void)mutexUnlock(ctx->lock);
-	return out->err;
 }
 
 
