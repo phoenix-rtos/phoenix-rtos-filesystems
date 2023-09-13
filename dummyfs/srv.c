@@ -147,7 +147,7 @@ int main(int argc, char **argv)
 	oid_t root = { 0 };
 	unsigned port;
 	msg_t msg;
-	unsigned long rid;
+	msg_rid_t rid;
 	const char *mountpt = NULL;
 	const char *remount_path = NULL;
 	int non_fs_namespace = 0;
