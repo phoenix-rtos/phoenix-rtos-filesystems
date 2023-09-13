@@ -23,16 +23,6 @@
 #include <sys/file.h>
 #include <dirent.h>
 
-#define DT_UNKNOWN		0
-#define DT_FIFO			1
-#define DT_CHR			2
-#define DT_DIR			4
-#define DT_BLK			6
-#define DT_REG			8
-#define DT_LNK			10
-#define DT_SOCK			12
-#define DT_WHT			14
-
 #define RENAME_NOREPLACE		(1 << 0)		/* Don't overwrite target */
 
 #define S_IRWXUGO		(S_IRWXU|S_IRWXG|S_IRWXO)
