@@ -14,9 +14,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/msg.h>
-#include <sys/file.h>
 #include <sys/stat.h>
 #include <string.h>
+#include <dirent.h>
 
 #include "dummyfs_internal.h"
 #include "dir.h"
@@ -145,16 +145,24 @@ int dir_add(dummyfs_t *ctx, dummyfs_object_t *dir, const char *name, uint32_t mo
 	}
 
 	memcpy(&n->oid, oid, sizeof(oid_t));
-	if (S_ISDIR(mode))
-		n->type = otDir;
-	else if (S_ISREG(mode))
-		n->type = otFile;
-	else if (S_ISCHR(mode) || S_ISBLK(mode))
-		n->type = otDev;
-	else if (S_ISLNK(mode))
-		n->type = otSymlink;
-	else
-		n->type = otUnknown;
+	if (S_ISDIR(mode)) {
+		n->type = DT_DIR;
+	}
+	else if (S_ISREG(mode)) {
+		n->type = DT_REG;
+	}
+	else if (S_ISCHR(mode)) {
+		n->type = DT_CHR;
+	}
+	else if (S_ISBLK(mode)) {
+		n->type = DT_BLK;
+	}
+	else if (S_ISLNK(mode)) {
+		n->type = DT_LNK;
+	}
+	else {
+		n->type = DT_UNKNOWN;
+	}
 	dir->size += n->len;
 
 	return EOK;
