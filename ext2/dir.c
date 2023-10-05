@@ -152,17 +152,21 @@ int _ext2_dir_read(ext2_t *fs, ext2_obj_t *dir, offs_t offs, struct dirent *res,
 	}
 
 	switch (entry->type) {
-	case DIRENT_DIR:
-		res->d_type = dtDir;
-		break;
+		case DIRENT_DIR:
+			res->d_type = DT_DIR;
+			break;
 
-	case DIRENT_CHRDEV:
-	case DIRENT_BLKDEV:
-		res->d_type = dtDev;
-		break;
+		case DIRENT_CHRDEV:
+			res->d_type = DT_CHR;
+			break;
 
-	default:
-		res->d_type = dtFile;
+		case DIRENT_BLKDEV:
+			res->d_type = DT_BLK;
+			break;
+
+		default:
+			res->d_type = DT_REG;
+			break;
 	}
 
 	res->d_ino = entry->ino;
