@@ -99,14 +99,16 @@ int dummyfs_lookup(void *ctx, oid_t *dir, const char *name, oid_t *res, oid_t *d
 
 		char *end = strchrnul(name + len, '/');
 		const size_t size = end - name + len;
-		object_lock(fs, d);
 
+		object_lock(fs, d);
 		if (!strncmp(name + len, ".", size)) {
 			*res = d->oid;
+			object_unlock(fs, d);
 			len++;
 			continue;
 		}
-		else if (!strncmp(name + len, "..", size)) {
+
+		if (!strncmp(name + len, "..", size)) {
 			if (dummyfs_root(&d->oid) != 0) {
 				*res = fs->parent;
 				*dev = fs->parent;
@@ -132,7 +134,6 @@ int dummyfs_lookup(void *ctx, oid_t *dir, const char *name, oid_t *res, oid_t *d
 		}
 
 		err = dir_find(d, name + len, res);
-
 		if (err <= 0) {
 			object_unlock(fs, d);
 			object_put(fs, d);
