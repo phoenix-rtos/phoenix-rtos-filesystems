@@ -129,27 +129,27 @@ int dummyfs_lookup(void *ctx, oid_t *dir, const char *name, oid_t *res, oid_t *d
 			*res = d->oid;
 			len--;
 			object_unlock(fs, d);
-			object_put(fs, d);
 			break;
 		}
 
 		err = dir_find(d, name + len, res);
 		if (err <= 0) {
 			object_unlock(fs, d);
-			object_put(fs, d);
 			break;
 		}
 
 		len += err;
 		object_unlock(fs, d);
-		object_put(fs, d);
 
 		if (dummyfs_device(fs, res)) {
 			break;
 		}
 
+		object_put(fs, d);
 		d = object_get(fs, res->id);
 	}
+
+	object_put(fs, d);
 
 	if (err < 0) {
 		return err;
