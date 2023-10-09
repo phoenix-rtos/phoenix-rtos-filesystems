@@ -520,11 +520,11 @@ int dummyfs_create(void *ctx, oid_t *dir, const char *name, oid_t *oid, unsigned
 			if (o == NULL) {
 				return -ENOMEM;
 			}
-		}
-		ret = dev_create(fs, dev, o);
-		if (ret != EOK) {
-			object_put(fs, o);
-			return ret;
+			ret = dev_create(fs, dev, o);
+			if (ret != EOK) {
+				object_put(fs, o);
+				return ret;
+			}
 		}
 	}
 	else {
@@ -533,7 +533,6 @@ int dummyfs_create(void *ctx, oid_t *dir, const char *name, oid_t *oid, unsigned
 			return -ENOMEM;
 		}
 	}
-
 
 	object_lock(fs, o);
 	o->oid.port = fs->port;
