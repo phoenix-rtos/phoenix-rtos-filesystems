@@ -3,56 +3,55 @@
  *
  * dummyfs
  *
- * Copyright 2012, 2018 Phoenix Systems
+ * Copyright 2012, 2018, 2023 Phoenix Systems
  * Copyright 2008 Pawel Pisarczyk
- * Author: Pawel Pisarczyk, Kamil Amanowicz, Maciej
+ * Author: Pawel Pisarczyk, Kamil Amanowicz,
+ * Maciej Purski, Aleksander Kaminski
  *
  * This file is part of Phoenix-RTOS.
  *
  * %LICENSE%
  */
 
-#ifndef _DUMMYFS_INTERNAL_H_
-#define _DUMMYFS_INTERNAL_H_
+#ifndef DUMMYFS_INTERNAL_H_
+#define DUMMYFS_INTERNAL_H_
 
 #include <errno.h>
 #include <stdint.h>
 #include <time.h>
 #include <sys/file.h>
+#include <sys/rb.h>
 #include <posix/idtree.h>
 
-#define DUMMYFS_SIZE_MAX (32 * 1024 * 1024)
+#include <board_config.h>
 
-/* threshold for cleaning directory from deleted dirents */
-#define DUMMYFS_DIRTY_DIR_AUTOCLEANUP_THRESH 8
+#ifndef DUMMYFS_SIZE_MAX
+#define DUMMYFS_SIZE_MAX (32 * 1024 * 1024)
+#endif
+
+#if 0
+#define TRACE() printf("%s\n", __FUNCTION__)
+#else
+#define TRACE()
+#endif
 
 
 typedef struct _dummyfs_dirent_t {
+	rbnode_t linkage;
+	uint32_t key;
+	struct _dummyfs_dirent_t *prev;
+	struct _dummyfs_dirent_t *next;
+
 	char *name;
-	unsigned int len;
+	size_t len;
 	uint32_t type;
 	oid_t oid;
-	uint8_t deleted;
-
-	struct _dummyfs_dirent_t *next;
-	struct _dummyfs_dirent_t *prev;
 } dummyfs_dirent_t;
 
 
-typedef struct _dummyfs_chunk_t {
-	char *data;
-
-	offs_t offs;
-	size_t size;
-	size_t used;
-
-	struct _dummyfs_chunk_t *next;
-	struct _dummyfs_chunk_t *prev;
-} dummyfs_chunk_t;
-
-
-typedef struct _dummyfs_object_t {
-	oid_t oid, dev;
+typedef struct {
+	oid_t oid;
+	oid_t dev;
 
 	unsigned int uid;
 	unsigned int gid;
@@ -65,34 +64,36 @@ typedef struct _dummyfs_object_t {
 	size_t size;
 
 	union {
-		dummyfs_dirent_t *entries;
-		dummyfs_chunk_t *chunks;
-		uint32_t port;
+		struct {
+			rbtree_t tree;
+			size_t entries;
+			struct {
+				off_t offs;
+				dummyfs_dirent_t *entry;
+			} hint;    /* Hint for ls iteration */
+		} dir;         /* Used for directories */
+		void *data;    /* Used for small files */
+		void **chunks; /* Used for big files */
 	};
 
 	time_t atime;
 	time_t mtime;
 	time_t ctime;
-
-	uint8_t dirty;
 } dummyfs_object_t;
 
 
 typedef struct {
 	uint32_t port;
 	handle_t mutex;
-	int size;
+	size_t size;
 	idtree_t dummytree;
-	handle_t olock;
-	rbtree_t devtree;
-	handle_t devlock;
 	char *mountpt;
 	oid_t parent;
+	unsigned long mode;
 } dummyfs_t;
 
-int dummyfs_incsz(dummyfs_t *ctx, int size);
 
-void dummyfs_decsz(dummyfs_t *ctx, int size);
+int _dummyfs_destroy(dummyfs_t *fs, oid_t *oid);
 
 
-#endif /* _DUMMYFS_INTERNAL_H_ */
+#endif /* DUMMYFS_INTERNAL_H_ */

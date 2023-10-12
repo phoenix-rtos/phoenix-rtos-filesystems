@@ -11,8 +11,8 @@
  *
  * %LICENSE%
  */
-#ifndef _DUMMYFS_H_
-#define _DUMMYFS_H_
+#ifndef DUMMYFS_H_
+#define DUMMYFS_H_
 
 
 int dummyfs_open(void *ctx, oid_t *oid);
@@ -66,4 +66,4 @@ int dummyfs_mount(void **ctx, const char *data, unsigned long mode, oid_t *root)
 int dummyfs_unmount(void *ctx);
 
 
-#endif /* _DUMMYFS_H_ */
+#endif /* DUMMYFS_H_ */

@@ -26,7 +26,6 @@
 #include "dummyfs_internal.h"
 #include "dummyfs.h"
 #include "object.h"
-#include "dev.h"
 #include "dir.h"
 
 #define LOG(msg, ...) printf("dummyfs: " msg, ##__VA_ARGS__)
