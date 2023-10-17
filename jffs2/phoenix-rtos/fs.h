@@ -146,25 +146,7 @@ static inline bool dir_emit_dots(struct file *file, struct dir_context *ctx)
 
 static inline int dir_print(struct dir_context *ctx, const char *name, int len, loff_t pos, uint64_t ino, unsigned type)
 {
-	switch (type) {
-		case DT_REG:
-			ctx->dent->d_type = otFile;
-			break;
-		case DT_DIR:
-			ctx->dent->d_type = otDir;
-			break;
-		case DT_CHR:
-		case DT_BLK:
-		case DT_FIFO:
-			ctx->dent->d_type = otDev;
-			break;
-		case DT_LNK:
-			ctx->dent->d_type = otSymlink;
-			break;
-		default:
-			ctx->dent->d_type = otUnknown;
-	}
-
+	ctx->dent->d_type = type;
 	ctx->pos++;
 	ctx->emit++;
 	ctx->dent->d_namlen = len;
