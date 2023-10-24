@@ -6,4 +6,4 @@
 # Copyright 2021 Phoenix Systems
 #
 
-DEFAULT_COMPONENTS := dummyfs libjffs2 libext2
+DEFAULT_COMPONENTS := dummyfs libjffs2 libext2 libfat
