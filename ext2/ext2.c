@@ -74,12 +74,13 @@ int ext2_destroy(ext2_t *fs, id_t id)
 }
 
 
-int ext2_lookup(ext2_t *fs, id_t id, const char *name, uint8_t len, id_t *res, oid_t *dev)
+int ext2_lookup(ext2_t *fs, id_t id, const char *name, uint8_t len, oid_t *res, oid_t *dev)
 {
 	ext2_obj_t *dir, *obj = NULL;
 	uint8_t i, j;
 	int err;
 
+	res->port = fs->port;
 	if (!len || (name == NULL))
 		return -EINVAL;
 
@@ -108,10 +109,10 @@ int ext2_lookup(ext2_t *fs, id_t id, const char *name, uint8_t len, id_t *res, o
 				break;
 			}
 
-			if ((err = _ext2_dir_search(fs, dir, name + i, j - i, res)) < 0)
+			if ((err = _ext2_dir_search(fs, dir, name + i, j - i, &res->id)) < 0)
 				break;
 
-			if ((obj = ext2_obj_get(fs, *res)) == NULL) {
+			if ((obj = ext2_obj_get(fs, res->id)) == NULL) {
 				ext2_unlink(fs, dir->id, name + i, j - i);
 				err = -ENOENT;
 				break;
@@ -131,8 +132,8 @@ int ext2_lookup(ext2_t *fs, id_t id, const char *name, uint8_t len, id_t *res, o
 		memcpy(dev, &obj->dev, sizeof(oid_t));
 	}
 	else {
-		dev->port = fs->oid.port;
-		dev->id = *res;
+		dev->port = fs->port;
+		dev->id = res->id;
 	}
 
 	mutexUnlock(obj->lock);

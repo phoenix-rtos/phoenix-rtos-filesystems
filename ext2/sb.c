@@ -21,8 +21,22 @@
 
 int ext2_sb_sync(ext2_t *fs)
 {
-	if (fs->write(fs->oid.id, SB_OFFSET, (char *)fs->sb, sizeof(ext2_sb_t)) != sizeof(ext2_sb_t))
-		return -EIO;
+	off_t offset = SB_OFFSET;
+	void *data = fs->sb;
+	size_t size = sizeof(ext2_sb_t);
+	if (fs->strg != NULL) {
+		if (fs->strg->dev->blk->ops->write(fs->strg, fs->strg->start + offset, data, size) != size) {
+			return -EIO;
+		}
+	}
+	else if (fs->legacy.write != NULL) {
+		if (fs->legacy.write(fs->legacy.devId, offset, data, size) != size) {
+			return -EIO;
+		}
+	}
+	else {
+		return -ENOSYS;
+	}
 
 	return EOK;
 }
@@ -37,12 +51,26 @@ void ext2_sb_destroy(ext2_t *fs)
 
 int ext2_sb_init(ext2_t *fs)
 {
+	off_t offset = SB_OFFSET;
+	size_t size = sizeof(ext2_sb_t);
+
 	if ((fs->sb = (ext2_sb_t *)malloc(sizeof(ext2_sb_t))) == NULL)
 		return -ENOMEM;
 
-	if (fs->read(fs->oid.id, SB_OFFSET, (char *)fs->sb, sizeof(ext2_sb_t)) != sizeof(ext2_sb_t)) {
-		free(fs->sb);
-		return -EIO;
+	if (fs->strg != NULL) {
+		if (fs->strg->dev->blk->ops->read(fs->strg, fs->strg->start + offset, fs->sb, size) != size) {
+			free(fs->sb);
+			return -EIO;
+		}
+	}
+	else if (fs->legacy.read != NULL) {
+		if (fs->legacy.read(fs->legacy.devId, offset, (char *)fs->sb, size) != size) {
+			free(fs->sb);
+			return -EIO;
+		}
+	}
+	else {
+		return -ENOSYS;
 	}
 
 	if (fs->sb->magic != MAGIC_EXT2) {

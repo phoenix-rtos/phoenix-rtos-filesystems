@@ -24,9 +24,19 @@
 int ext2_block_read(ext2_t *fs, uint32_t bno, void *buff, uint32_t n)
 {
 	ssize_t size = n * fs->blocksz;
-
-	if (fs->read(fs->oid.id, bno * fs->blocksz, buff, size) != size)
-		return -EIO;
+	if (fs->strg != NULL) {
+		if (fs->strg->dev->blk->ops->read(fs->strg, fs->strg->start + bno * fs->blocksz, buff, size) != size) {
+			return -EIO;
+		}
+	}
+	else if (fs->legacy.read != NULL) {
+		if (fs->legacy.read(fs->legacy.devId, bno * fs->blocksz, buff, size) != size) {
+			return -EIO;
+		}
+	}
+	else {
+		return -ENOSYS;
+	}
 
 	return EOK;
 }
@@ -35,9 +45,19 @@ int ext2_block_read(ext2_t *fs, uint32_t bno, void *buff, uint32_t n)
 int ext2_block_write(ext2_t *fs, uint32_t bno, const void *buff, uint32_t n)
 {
 	ssize_t size = n * fs->blocksz;
-
-	if (fs->write(fs->oid.id, bno * fs->blocksz, buff, size) != size)
-		return -EIO;
+	if (fs->strg != NULL) {
+		if (fs->strg->dev->blk->ops->write(fs->strg, fs->strg->start + bno * fs->blocksz, buff, size) != size) {
+			return -EIO;
+		}
+	}
+	else if (fs->legacy.write != NULL) {
+		if (fs->legacy.write(fs->legacy.devId, bno * fs->blocksz, buff, size) != size) {
+			return -EIO;
+		}
+	}
+	else {
+		return -ENOSYS;
+	}
 
 	return EOK;
 }

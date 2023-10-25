@@ -19,6 +19,8 @@
 #include <limits.h>
 #include <stdint.h>
 
+#include <storage/storage.h>
+
 #include <sys/types.h>
 
 
@@ -29,9 +31,9 @@
 
 
 /* Filesystem common data types forward declaration */
-typedef struct _ext2_sb_t   ext2_sb_t;   /* SuperBlock */
-typedef struct _ext2_gd_t   ext2_gd_t;   /* Group Descriptor*/
-typedef struct _ext2_obj_t  ext2_obj_t;  /* Filesystem object */
+typedef struct _ext2_sb_t ext2_sb_t;     /* SuperBlock */
+typedef struct _ext2_gd_t ext2_gd_t;     /* Group Descriptor*/
+typedef struct _ext2_obj_t ext2_obj_t;   /* Filesystem object */
 typedef struct _ext2_objs_t ext2_objs_t; /* Filesystem objects */
 
 
@@ -43,11 +45,15 @@ typedef ssize_t (*dev_write)(id_t, offs_t, const char *, size_t);
 typedef struct {
 	/* Device info */
 	uint32_t sectorsz; /* Device sector size */
-	dev_read read;     /* Device read callback */
-	dev_write write;   /* Device write callback */
+	storage_t *strg;   /* Pointer to libstorage data */
+	struct {
+		id_t devId;      /* Device ID for reading */
+		dev_read read;   /* Device read callback */
+		dev_write write; /* Device write callback */
+	} legacy;
 
 	/* Filesystem info */
-	oid_t oid;         /* Filesystem port and device ID */
+	unsigned int port; /* Filesystem port */
 	ext2_sb_t *sb;     /* SuperBlock */
 	ext2_gd_t *gdt;    /* Group Descriptors Table */
 	uint32_t blocksz;  /* Block size */
@@ -74,7 +80,7 @@ extern int ext2_destroy(ext2_t *fs, id_t id);
 
 
 /* Lookups a file */
-extern int ext2_lookup(ext2_t *fs, id_t id, const char *name, uint8_t len, id_t *res, oid_t *dev);
+extern int ext2_lookup(ext2_t *fs, id_t id, const char *name, uint8_t len, oid_t *res, oid_t *dev);
 
 
 /* Opens a file */
