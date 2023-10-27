@@ -148,7 +148,14 @@ static int _dummyfs_truncateObject(dummyfs_t *fs, dummyfs_object_t *o, size_t si
 	}
 
 	if (o->mode == OBJECT_MODE_MEM) {
-		return -EINVAL;
+		if (size != 0) {
+			return -EINVAL;
+		}
+		else {
+			munmap(o->data, (o->size + (_PAGE_SIZE - 1)) & ~(_PAGE_SIZE - 1));
+			o->data = 0;
+			return 0;
+		}
 	}
 
 	if (o->size < DUMMYFS_CHUNKSZ) {
@@ -255,6 +262,10 @@ static int _dummyfs_truncate(dummyfs_t *fs, oid_t *oid, size_t size)
 	o = dummyfs_object_get(fs, oid);
 	if (o == NULL) {
 		return -EINVAL;
+	}
+
+	if (o->mode == OBJECT_MODE_MEM) {
+		return -EPERM;
 	}
 
 	if (!S_ISREG(o->mode)) {
@@ -941,6 +952,10 @@ static int _dummyfs_writeObject(dummyfs_t *fs, dummyfs_object_t *o, offs_t offs,
 {
 	TRACE();
 	size_t cnt = 0;
+
+	if (o->mode == OBJECT_MODE_MEM) {
+		return -EPERM;
+	}
 
 	if (len == 0) {
 		return 0;
