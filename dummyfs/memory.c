@@ -114,7 +114,7 @@ void *dummyfs_mmap(dummyfs_t *ctx)
 	void *ptr = NULL;
 
 	if ((ctx->size + DUMMYFS_CHUNKSZ) <= DUMMYFS_SIZE_MAX) {
-		ptr = mmap(NULL, DUMMYFS_CHUNKSZ, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, NULL, 0);
+		ptr = mmap(NULL, DUMMYFS_CHUNKSZ, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, -1, 0);
 		if (ptr != MAP_FAILED) {
 			ctx->size += DUMMYFS_CHUNKSZ;
 		}

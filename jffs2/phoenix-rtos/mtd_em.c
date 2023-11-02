@@ -166,7 +166,7 @@ struct dentry *mount_mtd(struct file_system_type *fs_type, int flags,
 	int offs = 0;
 
 	printf("mmaping device\n");
-	nand_em = mmap(NULL, NAND_SIZE, PROT_READ | PROT_WRITE, 0, OID_NULL, 0);
+	nand_em = mmap(NULL, NAND_SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, -1, 0);
 
 	if (nand_em == NULL) {
 		printf("mtd mount mmap error\n");
