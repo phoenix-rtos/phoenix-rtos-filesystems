@@ -1062,7 +1062,7 @@ int dummyfs_createMapped(void *ctx, oid_t *dir, const char *name, void *addr, si
 	dummyfs_object_t *o = dummyfs_object_get(fs, oid);
 	assert(o != NULL);
 
-	o->data = mmap(NULL, (size + (_PAGE_SIZE - 1)) & ~(_PAGE_SIZE - 1), PROT_READ | PROT_WRITE, 0, OID_PHYSMEM, (addr_t)addr);
+	o->data = mmap(NULL, (size + (_PAGE_SIZE - 1)) & ~(_PAGE_SIZE - 1), PROT_READ | PROT_WRITE, MAP_PHYSMEM | MAP_ANONYMOUS, -1, (addr_t)addr);
 	o->size = size;
 	o->mode = OBJECT_MODE_MEM;
 
