@@ -274,77 +274,83 @@ int ext2_truncate(ext2_t *fs, id_t id, size_t size)
 
 int ext2_getattr(ext2_t *fs, id_t id, int type, long long *attr)
 {
-	ext2_obj_t *obj;
 	int ret = EOK;
+	ext2_obj_t *obj = ext2_obj_get(fs, id);
 
-	if ((obj = ext2_obj_get(fs, id)) < 0)
+	if (obj == NULL) {
 		return -EINVAL;
+	}
 
 	mutexLock(obj->lock);
 
 	switch(type) {
-	case atMode:
-		*attr = obj->inode->mode;
-		break;
+		case atMode:
+			*attr = obj->inode->mode;
+			break;
 
-	case atUid:
-		*attr = obj->inode->uid;
-		break;
+		case atUid:
+			*attr = obj->inode->uid;
+			break;
 
-	case atGid:
-		*attr = obj->inode->gid;
-		break;
+		case atGid:
+			*attr = obj->inode->gid;
+			break;
 
-	case atSize:
-		*attr = obj->inode->size;
-		break;
+		case atSize:
+			*attr = obj->inode->size;
+			break;
 
-	case atBlocks:
-		*attr = obj->inode->blocks;
-		break;
+		case atBlocks:
+			*attr = obj->inode->blocks;
+			break;
 
-	case atIOBlock:
-		/* TODO: determine optimal I/O block size */
-		/* fs->blocksz seems reasonable for now */
-		*attr = fs->blocksz;
-		break;
+		case atIOBlock:
+			/* TODO: determine optimal I/O block size */
+			/* fs->blocksz seems reasonable for now */
+			*attr = fs->blocksz;
+			break;
 
-	case atType:
-		if (S_ISDIR(obj->inode->mode))
-			*attr = otDir;
-		else if (S_ISREG(obj->inode->mode))
-			*attr = otFile;
-		else if (S_ISCHR(obj->inode->mode) || S_ISBLK(obj->inode->mode) || S_ISFIFO(obj->inode->mode))
-			*attr = otDev;
-		else if (S_ISLNK(obj->inode->mode))
-			*attr = otSymlink;
-		else
-			*attr = otUnknown;
-		break;
+		case atType:
+			if (S_ISDIR(obj->inode->mode)) {
+				*attr = otDir;
+			}
+			else if (S_ISREG(obj->inode->mode)) {
+				*attr = otFile;
+			}
+			else if (S_ISCHR(obj->inode->mode) || S_ISBLK(obj->inode->mode) || S_ISFIFO(obj->inode->mode)) {
+				*attr = otDev;
+			}
+			else if (S_ISLNK(obj->inode->mode)) {
+				*attr = otSymlink;
+			}
+			else {
+				*attr = otUnknown;
+			}
+			break;
 
-	case atCTime:
-		*attr = obj->inode->ctime;
-		break;
+		case atCTime:
+			*attr = obj->inode->ctime;
+			break;
 
-	case atATime:
-		*attr = obj->inode->atime;
-		break;
+		case atATime:
+			*attr = obj->inode->atime;
+			break;
 
-	case atMTime:
-		*attr = obj->inode->mtime;
-		break;
+		case atMTime:
+			*attr = obj->inode->mtime;
+			break;
 
-	case atLinks:
-		*attr = obj->inode->links;
-		break;
+		case atLinks:
+			*attr = obj->inode->links;
+			break;
 
-	case atPollStatus:
-		*attr = POLLIN | POLLRDNORM | POLLOUT | POLLWRNORM;
-		break;
+		case atPollStatus:
+			*attr = POLLIN | POLLRDNORM | POLLOUT | POLLWRNORM;
+			break;
 
-	default:
-		ret = -EINVAL;
-		break;
+		default:
+			ret = -EINVAL;
+			break;
 	}
 
 	mutexUnlock(obj->lock);
