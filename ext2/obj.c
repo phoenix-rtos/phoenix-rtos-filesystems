@@ -13,6 +13,7 @@
  * %LICENSE%
  */
 
+#include <stdbool.h>
 #include <errno.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -49,15 +50,17 @@ static int _ext2_obj_remove(ext2_t *fs, ext2_obj_t *obj)
 
 
 /* Destroys object */
-static int _ext2_obj_destroy(ext2_t *fs, ext2_obj_t *obj)
+static int _ext2_obj_destroy(ext2_t *fs, ext2_obj_t *obj, bool ignoreSync)
 {
-	int err;
-
-	if ((err = ext2_inode_destroy(fs, (uint32_t)obj->id, obj->inode->mode)) < 0)
+	int err = ext2_inode_destroy(fs, (uint32_t)obj->id, obj->inode->mode);
+	if ((err < 0) && (!ignoreSync)) {
 		return err;
+	}
 
-	if ((err = _ext2_obj_remove(fs, obj)) < 0)
+	err = _ext2_obj_remove(fs, obj);
+	if (err < 0) {
 		return err;
+	}
 
 	free(obj);
 
@@ -88,7 +91,7 @@ static int _ext2_obj_removelru(ext2_t *fs)
 
 
 /* Creates new object */
-static int _ext2_obj_create(ext2_t *fs, uint32_t pino, ext2_inode_t *inode, uint16_t mode, ext2_obj_t** res)
+static int _ext2_obj_create(ext2_t *fs, uint32_t pino, ext2_inode_t *inode, uint16_t mode, ext2_obj_t **res)
 {
 	ext2_obj_t *obj;
 	uint32_t ino;
@@ -181,10 +184,12 @@ void ext2_obj_put(ext2_t *fs, ext2_obj_t *obj)
 	mutexLock(fs->objs->lock);
 
 	if (!(--obj->refs) && !(S_ISCHR(obj->inode->mode) || S_ISBLK(obj->inode->mode))) {
-		if (!obj->inode->links)
-			_ext2_obj_destroy(fs, obj);
-		else
+		if (!obj->inode->links) {
+			_ext2_obj_destroy(fs, obj, false);
+		}
+		else {
 			LIST_ADD(&fs->objs->lru, obj);
+		}
 	}
 
 	mutexUnlock(fs->objs->lock);
@@ -257,7 +262,7 @@ int ext2_obj_destroy(ext2_t *fs, ext2_obj_t *obj)
 
 	mutexLock(fs->objs->lock);
 
-	ret = _ext2_obj_destroy(fs, obj);
+	ret = _ext2_obj_destroy(fs, obj, false);
 
 	mutexUnlock(fs->objs->lock);
 
@@ -287,7 +292,7 @@ void ext2_objs_destroy(ext2_t *fs)
 
 	for (node = lib_rbMinimum(fs->objs->used.root); node; node = next) {
 		next = lib_rbNext(node);
-		_ext2_obj_destroy(fs, lib_treeof(ext2_obj_t, node, node));
+		_ext2_obj_destroy(fs, lib_treeof(ext2_obj_t, node, node), true);
 	}
 
 	mutexUnlock(fs->objs->lock);
