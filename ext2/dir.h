@@ -17,6 +17,7 @@
 #define _DIR_H_
 
 #include <dirent.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #include <sys/types.h>
@@ -51,7 +52,7 @@ extern int _ext2_dir_empty(ext2_t *fs, ext2_obj_t *dir);
 
 
 /* Searches directory for a given file name (requires object to be locked) */
-extern int _ext2_dir_search(ext2_t *fs, ext2_obj_t *dir, const char *name, uint8_t len, id_t *res);
+extern int _ext2_dir_search(ext2_t *fs, ext2_obj_t *dir, const char *name, size_t len, id_t *res);
 
 
 /* Reads directory entry (requires object to be locked) */
@@ -59,11 +60,11 @@ extern int _ext2_dir_read(ext2_t *fs, ext2_obj_t *dir, offs_t offs, struct diren
 
 
 /* Adds directory entry (requires object to be locked) */
-extern int _ext2_dir_add(ext2_t *fs, ext2_obj_t *dir, const char *name, uint8_t len, uint16_t mode, uint32_t ino);
+extern int _ext2_dir_add(ext2_t *fs, ext2_obj_t *dir, const char *name, size_t len, uint16_t mode, uint32_t ino);
 
 
 /* Removes directory entry (requires object to be locked) */
-extern int _ext2_dir_remove(ext2_t *fs, ext2_obj_t *dir, const char *name, uint8_t len);
+extern int _ext2_dir_remove(ext2_t *fs, ext2_obj_t *dir, const char *name, size_t len);
 
 
 #endif

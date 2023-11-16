@@ -72,7 +72,7 @@ typedef struct {
 
 
 /* Creates a file */
-extern int ext2_create(ext2_t *fs, id_t id, const char *name, uint8_t len, oid_t *dev, uint16_t mode, id_t *res);
+extern int ext2_create(ext2_t *fs, id_t id, const char *name, size_t len, oid_t *dev, uint16_t mode, id_t *res);
 
 
 /* Destroys a file */
@@ -80,7 +80,7 @@ extern int ext2_destroy(ext2_t *fs, id_t id);
 
 
 /* Lookups a file */
-extern int ext2_lookup(ext2_t *fs, id_t id, const char *name, uint8_t len, oid_t *res, oid_t *dev);
+extern int ext2_lookup(ext2_t *fs, id_t id, const char *name, size_t len, oid_t *res, oid_t *dev);
 
 
 /* Opens a file */
@@ -112,11 +112,11 @@ extern int ext2_setattr(ext2_t *fs, id_t id, int type, long long attr);
 
 
 /* Adds a link */
-extern int ext2_link(ext2_t *fs, id_t id, const char *name, uint8_t len, id_t lid);
+extern int ext2_link(ext2_t *fs, id_t id, const char *name, size_t len, id_t lid);
 
 
 /* Removes a link */
-extern int ext2_unlink(ext2_t *fs, id_t id, const char *name, uint8_t len);
+extern int ext2_unlink(ext2_t *fs, id_t id, const char *name, size_t len);
 
 
 /* Retrieves filesystem statistics */
