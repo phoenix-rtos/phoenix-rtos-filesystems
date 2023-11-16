@@ -176,9 +176,6 @@ int _ext2_dir_read(ext2_t *fs, ext2_obj_t *dir, offs_t offs, struct dirent *res,
 	res->d_name[entry->len] = '\0';
 	free(entry);
 
-	if ((dir->flags & OFLAG_MOUNTPOINT) && !strncmp(res->d_name, "..", 2))
-		res->d_ino = (ino_t)dir->mnt.id;
-
 	dir->inode->atime = time(NULL);
 
 	return res->d_reclen;
@@ -251,6 +248,10 @@ int _ext2_dir_add(ext2_t *fs, ext2_obj_t *dir, const char *name, size_t len, uin
 		entry->type = DIRENT_CHRDEV;
 	else if (S_ISBLK(mode))
 		entry->type = DIRENT_BLKDEV;
+	else if (S_ISFIFO(mode))
+		entry->type = DIRENT_FIFO;
+	else if (S_ISSOCK(mode))
+		entry->type = DIRENT_SOCK;
 	else if (S_ISREG(mode))
 		entry->type = DIRENT_FILE;
 	else

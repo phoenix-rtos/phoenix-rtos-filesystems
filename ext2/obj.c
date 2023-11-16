@@ -157,20 +157,24 @@ ext2_obj_t *ext2_obj_get(ext2_t *fs, id_t id)
 	ext2_inode_t *inode;
 
 	mutexLock(fs->objs->lock);
-
 	do {
 		tmp.id = id;
-		if ((obj = lib_treeof(ext2_obj_t, node, lib_rbFind(&fs->objs->used, &tmp.node))) != NULL) {
-			if (!obj->refs++ && !(S_ISCHR(obj->inode->mode) || S_ISBLK(obj->inode->mode)))
+		obj = lib_treeof(ext2_obj_t, node, lib_rbFind(&fs->objs->used, &tmp.node));
+		if (obj != NULL) {
+			obj->refs++;
+			if ((obj->refs == 1) && !EXT2_IS_MOUNTPOINT(obj)) {
 				LIST_REMOVE(&fs->objs->lru, obj);
+			}
 			break;
 		}
 
-		if ((inode = ext2_inode_init(fs, (uint32_t)id)) == NULL)
+		if ((inode = ext2_inode_init(fs, (uint32_t)id)) == NULL) {
 			break;
+		}
 
-		if (_ext2_obj_create(fs, (uint32_t)id, inode, inode->mode, &obj) < 0)
+		if (_ext2_obj_create(fs, (uint32_t)id, inode, inode->mode, &obj) < 0) {
 			break;
+		}
 	} while (0);
 
 	mutexUnlock(fs->objs->lock);
@@ -183,7 +187,8 @@ void ext2_obj_put(ext2_t *fs, ext2_obj_t *obj)
 {
 	mutexLock(fs->objs->lock);
 
-	if (!(--obj->refs) && !(S_ISCHR(obj->inode->mode) || S_ISBLK(obj->inode->mode))) {
+	obj->refs--;
+	if ((obj->refs == 0) && !EXT2_IS_MOUNTPOINT(obj)) {
 		if (!obj->inode->links) {
 			_ext2_obj_destroy(fs, obj, false);
 		}
@@ -200,14 +205,13 @@ int _ext2_obj_sync(ext2_t *fs, ext2_obj_t *obj)
 {
 	int err;
 
-	if (obj->flags & OFLAG_DIRTY) {
+	if (EXT2_IS_DIRTY(obj)) {
 		if ((err = ext2_inode_sync(fs, (uint32_t)obj->id, obj->inode)) < 0)
 			return err;
 
 		obj->flags &= ~OFLAG_DIRTY;
 	}
-
-	if (!(S_ISCHR(obj->inode->mode) || S_ISBLK(obj->inode->mode)) && !(obj->flags & OFLAG_MOUNT)) {
+	if (!EXT2_ISDEV(obj->inode->mode) && !EXT2_IS_MOUNTPOINT(obj)) {
 		if ((obj->ind[0].data != NULL) && (err = ext2_block_write(fs, obj->ind[0].bno, obj->ind[0].data, 1)) < 0)
 			return err;
 

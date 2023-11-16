@@ -25,48 +25,62 @@
 #include "libext2.h"
 
 
-static int libext2_create(void *info, oid_t *oid, const char *name, oid_t *dev, unsigned mode, int type, oid_t *res)
+static int libext2_create(void *info, oid_t *dir, const char *name, oid_t *oid, unsigned mode, int type, oid_t *dev)
 {
 	ext2_t *fs = (ext2_t *)info;
 	ext2_obj_t *obj;
 	oid_t devOther;
 	int ret;
-	dev->port = fs->port;
+	oid->port = fs->port;
 
 	switch (type) {
 		case otDir:
-			mode |= S_IFDIR;
+			if (!S_ISDIR(mode)) {
+				mode &= ALLPERMS;
+				mode |= S_IFDIR;
+			}
 			break;
 
 		case otFile:
-			mode |= S_IFREG;
+			if (!S_ISREG(mode)) {
+				mode &= ALLPERMS;
+				mode |= S_IFREG;
+			}
 			break;
 
 		case otDev:
-			mode &= 0x1ff;
-			mode |= S_IFCHR;
+			if (!EXT2_ISDEV(mode)) {
+				mode &= ALLPERMS;
+				mode |= S_IFCHR;
+			}
 			break;
 
 		case otSymlink:
-			mode |= S_IFLNK;
+			if (!S_ISLNK(mode)) {
+				mode &= ALLPERMS;
+				mode |= S_IFLNK;
+			}
 			break;
 	}
 
 	size_t namelen = strlen(name);
 
-	if (ext2_lookup(fs, oid->id, name, namelen, dev, &devOther) > 0) {
-		if ((obj = ext2_obj_get(fs, dev->id)) == NULL) {
+	if (ext2_lookup(fs, dir->id, name, namelen, oid, &devOther) > 0) {
+		if ((obj = ext2_obj_get(fs, oid->id)) == NULL) {
 			return -EINVAL;
 		}
 
 		mutexLock(obj->lock);
 
-		if (S_ISCHR(obj->inode->mode) || S_ISBLK(obj->inode->mode)) {
-			if (!devOther.port && !devOther.id && (S_ISCHR(mode) || S_ISBLK(mode))) {
-				memcpy(&obj->dev, res, sizeof(oid_t));
+		if (EXT2_ISDEV(obj->inode->mode) && !EXT2_IS_MOUNTPOINT(obj)) {
+			/* This can happen if we have a device file stored in filesystem
+			 * but no device oid is associated with it at the moment
+			 */
+			if (EXT2_ISDEV(mode)) {
+				memcpy(&obj->dev, dev, sizeof(oid_t));
 				obj->inode->mode = mode;
-				obj->flags |= OFLAG_DIRTY;
-				dev->id = obj->id;
+				obj->flags |= OFLAG_DIRTY | OFLAG_MOUNTPOINT;
+				oid->id = obj->id;
 				ret = _ext2_obj_sync(fs, obj);
 
 				mutexUnlock(obj->lock);
@@ -77,12 +91,7 @@ static int libext2_create(void *info, oid_t *oid, const char *name, oid_t *dev, 
 				mutexUnlock(obj->lock);
 				ext2_obj_put(fs, obj);
 
-				if ((devOther.port == fs->port) && (devOther.id == dev->id)) {
-					if (ext2_unlink(fs, oid->id, name, namelen) < 0) {
-						return -EEXIST;
-					}
-				}
-				else {
+				if (ext2_unlink(fs, dir->id, name, namelen) < 0) {
 					return -EEXIST;
 				}
 			}
@@ -94,7 +103,7 @@ static int libext2_create(void *info, oid_t *oid, const char *name, oid_t *dev, 
 		}
 	}
 
-	ret = ext2_create(fs, oid->id, name, namelen, res, mode, &dev->id);
+	ret = ext2_create(fs, dir->id, name, namelen, dev, mode, &oid->id);
 
 	if (ret >= 0 && type == otSymlink) {
 		const char *target = name + namelen + 1;
@@ -102,11 +111,11 @@ static int libext2_create(void *info, oid_t *oid, const char *name, oid_t *dev, 
 		int retWrite;
 
 		/* not writing trailing '\0', readlink() does not append it */
-		retWrite = ext2_write(fs, dev->id, 0, target, targetlen);
+		retWrite = ext2_write(fs, oid->id, 0, target, targetlen);
 		if (retWrite < 0) {
 			ret = retWrite;
-			ext2_destroy(fs, dev->id);
-			dev->id = 0;
+			ext2_destroy(fs, oid->id);
+			oid->id = 0;
 		}
 	}
 
@@ -140,7 +149,7 @@ static ssize_t libext2_write(void *info, oid_t *oid, offs_t offs, const void *da
 
 static int libext2_setattr(void *info, oid_t *oid, int type, long long attr, void *data, size_t len)
 {
-	return ext2_setattr((ext2_t *)info, oid->id, type, attr);
+	return ext2_setattr((ext2_t *)info, oid->id, type, attr, data, len);
 }
 
 
@@ -168,9 +177,9 @@ static int libext2_lookup(void *info, oid_t *oid, const char *name, oid_t *res, 
 }
 
 
-static int libext2_link(void *info, oid_t *oid, const char *name, oid_t *res)
+static int libext2_link(void *info, oid_t *dir, const char *name, oid_t *oid)
 {
-	return ext2_link((ext2_t *)info, oid->id, name, strlen(name), res->id);
+	return ext2_link((ext2_t *)info, dir->id, name, strlen(name), oid->id);
 }
 
 
