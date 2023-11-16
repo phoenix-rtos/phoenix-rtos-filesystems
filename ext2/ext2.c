@@ -28,7 +28,7 @@
 #include "file.h"
 
 
-int ext2_create(ext2_t *fs, id_t id, const char *name, uint8_t len, oid_t *dev, uint16_t mode, id_t *res)
+int ext2_create(ext2_t *fs, id_t id, const char *name, size_t len, oid_t *dev, uint16_t mode, id_t *res)
 {
 	ext2_obj_t *obj;
 	int err;
@@ -74,10 +74,10 @@ int ext2_destroy(ext2_t *fs, id_t id)
 }
 
 
-int ext2_lookup(ext2_t *fs, id_t id, const char *name, uint8_t len, oid_t *res, oid_t *dev)
+int ext2_lookup(ext2_t *fs, id_t id, const char *name, size_t len, oid_t *res, oid_t *dev)
 {
 	ext2_obj_t *dir, *obj = NULL;
-	uint8_t i, j;
+	size_t i, j;
 	int err;
 
 	res->port = fs->port;
@@ -424,7 +424,7 @@ int ext2_setattr(ext2_t *fs, id_t id, int type, long long attr)
 }
 
 
-int ext2_link(ext2_t *fs, id_t id, const char *name, uint8_t len, id_t lid)
+int ext2_link(ext2_t *fs, id_t id, const char *name, size_t len, id_t lid)
 {
 	ext2_obj_t *dir, *obj;
 	id_t res;
@@ -498,7 +498,7 @@ int ext2_link(ext2_t *fs, id_t id, const char *name, uint8_t len, id_t lid)
 }
 
 
-int ext2_unlink(ext2_t *fs, id_t id, const char *name, uint8_t len)
+int ext2_unlink(ext2_t *fs, id_t id, const char *name, size_t len)
 {
 	ext2_obj_t *dir, *obj;
 	id_t res;

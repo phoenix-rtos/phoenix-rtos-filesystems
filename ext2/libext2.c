@@ -30,7 +30,6 @@ static int libext2_create(void *info, oid_t *oid, const char *name, oid_t *dev, 
 	ext2_t *fs = (ext2_t *)info;
 	ext2_obj_t *obj;
 	oid_t devOther;
-	size_t namelen;
 	int ret;
 	dev->port = fs->port;
 
@@ -53,10 +52,7 @@ static int libext2_create(void *info, oid_t *oid, const char *name, oid_t *dev, 
 			break;
 	}
 
-	namelen = strlen(name);
-	if (namelen > UINT8_MAX) {
-		return -ENAMETOOLONG;
-	}
+	size_t namelen = strlen(name);
 
 	if (ext2_lookup(fs, oid->id, name, namelen, dev, &devOther) > 0) {
 		if ((obj = ext2_obj_get(fs, dev->id)) == NULL) {
@@ -168,34 +164,19 @@ static int libext2_destroy(void *info, oid_t *oid)
 
 static int libext2_lookup(void *info, oid_t *oid, const char *name, oid_t *res, oid_t *dev, char *lnk, int lnksz)
 {
-	size_t namelen = strlen(name);
-	if (namelen > UINT8_MAX) {
-		return -ENAMETOOLONG;
-	}
-
-	return ext2_lookup((ext2_t *)info, oid->id, name, namelen, res, dev);
+	return ext2_lookup((ext2_t *)info, oid->id, name, strlen(name), res, dev);
 }
 
 
 static int libext2_link(void *info, oid_t *oid, const char *name, oid_t *res)
 {
-	size_t namelen = strlen(name);
-	if (namelen > UINT8_MAX) {
-		return -ENAMETOOLONG;
-	}
-
-	return ext2_link((ext2_t *)info, oid->id, name, namelen, res->id);
+	return ext2_link((ext2_t *)info, oid->id, name, strlen(name), res->id);
 }
 
 
 static int libext2_unlink(void *info, oid_t *oid, const char *name)
 {
-	size_t namelen = strlen(name);
-	if (namelen > UINT8_MAX) {
-		return -ENAMETOOLONG;
-	}
-
-	return ext2_unlink((ext2_t *)info, oid->id, name, namelen);
+	return ext2_unlink((ext2_t *)info, oid->id, name, strlen(name));
 }
 
 

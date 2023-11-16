@@ -68,7 +68,7 @@ int _ext2_dir_empty(ext2_t *fs, ext2_obj_t *dir)
 }
 
 
-static int _ext2_dir_find(ext2_t *fs, ext2_obj_t *dir, const char *name, uint8_t len, char *buff, uint32_t *offs)
+static int _ext2_dir_find(ext2_t *fs, ext2_obj_t *dir, const char *name, size_t len, char *buff, uint32_t *offs)
 {
 	ext2_dirent_t *entry;
 	uint32_t boffs;
@@ -84,7 +84,7 @@ static int _ext2_dir_find(ext2_t *fs, ext2_obj_t *dir, const char *name, uint8_t
 			if (!entry->size)
 				break;
 
-			if ((entry->len == len) && !strncmp(entry->name, name, len))
+			if (((size_t)entry->len == len) && !strncmp(entry->name, name, len))
 				return boffs;
 		}
 	}
@@ -93,7 +93,7 @@ static int _ext2_dir_find(ext2_t *fs, ext2_obj_t *dir, const char *name, uint8_t
 }
 
 
-int _ext2_dir_search(ext2_t *fs, ext2_obj_t *dir, const char *name, uint8_t len, id_t *res)
+int _ext2_dir_search(ext2_t *fs, ext2_obj_t *dir, const char *name, size_t len, id_t *res)
 {
 	uint32_t offs = 0;
 	char *buff;
@@ -185,12 +185,16 @@ int _ext2_dir_read(ext2_t *fs, ext2_obj_t *dir, offs_t offs, struct dirent *res,
 }
 
 
-int _ext2_dir_add(ext2_t *fs, ext2_obj_t *dir, const char *name, uint8_t len, uint16_t mode, uint32_t ino)
+int _ext2_dir_add(ext2_t *fs, ext2_obj_t *dir, const char *name, size_t len, uint16_t mode, uint32_t ino)
 {
 	uint32_t offs, size = 0;
 	ext2_dirent_t *entry;
 	char *buff;
 	ssize_t ret;
+
+	if (len > MAX_NAMELEN) {
+		return -ENAMETOOLONG;
+	}
 
 	if ((buff = (char *)malloc(fs->blocksz)) == NULL)
 		return -ENOMEM;
@@ -214,7 +218,8 @@ int _ext2_dir_add(ext2_t *fs, ext2_obj_t *dir, const char *name, uint8_t len, ui
 				entry->size = (entry->len) ? (entry->len + sizeof(ext2_dirent_t) + 3) & ~3 : 0;
 				offs += entry->size;
 
-				if ((size = (len + sizeof(ext2_dirent_t) + 3) & ~3) >= fs->blocksz - offs) {
+				size = (len + sizeof(ext2_dirent_t) + 3) & ~3;
+				if (size >= fs->blocksz - offs) {
 					entry->size += fs->blocksz - offs;
 					offs = fs->blocksz;
 					break;
@@ -264,7 +269,7 @@ int _ext2_dir_add(ext2_t *fs, ext2_obj_t *dir, const char *name, uint8_t len, ui
 }
 
 
-int _ext2_dir_remove(ext2_t *fs, ext2_obj_t *dir, const char *name, uint8_t len)
+int _ext2_dir_remove(ext2_t *fs, ext2_obj_t *dir, const char *name, size_t len)
 {
 	ext2_dirent_t *entry, *tmp;
 	uint32_t prev, boffs, offs = 0;
