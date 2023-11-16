@@ -27,25 +27,23 @@
 
 /* Object flags */
 enum {
-	OFLAG_DIRTY      = 0x01,
+	OFLAG_DIRTY = 0x01,
 	OFLAG_MOUNTPOINT = 0x02,
-	OFLAG_MOUNT      = 0x04
 };
 
+#define EXT2_IS_DIRTY(obj)      (((obj)->flags & OFLAG_DIRTY) != 0)
+#define EXT2_IS_MOUNTPOINT(obj) (((obj)->flags & OFLAG_MOUNTPOINT) != 0)
 
 struct _ext2_obj_t {
 	id_t id;                 /* Object ID, same as underlying inode number */
 	rbnode_t node;           /* RBTree node */
 
 	/* Object data */
-	union {
-		struct {
-			uint32_t bno;
-			uint32_t *data;
-		} ind[3];            /* Indirect blocks */
-		oid_t mnt;           /* Mounted filesystem */
-		oid_t dev;           /* Device */
-	};
+	struct {
+		uint32_t bno;
+		uint32_t *data;
+	} ind[3];                /* Indirect blocks */
+	oid_t dev;               /* Device */
 	uint32_t refs;           /* Reference counter */
 	uint8_t flags;           /* Object flags */
 	ext2_inode_t *inode;     /* Underlying inode */

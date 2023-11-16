@@ -30,6 +30,9 @@
 #define MAX_OBJECTS 512 /* Max number of filesystem objects in use */
 
 
+#define EXT2_ISDEV(x) (S_ISCHR(x) || S_ISBLK(x) || S_ISFIFO(x) || S_ISSOCK(x))
+
+
 /* Filesystem common data types forward declaration */
 typedef struct _ext2_sb_t ext2_sb_t;     /* SuperBlock */
 typedef struct _ext2_gd_t ext2_gd_t;     /* Group Descriptor*/
@@ -108,7 +111,7 @@ extern int ext2_getattr(ext2_t *fs, id_t id, int type, long long *attr);
 
 
 /* Sets file attributes */
-extern int ext2_setattr(ext2_t *fs, id_t id, int type, long long attr);
+extern int ext2_setattr(ext2_t *fs, id_t id, int type, long long attr, void *data, size_t len);
 
 
 /* Adds a link */
