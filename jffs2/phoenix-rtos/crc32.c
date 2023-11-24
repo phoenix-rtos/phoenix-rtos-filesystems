@@ -20,10 +20,12 @@
 uint32_t crc32(uint32_t crc, void *p, size_t len)
 {
 	int i;
+	const uint8_t *buf = p;
 	while (len--) {
-		crc ^= *(char *)p++;
-		for (i = 0; i < 8; i++)
+		crc = (crc ^ (*buf++));
+		for (i = 0; i < 8; i++) {
 			crc = (crc >> 1) ^ ((crc & 1) ? 0xedb88320 : 0);
+		}
 	}
 
 	return crc;
