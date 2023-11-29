@@ -16,6 +16,7 @@
 
 #include <sys/rb.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #define MAX_NAME_LEN 8
 
@@ -75,6 +76,10 @@ typedef struct {
 
 	rbtree_t nodesTree;
 
+	char *mountpoint;
+	unsigned long mountopt;
+	oid_t parent;
+
 	/* meterfs externals - should be initialized before meterfs_init */
 	size_t sz;
 	size_t sectorsz;
@@ -93,13 +98,20 @@ typedef struct {
 int meterfs_init(meterfs_ctx_t *ctx);
 
 
+int meterfs_mount(meterfs_ctx_t *ctx, const char *data, unsigned long mode);
+
+
 int meterfs_open(id_t id, meterfs_ctx_t *ctx);
 
 
 int meterfs_close(id_t id, meterfs_ctx_t *ctx);
 
 
+/* Deprecated */
 int meterfs_lookup(const char *name, id_t *res, meterfs_ctx_t *ctx);
+
+
+int meterfs_lookupOid(const char *name, oid_t *res, meterfs_ctx_t *ctx);
 
 
 int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size_t recordsz, meterfs_ctx_t *ctx);
@@ -115,6 +127,18 @@ int meterfs_writeFile(id_t id, const char *buff, size_t bufflen, meterfs_ctx_t *
 
 
 int meterfs_devctl(const meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *ctx);
+
+
+int meterfs_setAttr(id_t id, int type, long long int attr, const void *data, size_t size, meterfs_ctx_t *ctx);
+
+
+int meterfs_getAttr(id_t id, int type, long long int *attr, meterfs_ctx_t *ctx);
+
+
+int meterfs_readdir(id_t dir, off_t offs, struct dirent *dent, unsigned int size, meterfs_ctx_t *ctx);
+
+
+int meterfs_stat(void *buf, size_t len, meterfs_ctx_t *ctx);
 
 
 #endif

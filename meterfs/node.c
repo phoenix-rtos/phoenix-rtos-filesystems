@@ -89,6 +89,42 @@ file_t *node_getById(id_t id, rbtree_t *tree)
 }
 
 
+file_t *node_getByOffset(off_t offs, id_t *id, rbtree_t *tree)
+{
+	node_t *p = lib_treeof(node_t, linkage, lib_rbMinimum(tree->root));
+	if (p == NULL) {
+		return NULL;
+	}
+
+	off_t curr = (off_t)strnlen(p->file.header.name, sizeof(p->file.header.name));
+	while (curr < offs) {
+		p = lib_treeof(node_t, linkage, lib_rbNext(&p->linkage));
+		if (p == NULL) {
+			return NULL;
+		}
+		curr += (off_t)strnlen(p->file.header.name, sizeof(p->file.header.name));
+	}
+
+	*id = p->id;
+
+	return &p->file;
+}
+
+
+size_t node_totalSectors(rbtree_t *tree)
+{
+	size_t sectors = 0;
+	node_t *p = lib_treeof(node_t, linkage, lib_rbMinimum(tree->root));
+
+	while (p != NULL) {
+		sectors += p->file.header.sectorcnt;
+		p = lib_treeof(node_t, linkage, lib_rbNext(&p->linkage));
+	}
+
+	return sectors;
+}
+
+
 void node_cleanAll(rbtree_t *tree)
 {
 	node_t *p = lib_treeof(node_t, linkage, tree->root);
