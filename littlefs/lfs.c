@@ -6,491 +6,11 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 #include "lfs.h"
+#include "lfs_bd.h"
+#include "lfs_internal.h"
 #include "lfs_util.h"
 
 /* clang-format off */
-
-// some constants used throughout the code
-#define LFS_BLOCK_NULL ((lfs_block_t)-1)
-#define LFS_BLOCK_INLINE ((lfs_block_t)-2)
-
-enum {
-    LFS_OK_RELOCATED = 1,
-    LFS_OK_DROPPED   = 2,
-    LFS_OK_ORPHANED  = 3,
-};
-
-enum {
-    LFS_CMP_EQ = 0,
-    LFS_CMP_LT = 1,
-    LFS_CMP_GT = 2,
-};
-
-
-/// Caching block device operations ///
-
-static inline void lfs_cache_drop(lfs_t *lfs, lfs_cache_t *rcache) {
-    // do not zero, cheaper if cache is readonly or only going to be
-    // written with identical data (during relocates)
-    (void)lfs;
-    rcache->block = LFS_BLOCK_NULL;
-}
-
-static inline void lfs_cache_zero(lfs_t *lfs, lfs_cache_t *pcache) {
-    // zero to avoid information leak
-    memset(pcache->buffer, 0xff, lfs->cfg->cache_size);
-    pcache->block = LFS_BLOCK_NULL;
-}
-
-static int lfs_bd_read(lfs_t *lfs,
-        const lfs_cache_t *pcache, lfs_cache_t *rcache, lfs_size_t hint,
-        lfs_block_t block, lfs_off_t off,
-        void *buffer, lfs_size_t size) {
-    uint8_t *data = buffer;
-    if (off+size > lfs->cfg->block_size
-            || (lfs->block_count && block >= lfs->block_count)) {
-        return LFS_ERR_CORRUPT;
-    }
-
-    while (size > 0) {
-        lfs_size_t diff = size;
-
-        if (pcache && block == pcache->block &&
-                off < pcache->off + pcache->size) {
-            if (off >= pcache->off) {
-                // is already in pcache?
-                diff = lfs_min(diff, pcache->size - (off-pcache->off));
-                memcpy(data, &pcache->buffer[off-pcache->off], diff);
-
-                data += diff;
-                off += diff;
-                size -= diff;
-                continue;
-            }
-
-            // pcache takes priority
-            diff = lfs_min(diff, pcache->off-off);
-        }
-
-        if (block == rcache->block &&
-                off < rcache->off + rcache->size) {
-            if (off >= rcache->off) {
-                // is already in rcache?
-                diff = lfs_min(diff, rcache->size - (off-rcache->off));
-                memcpy(data, &rcache->buffer[off-rcache->off], diff);
-
-                data += diff;
-                off += diff;
-                size -= diff;
-                continue;
-            }
-
-            // rcache takes priority
-            diff = lfs_min(diff, rcache->off-off);
-        }
-
-        if (size >= hint && off % lfs->cfg->read_size == 0 &&
-                size >= lfs->cfg->read_size) {
-            // bypass cache?
-            diff = lfs_aligndown(diff, lfs->cfg->read_size);
-            int err = lfs->cfg->read(lfs->cfg, block, off, data, diff);
-            if (err) {
-                return err;
-            }
-
-            data += diff;
-            off += diff;
-            size -= diff;
-            continue;
-        }
-
-        // load to cache, first condition can no longer fail
-        LFS_ASSERT(!lfs->block_count || block < lfs->block_count);
-        rcache->block = block;
-        rcache->off = lfs_aligndown(off, lfs->cfg->read_size);
-        rcache->size = lfs_min(
-                lfs_min(
-                    lfs_alignup(off+hint, lfs->cfg->read_size),
-                    lfs->cfg->block_size)
-                - rcache->off,
-                lfs->cfg->cache_size);
-        int err = lfs->cfg->read(lfs->cfg, rcache->block,
-                rcache->off, rcache->buffer, rcache->size);
-        LFS_ASSERT(err <= 0);
-        if (err) {
-            return err;
-        }
-    }
-
-    return 0;
-}
-
-static int lfs_bd_cmp(lfs_t *lfs,
-        const lfs_cache_t *pcache, lfs_cache_t *rcache, lfs_size_t hint,
-        lfs_block_t block, lfs_off_t off,
-        const void *buffer, lfs_size_t size) {
-    const uint8_t *data = buffer;
-    lfs_size_t diff = 0;
-
-    for (lfs_off_t i = 0; i < size; i += diff) {
-        uint8_t dat[8];
-
-        diff = lfs_min(size-i, sizeof(dat));
-        int err = lfs_bd_read(lfs,
-                pcache, rcache, hint-i,
-                block, off+i, &dat, diff);
-        if (err) {
-            return err;
-        }
-
-        int res = memcmp(dat, data + i, diff);
-        if (res) {
-            return res < 0 ? LFS_CMP_LT : LFS_CMP_GT;
-        }
-    }
-
-    return LFS_CMP_EQ;
-}
-
-static int lfs_bd_crc(lfs_t *lfs,
-        const lfs_cache_t *pcache, lfs_cache_t *rcache, lfs_size_t hint,
-        lfs_block_t block, lfs_off_t off, lfs_size_t size, uint32_t *crc) {
-    lfs_size_t diff = 0;
-
-    for (lfs_off_t i = 0; i < size; i += diff) {
-        uint8_t dat[8];
-        diff = lfs_min(size-i, sizeof(dat));
-        int err = lfs_bd_read(lfs,
-                pcache, rcache, hint-i,
-                block, off+i, &dat, diff);
-        if (err) {
-            return err;
-        }
-
-        *crc = lfs_crc(*crc, &dat, diff);
-    }
-
-    return 0;
-}
-
-#ifndef LFS_READONLY
-static int lfs_bd_flush(lfs_t *lfs,
-        lfs_cache_t *pcache, lfs_cache_t *rcache, bool validate) {
-    if (pcache->block != LFS_BLOCK_NULL && pcache->block != LFS_BLOCK_INLINE) {
-        LFS_ASSERT(pcache->block < lfs->block_count);
-        lfs_size_t diff = lfs_alignup(pcache->size, lfs->cfg->prog_size);
-        int err = lfs->cfg->prog(lfs->cfg, pcache->block,
-                pcache->off, pcache->buffer, diff);
-        LFS_ASSERT(err <= 0);
-        if (err) {
-            return err;
-        }
-
-        if (validate) {
-            // check data on disk
-            lfs_cache_drop(lfs, rcache);
-            int res = lfs_bd_cmp(lfs,
-                    NULL, rcache, diff,
-                    pcache->block, pcache->off, pcache->buffer, diff);
-            if (res < 0) {
-                return res;
-            }
-
-            if (res != LFS_CMP_EQ) {
-                return LFS_ERR_CORRUPT;
-            }
-        }
-
-        lfs_cache_zero(lfs, pcache);
-    }
-
-    return 0;
-}
-#endif
-
-#ifndef LFS_READONLY
-static int lfs_bd_sync(lfs_t *lfs,
-        lfs_cache_t *pcache, lfs_cache_t *rcache, bool validate) {
-    lfs_cache_drop(lfs, rcache);
-
-    int err = lfs_bd_flush(lfs, pcache, rcache, validate);
-    if (err) {
-        return err;
-    }
-
-    err = lfs->cfg->sync(lfs->cfg);
-    LFS_ASSERT(err <= 0);
-    return err;
-}
-#endif
-
-#ifndef LFS_READONLY
-static int lfs_bd_prog(lfs_t *lfs,
-        lfs_cache_t *pcache, lfs_cache_t *rcache, bool validate,
-        lfs_block_t block, lfs_off_t off,
-        const void *buffer, lfs_size_t size) {
-    const uint8_t *data = buffer;
-    LFS_ASSERT(block == LFS_BLOCK_INLINE || block < lfs->block_count);
-    LFS_ASSERT(off + size <= lfs->cfg->block_size);
-
-    while (size > 0) {
-        if (block == pcache->block &&
-                off >= pcache->off &&
-                off < pcache->off + lfs->cfg->cache_size) {
-            // already fits in pcache?
-            lfs_size_t diff = lfs_min(size,
-                    lfs->cfg->cache_size - (off-pcache->off));
-            memcpy(&pcache->buffer[off-pcache->off], data, diff);
-
-            data += diff;
-            off += diff;
-            size -= diff;
-
-            pcache->size = lfs_max(pcache->size, off - pcache->off);
-            if (pcache->size == lfs->cfg->cache_size) {
-                // eagerly flush out pcache if we fill up
-                int err = lfs_bd_flush(lfs, pcache, rcache, validate);
-                if (err) {
-                    return err;
-                }
-            }
-
-            continue;
-        }
-
-        // pcache must have been flushed, either by programming and
-        // entire block or manually flushing the pcache
-        LFS_ASSERT(pcache->block == LFS_BLOCK_NULL);
-
-        // prepare pcache, first condition can no longer fail
-        pcache->block = block;
-        pcache->off = lfs_aligndown(off, lfs->cfg->prog_size);
-        pcache->size = 0;
-    }
-
-    return 0;
-}
-#endif
-
-#ifndef LFS_READONLY
-static int lfs_bd_erase(lfs_t *lfs, lfs_block_t block) {
-    LFS_ASSERT(block < lfs->block_count);
-    int err = lfs->cfg->erase(lfs->cfg, block);
-    LFS_ASSERT(err <= 0);
-    return err;
-}
-#endif
-
-
-/// Small type-level utilities ///
-// operations on block pairs
-static inline void lfs_pair_swap(lfs_block_t pair[2]) {
-    lfs_block_t t = pair[0];
-    pair[0] = pair[1];
-    pair[1] = t;
-}
-
-static inline bool lfs_pair_isnull(const lfs_block_t pair[2]) {
-    return pair[0] == LFS_BLOCK_NULL || pair[1] == LFS_BLOCK_NULL;
-}
-
-static inline int lfs_pair_cmp(
-        const lfs_block_t paira[2],
-        const lfs_block_t pairb[2]) {
-    return !(paira[0] == pairb[0] || paira[1] == pairb[1] ||
-             paira[0] == pairb[1] || paira[1] == pairb[0]);
-}
-
-static inline bool lfs_pair_issync(
-        const lfs_block_t paira[2],
-        const lfs_block_t pairb[2]) {
-    return (paira[0] == pairb[0] && paira[1] == pairb[1]) ||
-           (paira[0] == pairb[1] && paira[1] == pairb[0]);
-}
-
-static inline void lfs_pair_fromle32(lfs_block_t pair[2]) {
-    pair[0] = lfs_fromle32(pair[0]);
-    pair[1] = lfs_fromle32(pair[1]);
-}
-
-#ifndef LFS_READONLY
-static inline void lfs_pair_tole32(lfs_block_t pair[2]) {
-    pair[0] = lfs_tole32(pair[0]);
-    pair[1] = lfs_tole32(pair[1]);
-}
-#endif
-
-// operations on 32-bit entry tags
-typedef uint32_t lfs_tag_t;
-typedef int32_t lfs_stag_t;
-
-#define LFS_MKTAG(type, id, size) \
-    (((lfs_tag_t)(type) << 20) | ((lfs_tag_t)(id) << 10) | (lfs_tag_t)(size))
-
-#define LFS_MKTAG_IF(cond, type, id, size) \
-    ((cond) ? LFS_MKTAG(type, id, size) : LFS_MKTAG(LFS_FROM_NOOP, 0, 0))
-
-#define LFS_MKTAG_IF_ELSE(cond, type1, id1, size1, type2, id2, size2) \
-    ((cond) ? LFS_MKTAG(type1, id1, size1) : LFS_MKTAG(type2, id2, size2))
-
-static inline bool lfs_tag_isvalid(lfs_tag_t tag) {
-    return !(tag & 0x80000000);
-}
-
-static inline bool lfs_tag_isdelete(lfs_tag_t tag) {
-    return ((int32_t)(tag << 22) >> 22) == -1;
-}
-
-static inline uint16_t lfs_tag_type1(lfs_tag_t tag) {
-    return (tag & 0x70000000) >> 20;
-}
-
-static inline uint16_t lfs_tag_type2(lfs_tag_t tag) {
-    return (tag & 0x78000000) >> 20;
-}
-
-static inline uint16_t lfs_tag_type3(lfs_tag_t tag) {
-    return (tag & 0x7ff00000) >> 20;
-}
-
-static inline uint8_t lfs_tag_chunk(lfs_tag_t tag) {
-    return (tag & 0x0ff00000) >> 20;
-}
-
-static inline int8_t lfs_tag_splice(lfs_tag_t tag) {
-    return (int8_t)lfs_tag_chunk(tag);
-}
-
-static inline uint16_t lfs_tag_id(lfs_tag_t tag) {
-    return (tag & 0x000ffc00) >> 10;
-}
-
-static inline lfs_size_t lfs_tag_size(lfs_tag_t tag) {
-    return tag & 0x000003ff;
-}
-
-static inline lfs_size_t lfs_tag_dsize(lfs_tag_t tag) {
-    return sizeof(tag) + lfs_tag_size(tag + lfs_tag_isdelete(tag));
-}
-
-// operations on attributes in attribute lists
-struct lfs_mattr {
-    lfs_tag_t tag;
-    const void *buffer;
-};
-
-struct lfs_diskoff {
-    lfs_block_t block;
-    lfs_off_t off;
-};
-
-#define LFS_MKATTRS(...) \
-    (struct lfs_mattr[]){__VA_ARGS__}, \
-    sizeof((struct lfs_mattr[]){__VA_ARGS__}) / sizeof(struct lfs_mattr)
-
-// operations on global state
-static inline void lfs_gstate_xor(lfs_gstate_t *a, const lfs_gstate_t *b) {
-    for (int i = 0; i < 3; i++) {
-        ((uint32_t*)a)[i] ^= ((const uint32_t*)b)[i];
-    }
-}
-
-static inline bool lfs_gstate_iszero(const lfs_gstate_t *a) {
-    for (int i = 0; i < 3; i++) {
-        if (((uint32_t*)a)[i] != 0) {
-            return false;
-        }
-    }
-    return true;
-}
-
-#ifndef LFS_READONLY
-static inline bool lfs_gstate_hasorphans(const lfs_gstate_t *a) {
-    return lfs_tag_size(a->tag);
-}
-
-static inline uint8_t lfs_gstate_getorphans(const lfs_gstate_t *a) {
-    return lfs_tag_size(a->tag) & 0x1ff;
-}
-
-static inline bool lfs_gstate_hasmove(const lfs_gstate_t *a) {
-    return lfs_tag_type1(a->tag);
-}
-#endif
-
-static inline bool lfs_gstate_needssuperblock(const lfs_gstate_t *a) {
-    return lfs_tag_size(a->tag) >> 9;
-}
-
-static inline bool lfs_gstate_hasmovehere(const lfs_gstate_t *a,
-        const lfs_block_t *pair) {
-    return lfs_tag_type1(a->tag) && lfs_pair_cmp(a->pair, pair) == 0;
-}
-
-static inline void lfs_gstate_fromle32(lfs_gstate_t *a) {
-    a->tag     = lfs_fromle32(a->tag);
-    a->pair[0] = lfs_fromle32(a->pair[0]);
-    a->pair[1] = lfs_fromle32(a->pair[1]);
-}
-
-#ifndef LFS_READONLY
-static inline void lfs_gstate_tole32(lfs_gstate_t *a) {
-    a->tag     = lfs_tole32(a->tag);
-    a->pair[0] = lfs_tole32(a->pair[0]);
-    a->pair[1] = lfs_tole32(a->pair[1]);
-}
-#endif
-
-// operations on forward-CRCs used to track erased state
-struct lfs_fcrc {
-    lfs_size_t size;
-    uint32_t crc;
-};
-
-static void lfs_fcrc_fromle32(struct lfs_fcrc *fcrc) {
-    fcrc->size = lfs_fromle32(fcrc->size);
-    fcrc->crc = lfs_fromle32(fcrc->crc);
-}
-
-#ifndef LFS_READONLY
-static void lfs_fcrc_tole32(struct lfs_fcrc *fcrc) {
-    fcrc->size = lfs_tole32(fcrc->size);
-    fcrc->crc = lfs_tole32(fcrc->crc);
-}
-#endif
-
-// other endianness operations
-static void lfs_ctz_fromle32(struct lfs_ctz *ctz) {
-    ctz->head = lfs_fromle32(ctz->head);
-    ctz->size = lfs_fromle32(ctz->size);
-}
-
-#ifndef LFS_READONLY
-static void lfs_ctz_tole32(struct lfs_ctz *ctz) {
-    ctz->head = lfs_tole32(ctz->head);
-    ctz->size = lfs_tole32(ctz->size);
-}
-#endif
-
-static inline void lfs_superblock_fromle32(lfs_superblock_t *superblock) {
-    superblock->version     = lfs_fromle32(superblock->version);
-    superblock->block_size  = lfs_fromle32(superblock->block_size);
-    superblock->block_count = lfs_fromle32(superblock->block_count);
-    superblock->name_max    = lfs_fromle32(superblock->name_max);
-    superblock->file_max    = lfs_fromle32(superblock->file_max);
-    superblock->attr_max    = lfs_fromle32(superblock->attr_max);
-}
-
-#ifndef LFS_READONLY
-static inline void lfs_superblock_tole32(lfs_superblock_t *superblock) {
-    superblock->version     = lfs_tole32(superblock->version);
-    superblock->block_size  = lfs_tole32(superblock->block_size);
-    superblock->block_count = lfs_tole32(superblock->block_count);
-    superblock->name_max    = lfs_tole32(superblock->name_max);
-    superblock->file_max    = lfs_tole32(superblock->file_max);
-    superblock->attr_max    = lfs_tole32(superblock->attr_max);
-}
-#endif
 
 #ifndef LFS_NO_ASSERT
 static bool lfs_mlist_isopen(struct lfs_mlist *head,
@@ -505,7 +25,7 @@ static bool lfs_mlist_isopen(struct lfs_mlist *head,
 }
 #endif
 
-static void lfs_mlist_remove(lfs_t *lfs, struct lfs_mlist *mlist) {
+void lfs_mlist_remove(lfs_t *lfs, struct lfs_mlist *mlist) {
     for (struct lfs_mlist **p = &lfs->mlist; *p; p = &(*p)->next) {
         if (*p == mlist) {
             *p = (*p)->next;
@@ -514,58 +34,23 @@ static void lfs_mlist_remove(lfs_t *lfs, struct lfs_mlist *mlist) {
     }
 }
 
-static void lfs_mlist_append(lfs_t *lfs, struct lfs_mlist *mlist) {
+void lfs_mlist_append(lfs_t *lfs, struct lfs_mlist *mlist) {
     mlist->next = lfs->mlist;
     lfs->mlist = mlist;
 }
 
-// some other filesystem operations
-static uint32_t lfs_fs_disk_version(lfs_t *lfs) {
-    (void)lfs;
-#ifdef LFS_MULTIVERSION
-    if (lfs->cfg->disk_version) {
-        return lfs->cfg->disk_version;
-    } else
-#endif
-    {
-        return LFS_DISK_VERSION;
-    }
-}
-
-static uint16_t lfs_fs_disk_version_major(lfs_t *lfs) {
-    return 0xffff & (lfs_fs_disk_version(lfs) >> 16);
-
-}
-
-static uint16_t lfs_fs_disk_version_minor(lfs_t *lfs) {
-    return 0xffff & (lfs_fs_disk_version(lfs) >> 0);
-}
-
-
 /// Internal operations predeclared here ///
 #ifndef LFS_READONLY
-static int lfs_dir_commit(lfs_t *lfs, lfs_mdir_t *dir,
-        const struct lfs_mattr *attrs, int attrcount);
 static int lfs_dir_compact(lfs_t *lfs,
         lfs_mdir_t *dir, const struct lfs_mattr *attrs, int attrcount,
         lfs_mdir_t *source, uint16_t begin, uint16_t end);
 static lfs_ssize_t lfs_file_flushedwrite(lfs_t *lfs, lfs_file_t *file,
         const void *buffer, lfs_size_t size);
-static lfs_ssize_t lfs_file_rawwrite(lfs_t *lfs, lfs_file_t *file,
-        const void *buffer, lfs_size_t size);
-static int lfs_file_rawsync(lfs_t *lfs, lfs_file_t *file);
-static int lfs_file_outline(lfs_t *lfs, lfs_file_t *file);
-static int lfs_file_flush(lfs_t *lfs, lfs_file_t *file);
 
 static int lfs_fs_deorphan(lfs_t *lfs, bool powerloss);
-static int lfs_fs_preporphans(lfs_t *lfs, int8_t orphans);
-static void lfs_fs_prepmove(lfs_t *lfs,
-        uint16_t id, const lfs_block_t pair[2]);
-static int lfs_fs_pred(lfs_t *lfs, const lfs_block_t dir[2],
-        lfs_mdir_t *pdir);
+
 static lfs_stag_t lfs_fs_parent(lfs_t *lfs, const lfs_block_t dir[2],
         lfs_mdir_t *parent);
-static int lfs_fs_forceconsistency(lfs_t *lfs);
 #endif
 
 static void lfs_fs_prepsuperblock(lfs_t *lfs, bool needssuperblock);
@@ -579,18 +64,12 @@ static int lfs_dir_rawrewind(lfs_t *lfs, lfs_dir_t *dir);
 
 static lfs_ssize_t lfs_file_flushedread(lfs_t *lfs, lfs_file_t *file,
         void *buffer, lfs_size_t size);
-static lfs_ssize_t lfs_file_rawread(lfs_t *lfs, lfs_file_t *file,
-        void *buffer, lfs_size_t size);
-static int lfs_file_rawclose(lfs_t *lfs, lfs_file_t *file);
-static lfs_soff_t lfs_file_rawsize(lfs_t *lfs, lfs_file_t *file);
 
-static lfs_ssize_t lfs_fs_rawsize(lfs_t *lfs);
 static int lfs_fs_rawtraverse(lfs_t *lfs,
         int (*cb)(void *data, lfs_block_t block), void *data,
         bool includeorphans);
 
 static int lfs_deinit(lfs_t *lfs);
-static int lfs_rawunmount(lfs_t *lfs);
 
 
 /// Block allocator ///
@@ -607,13 +86,6 @@ static int lfs_alloc_lookahead(void *p, lfs_block_t block) {
     return 0;
 }
 #endif
-
-// indicate allocated blocks have been committed into the filesystem, this
-// is to prevent blocks from being garbage collected in the middle of a
-// commit operation
-static void lfs_alloc_ack(lfs_t *lfs) {
-    lfs->free.ack = lfs->block_count;
-}
 
 // drop the lookahead buffer, this is done during mounting and failed
 // traversals in order to avoid invalid lookahead state
@@ -746,7 +218,7 @@ static lfs_stag_t lfs_dir_getslice(lfs_t *lfs, const lfs_mdir_t *dir,
     return LFS_ERR_NOENT;
 }
 
-static lfs_stag_t lfs_dir_get(lfs_t *lfs, const lfs_mdir_t *dir,
+lfs_stag_t lfs_dir_get(lfs_t *lfs, const lfs_mdir_t *dir,
         lfs_tag_t gmask, lfs_tag_t gtag, void *buffer) {
     return lfs_dir_getslice(lfs, dir,
             gmask, gtag,
@@ -1070,7 +542,7 @@ popped:
 }
 #endif
 
-static lfs_stag_t lfs_dir_fetchmatch(lfs_t *lfs,
+lfs_stag_t lfs_dir_fetchmatch(lfs_t *lfs,
         lfs_mdir_t *dir, const lfs_block_t pair[2],
         lfs_tag_t fmask, lfs_tag_t ftag, uint16_t *id,
         int (*cb)(void *data, lfs_tag_t tag, const void *buffer), void *data) {
@@ -1349,7 +821,7 @@ static lfs_stag_t lfs_dir_fetchmatch(lfs_t *lfs,
     return LFS_ERR_CORRUPT;
 }
 
-static int lfs_dir_fetch(lfs_t *lfs,
+int lfs_dir_fetch(lfs_t *lfs,
         lfs_mdir_t *dir, const lfs_block_t pair[2]) {
     // note, mask=-1, tag=-1 can never match a tag since this
     // pattern has the invalid bit set
@@ -1409,13 +881,7 @@ static int lfs_dir_getinfo(lfs_t *lfs, lfs_mdir_t *dir,
     return 0;
 }
 
-struct lfs_dir_find_match {
-    lfs_t *lfs;
-    const void *name;
-    lfs_size_t size;
-};
-
-static int lfs_dir_find_match(void *data,
+int lfs_dir_find_match(void *data,
         lfs_tag_t tag, const void *buffer) {
     struct lfs_dir_find_match *name = data;
     lfs_t *lfs = name->lfs;
@@ -1432,6 +898,8 @@ static int lfs_dir_find_match(void *data,
 
     // only equal if our size is still the same
     if (name->size != lfs_tag_size(tag)) {
+        /* NOTE: this comparison gives the opposite result.
+         * It can't be fixed without breaking compatibility with older versions*/
         return (name->size < lfs_tag_size(tag)) ? LFS_CMP_LT : LFS_CMP_GT;
     }
 
@@ -1762,7 +1230,7 @@ static int lfs_dir_commitcrc(lfs_t *lfs, struct lfs_commit *commit) {
 #endif
 
 #ifndef LFS_READONLY
-static int lfs_dir_alloc(lfs_t *lfs, lfs_mdir_t *dir) {
+int lfs_dir_alloc(lfs_t *lfs, lfs_mdir_t *dir) {
     // allocate pair of dir blocks (backwards, so we write block 1 first)
     for (int i = 0; i < 2; i++) {
         int err = lfs_alloc(lfs, &dir->pair[(i+1)%2]);
@@ -1806,7 +1274,7 @@ static int lfs_dir_alloc(lfs_t *lfs, lfs_mdir_t *dir) {
 #endif
 
 #ifndef LFS_READONLY
-static int lfs_dir_drop(lfs_t *lfs, lfs_mdir_t *dir, lfs_mdir_t *tail) {
+int lfs_dir_drop(lfs_t *lfs, lfs_mdir_t *dir, lfs_mdir_t *tail) {
     // steal state
     int err = lfs_dir_getgstate(lfs, tail, &lfs->gdelta);
     if (err) {
@@ -2548,7 +2016,7 @@ static int lfs_dir_orphaningcommit(lfs_t *lfs, lfs_mdir_t *dir,
 #endif
 
 #ifndef LFS_READONLY
-static int lfs_dir_commit(lfs_t *lfs, lfs_mdir_t *dir,
+int lfs_dir_commit(lfs_t *lfs, lfs_mdir_t *dir,
         const struct lfs_mattr *attrs, int attrcount) {
     int orphans = lfs_dir_orphaningcommit(lfs, dir, attrs, attrcount);
     if (orphans < 0) {
@@ -2764,7 +2232,7 @@ static int lfs_dir_rawread(lfs_t *lfs, lfs_dir_t *dir, struct lfs_info *info) {
     return true;
 }
 
-static int lfs_dir_rawseek(lfs_t *lfs, lfs_dir_t *dir, lfs_off_t off) {
+int lfs_dir_rawseek(lfs_t *lfs, lfs_dir_t *dir, lfs_off_t off) {
     // simply walk from head dir
     int err = lfs_dir_rawrewind(lfs, dir);
     if (err) {
@@ -2967,7 +2435,7 @@ relocate:
 }
 #endif
 
-static int lfs_ctz_traverse(lfs_t *lfs,
+int lfs_ctz_traverse(lfs_t *lfs,
         const lfs_cache_t *pcache, lfs_cache_t *rcache,
         lfs_block_t head, lfs_size_t size,
         int (*cb)(void*, lfs_block_t), void *data) {
@@ -3278,7 +2746,7 @@ relocate:
 #endif
 
 #ifndef LFS_READONLY
-static int lfs_file_outline(lfs_t *lfs, lfs_file_t *file) {
+int lfs_file_outline(lfs_t *lfs, lfs_file_t *file) {
     file->off = file->pos;
     lfs_alloc_ack(lfs);
     int err = lfs_file_relocate(lfs, file);
@@ -3291,7 +2759,7 @@ static int lfs_file_outline(lfs_t *lfs, lfs_file_t *file) {
 }
 #endif
 
-static int lfs_file_flush(lfs_t *lfs, lfs_file_t *file) {
+int lfs_file_flush(lfs_t *lfs, lfs_file_t *file) {
     if (file->flags & LFS_F_READING) {
         if (!(file->flags & LFS_F_INLINE)) {
             lfs_cache_drop(lfs, &file->cache);
@@ -3372,7 +2840,7 @@ relocate:
 }
 
 #ifndef LFS_READONLY
-static int lfs_file_rawsync(lfs_t *lfs, lfs_file_t *file) {
+int lfs_file_rawsync(lfs_t *lfs, lfs_file_t *file) {
     if (file->flags & LFS_F_ERRED) {
         // it's not safe to do anything if our file errored
         return 0;
@@ -3485,7 +2953,7 @@ static lfs_ssize_t lfs_file_flushedread(lfs_t *lfs, lfs_file_t *file,
     return size;
 }
 
-static lfs_ssize_t lfs_file_rawread(lfs_t *lfs, lfs_file_t *file,
+lfs_ssize_t lfs_file_rawread(lfs_t *lfs, lfs_file_t *file,
         void *buffer, lfs_size_t size) {
     LFS_ASSERT((file->flags & LFS_O_RDONLY) == LFS_O_RDONLY);
 
@@ -3592,7 +3060,7 @@ relocate:
     return size;
 }
 
-static lfs_ssize_t lfs_file_rawwrite(lfs_t *lfs, lfs_file_t *file,
+lfs_ssize_t lfs_file_rawwrite(lfs_t *lfs, lfs_file_t *file,
         const void *buffer, lfs_size_t size) {
     LFS_ASSERT((file->flags & LFS_O_WRONLY) == LFS_O_WRONLY);
 
@@ -3636,7 +3104,7 @@ static lfs_ssize_t lfs_file_rawwrite(lfs_t *lfs, lfs_file_t *file,
 }
 #endif
 
-static lfs_soff_t lfs_file_rawseek(lfs_t *lfs, lfs_file_t *file,
+lfs_soff_t lfs_file_rawseek(lfs_t *lfs, lfs_file_t *file,
         lfs_soff_t off, int whence) {
     // find new pos
     lfs_off_t npos = file->pos;
@@ -3700,7 +3168,7 @@ static lfs_soff_t lfs_file_rawseek(lfs_t *lfs, lfs_file_t *file,
 }
 
 #ifndef LFS_READONLY
-static int lfs_file_rawtruncate(lfs_t *lfs, lfs_file_t *file, lfs_off_t size) {
+int lfs_file_rawtruncate(lfs_t *lfs, lfs_file_t *file, lfs_off_t size) {
     LFS_ASSERT((file->flags & LFS_O_WRONLY) == LFS_O_WRONLY);
 
     if (size > LFS_FILE_MAX) {
@@ -3799,7 +3267,7 @@ static int lfs_file_rawrewind(lfs_t *lfs, lfs_file_t *file) {
     return 0;
 }
 
-static lfs_soff_t lfs_file_rawsize(lfs_t *lfs, lfs_file_t *file) {
+lfs_soff_t lfs_file_rawsize(lfs_t *lfs, lfs_file_t *file) {
     (void)lfs;
 
 #ifndef LFS_READONLY
@@ -4329,7 +3797,7 @@ cleanup:
 }
 #endif
 
-static int lfs_rawmount(lfs_t *lfs, const struct lfs_config *cfg) {
+int lfs_rawmount(lfs_t *lfs, const struct lfs_config *cfg) {
     int err = lfs_init(lfs, cfg);
     if (err) {
         return err;
@@ -4496,7 +3964,7 @@ cleanup:
     return err;
 }
 
-static int lfs_rawunmount(lfs_t *lfs) {
+int lfs_rawunmount(lfs_t *lfs) {
     return lfs_deinit(lfs);
 }
 
@@ -4651,7 +4119,7 @@ int lfs_fs_rawtraverse(lfs_t *lfs,
 }
 
 #ifndef LFS_READONLY
-static int lfs_fs_pred(lfs_t *lfs,
+int lfs_fs_pred(lfs_t *lfs,
         const lfs_block_t pair[2], lfs_mdir_t *pdir) {
     // iterate over all directory directory entries
     pdir->tail[0] = 0;
@@ -4759,7 +4227,7 @@ static void lfs_fs_prepsuperblock(lfs_t *lfs, bool needssuperblock) {
 }
 
 #ifndef LFS_READONLY
-static int lfs_fs_preporphans(lfs_t *lfs, int8_t orphans) {
+int lfs_fs_preporphans(lfs_t *lfs, int8_t orphans) {
     LFS_ASSERT(lfs_tag_size(lfs->gstate.tag) > 0x000 || orphans >= 0);
     LFS_ASSERT(lfs_tag_size(lfs->gstate.tag) < 0x1ff || orphans <= 0);
     lfs->gstate.tag += orphans;
@@ -4771,7 +4239,7 @@ static int lfs_fs_preporphans(lfs_t *lfs, int8_t orphans) {
 #endif
 
 #ifndef LFS_READONLY
-static void lfs_fs_prepmove(lfs_t *lfs,
+void lfs_fs_prepmove(lfs_t *lfs,
         uint16_t id, const lfs_block_t pair[2]) {
     lfs->gstate.tag = ((lfs->gstate.tag & ~LFS_MKTAG(0x7ff, 0x3ff, 0)) |
             ((id != 0x3ff) ? LFS_MKTAG(LFS_TYPE_DELETE, id, 0) : 0));
@@ -4987,7 +4455,7 @@ static int lfs_fs_deorphan(lfs_t *lfs, bool powerloss) {
 #endif
 
 #ifndef LFS_READONLY
-static int lfs_fs_forceconsistency(lfs_t *lfs) {
+int lfs_fs_forceconsistency(lfs_t *lfs) {
     int err = lfs_fs_desuperblock(lfs);
     if (err) {
         return err;
@@ -5044,7 +4512,7 @@ static int lfs_fs_size_count(void *p, lfs_block_t block) {
     return 0;
 }
 
-static lfs_ssize_t lfs_fs_rawsize(lfs_t *lfs) {
+lfs_ssize_t lfs_fs_rawsize(lfs_t *lfs) {
     lfs_size_t size = 0;
     int err = lfs_fs_rawtraverse(lfs, lfs_fs_size_count, &size, false);
     if (err) {

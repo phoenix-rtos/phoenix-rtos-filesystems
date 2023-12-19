@@ -85,6 +85,8 @@ enum lfs_error {
     LFS_ERR_NOMEM       = -12,  // No more memory available
     LFS_ERR_NOATTR      = -61,  // No data/attr available
     LFS_ERR_NAMETOOLONG = -36,  // File name too long
+    LFS_ERR_BUSY        = -16,  // Object is in use
+    LFS_ERR_ROFS        = -30,  // Read-only filesystem
 };
 
 // File types
