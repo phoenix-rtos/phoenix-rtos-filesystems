@@ -8,6 +8,7 @@
 #include "lfs.h"
 #include "lfs_util.h"
 
+/* clang-format off */
 
 // some constants used throughout the code
 #define LFS_BLOCK_NULL ((lfs_block_t)-1)
@@ -1079,7 +1080,7 @@ static lfs_stag_t lfs_dir_fetchmatch(lfs_t *lfs,
 
     // if either block address is invalid we return LFS_ERR_CORRUPT here,
     // otherwise later writes to the pair could fail
-    if (lfs->block_count 
+    if (lfs->block_count
             && (pair[0] >= lfs->block_count || pair[1] >= lfs->block_count)) {
         return LFS_ERR_CORRUPT;
     }
@@ -2162,7 +2163,7 @@ static int lfs_dir_splittingcompact(lfs_t *lfs, lfs_mdir_t *dir,
             }
 
             if (err) {
-                // welp, we tried, if we ran out of space there's not much
+                // whelp, we tried, if we ran out of space there's not much
                 // we can do, we'll error later if we've become frozen
                 LFS_WARN("Unable to expand superblock");
             } else {
@@ -2516,7 +2517,7 @@ static int lfs_dir_orphaningcommit(lfs_t *lfs, lfs_mdir_t *dir,
                 lfs_fs_prepmove(lfs, 0x3ff, NULL);
             }
 
-            // replace bad pair, either we clean up desync, or no desync occured
+            // replace bad pair, either we clean up desync, or no desync occurred
             lpair[0] = pdir.pair[0];
             lpair[1] = pdir.pair[1];
             lfs_pair_tole32(ldir.pair);
@@ -6328,4 +6329,4 @@ int lfs_migrate(lfs_t *lfs, const struct lfs_config *cfg) {
     return err;
 }
 #endif
-
+/* clang-format on */

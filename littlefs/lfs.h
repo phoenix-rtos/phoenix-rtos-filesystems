@@ -7,6 +7,7 @@
  */
 #ifndef LFS_H
 #define LFS_H
+/* clang-format off */
 
 #include "lfs_util.h"
 
@@ -267,7 +268,7 @@ struct lfs_config {
 #ifdef LFS_MULTIVERSION
     // On-disk version to use when writing in the form of 16-bit major version
     // + 16-bit minor version. This limiting metadata to what is supported by
-    // older minor versions. Note that some features will be lost. Defaults to 
+    // older minor versions. Note that some features will be lost. Defaults to
     // to the most recent minor version when zero.
     uint32_t disk_version;
 #endif
@@ -768,4 +769,5 @@ int lfs_migrate(lfs_t *lfs, const struct lfs_config *cfg);
 } /* extern "C" */
 #endif
 
+/* clang-format off */
 #endif
