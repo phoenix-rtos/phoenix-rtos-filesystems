@@ -367,12 +367,16 @@ typedef struct lfs_mdir {
     lfs_block_t tail[2];
 } lfs_mdir_t;
 
-// littlefs directory type
-typedef struct lfs_dir {
-    struct lfs_dir *next;
+typedef struct lfs_mlist {
+    struct lfs_mlist *next;
     uint16_t id;
     uint8_t type;
     lfs_mdir_t m;
+} lfs_mlist_t;
+
+// littlefs directory type
+typedef struct lfs_dir {
+    struct lfs_mlist common;  // NOTE: this common header must be first
 
     lfs_off_t pos;
     lfs_block_t head[2];
@@ -380,10 +384,7 @@ typedef struct lfs_dir {
 
 // littlefs file type
 typedef struct lfs_file {
-    struct lfs_file *next;
-    uint16_t id;
-    uint8_t type;
-    lfs_mdir_t m;
+    struct lfs_mlist common;  // NOTE: this common header must be first
 
     struct lfs_ctz {
         lfs_block_t head;
@@ -419,12 +420,7 @@ typedef struct lfs {
     lfs_cache_t pcache;
 
     lfs_block_t root[2];
-    struct lfs_mlist {
-        struct lfs_mlist *next;
-        uint16_t id;
-        uint8_t type;
-        lfs_mdir_t m;
-    } *mlist;
+    struct lfs_mlist *mlist;
     uint32_t seed;
 
     lfs_gstate_t gstate;

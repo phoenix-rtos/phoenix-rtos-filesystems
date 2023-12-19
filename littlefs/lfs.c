@@ -2352,10 +2352,15 @@ static int lfs_dir_orphaningcommit(lfs_t *lfs, lfs_mdir_t *dir,
         const struct lfs_mattr *attrs, int attrcount) {
     // check for any inline files that aren't RAM backed and
     // forcefully evict them, needed for filesystem consistency
-    for (lfs_file_t *f = (lfs_file_t*)lfs->mlist; f; f = f->next) {
-        if (dir != &f->m && lfs_pair_cmp(f->m.pair, dir->pair) == 0 &&
-                f->type == LFS_TYPE_REG && (f->flags & LFS_F_INLINE) &&
-                f->ctz.size > lfs->cfg->cache_size) {
+    for (lfs_mlist_t *i = lfs->mlist; i; i = i->next) {
+        if (i->type != LFS_TYPE_REG) {
+            continue;
+        }
+
+        lfs_file_t *f = (lfs_file_t *)i;
+        if (dir != &f->common.m &&
+            lfs_pair_cmp(f->common.m.pair, dir->pair) == 0 &&
+            (f->flags & LFS_F_INLINE) && f->ctz.size > lfs->cfg->cache_size) {
             int err = lfs_file_outline(lfs, f);
             if (err) {
                 return err;
@@ -2432,10 +2437,12 @@ static int lfs_dir_orphaningcommit(lfs_t *lfs, lfs_mdir_t *dir,
                 d->m.pair[1] = ldir.pair[1];
             }
 
-            if (d->type == LFS_TYPE_DIR &&
-                    lfs_pair_cmp(lpair, ((lfs_dir_t*)d)->head) == 0) {
-                ((lfs_dir_t*)d)->head[0] = ldir.pair[0];
-                ((lfs_dir_t*)d)->head[1] = ldir.pair[1];
+            if (d->type == LFS_TYPE_DIR) {
+                lfs_dir_t* dir = (lfs_dir_t*)d;
+                if (lfs_pair_cmp(lpair, dir->head) == 0) {
+                    dir->head[0] = ldir.pair[0];
+                    dir->head[1] = ldir.pair[1];
+                }
             }
         }
 
@@ -2662,7 +2669,7 @@ static int lfs_rawmkdir(lfs_t *lfs, const char *path) {
 #endif
 
 static int lfs_dir_rawopen(lfs_t *lfs, lfs_dir_t *dir, const char *path) {
-    lfs_stag_t tag = lfs_dir_find(lfs, &dir->m, &path, NULL);
+    lfs_stag_t tag = lfs_dir_find(lfs, &dir->common.m, &path, NULL);
     if (tag < 0) {
         return tag;
     }
@@ -2678,7 +2685,7 @@ static int lfs_dir_rawopen(lfs_t *lfs, lfs_dir_t *dir, const char *path) {
         pair[1] = lfs->root[1];
     } else {
         // get dir pair from parent
-        lfs_stag_t res = lfs_dir_get(lfs, &dir->m, LFS_MKTAG(0x700, 0x3ff, 0),
+        lfs_stag_t res = lfs_dir_get(lfs, &dir->common.m, LFS_MKTAG(0x700, 0x3ff, 0),
                 LFS_MKTAG(LFS_TYPE_STRUCT, lfs_tag_id(tag), 8), pair);
         if (res < 0) {
             return res;
@@ -2687,19 +2694,19 @@ static int lfs_dir_rawopen(lfs_t *lfs, lfs_dir_t *dir, const char *path) {
     }
 
     // fetch first pair
-    int err = lfs_dir_fetch(lfs, &dir->m, pair);
+    int err = lfs_dir_fetch(lfs, &dir->common.m, pair);
     if (err) {
         return err;
     }
 
     // setup entry
-    dir->head[0] = dir->m.pair[0];
-    dir->head[1] = dir->m.pair[1];
-    dir->id = 0;
+    dir->head[0] = dir->common.m.pair[0];
+    dir->head[1] = dir->common.m.pair[1];
+    dir->common.id = 0;
     dir->pos = 0;
 
     // add to list of mdirs
-    dir->type = LFS_TYPE_DIR;
+    dir->common.type = LFS_TYPE_DIR;
     lfs_mlist_append(lfs, (struct lfs_mlist *)dir);
 
     return 0;
@@ -2729,25 +2736,25 @@ static int lfs_dir_rawread(lfs_t *lfs, lfs_dir_t *dir, struct lfs_info *info) {
     }
 
     while (true) {
-        if (dir->id == dir->m.count) {
-            if (!dir->m.split) {
+        if (dir->common.id == dir->common.m.count) {
+            if (!dir->common.m.split) {
                 return false;
             }
 
-            int err = lfs_dir_fetch(lfs, &dir->m, dir->m.tail);
+            int err = lfs_dir_fetch(lfs, &dir->common.m, dir->common.m.tail);
             if (err) {
                 return err;
             }
 
-            dir->id = 0;
+            dir->common.id = 0;
         }
 
-        int err = lfs_dir_getinfo(lfs, &dir->m, dir->id, info);
+        int err = lfs_dir_getinfo(lfs, &dir->common.m, dir->common.id, info);
         if (err && err != LFS_ERR_NOENT) {
             return err;
         }
 
-        dir->id += 1;
+        dir->common.id += 1;
         if (err != LFS_ERR_NOENT) {
             break;
         }
@@ -2769,24 +2776,24 @@ static int lfs_dir_rawseek(lfs_t *lfs, lfs_dir_t *dir, lfs_off_t off) {
     off -= dir->pos;
 
     // skip superblock entry
-    dir->id = (off > 0 && lfs_pair_cmp(dir->head, lfs->root) == 0);
+    dir->common.id = (off > 0 && lfs_pair_cmp(dir->head, lfs->root) == 0);
 
     while (off > 0) {
-        if (dir->id == dir->m.count) {
-            if (!dir->m.split) {
+        if (dir->common.id == dir->common.m.count) {
+            if (!dir->common.m.split) {
                 return LFS_ERR_INVAL;
             }
 
-            err = lfs_dir_fetch(lfs, &dir->m, dir->m.tail);
+            err = lfs_dir_fetch(lfs, &dir->common.m, dir->common.m.tail);
             if (err) {
                 return err;
             }
 
-            dir->id = 0;
+            dir->common.id = 0;
         }
 
-        int diff = lfs_min(dir->m.count - dir->id, off);
-        dir->id += diff;
+        int diff = lfs_min(dir->common.m.count - dir->common.id, off);
+        dir->common.id += diff;
         dir->pos += diff;
         off -= diff;
     }
@@ -2801,12 +2808,12 @@ static lfs_soff_t lfs_dir_rawtell(lfs_t *lfs, lfs_dir_t *dir) {
 
 static int lfs_dir_rawrewind(lfs_t *lfs, lfs_dir_t *dir) {
     // reload the head dir
-    int err = lfs_dir_fetch(lfs, &dir->m, dir->head);
+    int err = lfs_dir_fetch(lfs, &dir->common.m, dir->head);
     if (err) {
         return err;
     }
 
-    dir->id = 0;
+    dir->common.id = 0;
     dir->pos = 0;
     return 0;
 }
@@ -3029,14 +3036,14 @@ static int lfs_file_rawopencfg(lfs_t *lfs, lfs_file_t *file,
     file->cache.buffer = NULL;
 
     // allocate entry for file if it doesn't exist
-    lfs_stag_t tag = lfs_dir_find(lfs, &file->m, &path, &file->id);
-    if (tag < 0 && !(tag == LFS_ERR_NOENT && file->id != 0x3ff)) {
+    lfs_stag_t tag = lfs_dir_find(lfs, &file->common.m, &path, &file->common.id);
+    if (tag < 0 && !(tag == LFS_ERR_NOENT && file->common.id != 0x3ff)) {
         err = tag;
         goto cleanup;
     }
 
     // get id, add to list of mdirs to catch update changes
-    file->type = LFS_TYPE_REG;
+    file->common.type = LFS_TYPE_REG;
     lfs_mlist_append(lfs, (struct lfs_mlist *)file);
 
 #ifdef LFS_READONLY
@@ -3058,10 +3065,10 @@ static int lfs_file_rawopencfg(lfs_t *lfs, lfs_file_t *file,
         }
 
         // get next slot and create entry to remember name
-        err = lfs_dir_commit(lfs, &file->m, LFS_MKATTRS(
-                {LFS_MKTAG(LFS_TYPE_CREATE, file->id, 0), NULL},
-                {LFS_MKTAG(LFS_TYPE_REG, file->id, nlen), path},
-                {LFS_MKTAG(LFS_TYPE_INLINESTRUCT, file->id, 0), NULL}));
+        err = lfs_dir_commit(lfs, &file->common.m, LFS_MKATTRS(
+                {LFS_MKTAG(LFS_TYPE_CREATE, file->common.id, 0), NULL},
+                {LFS_MKTAG(LFS_TYPE_REG, file->common.id, nlen), path},
+                {LFS_MKTAG(LFS_TYPE_INLINESTRUCT, file->common.id, 0), NULL}));
 
         // it may happen that the file name doesn't fit in the metadata blocks, e.g., a 256 byte file name will
         // not fit in a 128 byte block.
@@ -3081,13 +3088,13 @@ static int lfs_file_rawopencfg(lfs_t *lfs, lfs_file_t *file,
 #ifndef LFS_READONLY
     } else if (flags & LFS_O_TRUNC) {
         // truncate if requested
-        tag = LFS_MKTAG(LFS_TYPE_INLINESTRUCT, file->id, 0);
+        tag = LFS_MKTAG(LFS_TYPE_INLINESTRUCT, file->common.id, 0);
         file->flags |= LFS_F_DIRTY;
 #endif
     } else {
         // try to load what's on disk, if it's inlined we'll fix it later
-        tag = lfs_dir_get(lfs, &file->m, LFS_MKTAG(0x700, 0x3ff, 0),
-                LFS_MKTAG(LFS_TYPE_STRUCT, file->id, 8), &file->ctz);
+        tag = lfs_dir_get(lfs, &file->common.m, LFS_MKTAG(0x700, 0x3ff, 0),
+                LFS_MKTAG(LFS_TYPE_STRUCT, file->common.id, 8), &file->ctz);
         if (tag < 0) {
             err = tag;
             goto cleanup;
@@ -3099,10 +3106,10 @@ static int lfs_file_rawopencfg(lfs_t *lfs, lfs_file_t *file,
     for (unsigned i = 0; i < file->cfg->attr_count; i++) {
         // if opened for read / read-write operations
         if ((file->flags & LFS_O_RDONLY) == LFS_O_RDONLY) {
-            lfs_stag_t res = lfs_dir_get(lfs, &file->m,
+            lfs_stag_t res = lfs_dir_get(lfs, &file->common.m,
                     LFS_MKTAG(0x7ff, 0x3ff, 0),
                     LFS_MKTAG(LFS_TYPE_USERATTR + file->cfg->attrs[i].type,
-                        file->id, file->cfg->attrs[i].size),
+                        file->common.id, file->cfg->attrs[i].size),
                         file->cfg->attrs[i].buffer);
             if (res < 0 && res != LFS_ERR_NOENT) {
                 err = res;
@@ -3148,9 +3155,9 @@ static int lfs_file_rawopencfg(lfs_t *lfs, lfs_file_t *file,
 
         // don't always read (may be new/trunc file)
         if (file->ctz.size > 0) {
-            lfs_stag_t res = lfs_dir_get(lfs, &file->m,
+            lfs_stag_t res = lfs_dir_get(lfs, &file->common.m,
                     LFS_MKTAG(0x700, 0x3ff, 0),
-                    LFS_MKTAG(LFS_TYPE_STRUCT, file->id,
+                    LFS_MKTAG(LFS_TYPE_STRUCT, file->common.id,
                         lfs_min(file->cache.size, 0x3fe)),
                     file->cache.buffer);
             if (res < 0) {
@@ -3221,11 +3228,11 @@ static int lfs_file_relocate(lfs_t *lfs, lfs_file_t *file) {
         for (lfs_off_t i = 0; i < file->off; i++) {
             uint8_t data;
             if (file->flags & LFS_F_INLINE) {
-                err = lfs_dir_getread(lfs, &file->m,
+                err = lfs_dir_getread(lfs, &file->common.m,
                         // note we evict inline files before they can be dirty
                         NULL, &file->cache, file->off-i,
                         LFS_MKTAG(0xfff, 0x1ff, 0),
-                        LFS_MKTAG(LFS_TYPE_INLINESTRUCT, file->id, 0),
+                        LFS_MKTAG(LFS_TYPE_INLINESTRUCT, file->common.id, 0),
                         i, &data, 1);
                 if (err) {
                     return err;
@@ -3379,7 +3386,7 @@ static int lfs_file_rawsync(lfs_t *lfs, lfs_file_t *file) {
 
 
     if ((file->flags & LFS_F_DIRTY) &&
-            !lfs_pair_isnull(file->m.pair)) {
+            !lfs_pair_isnull(file->common.m.pair)) {
         // update dir entry
         uint16_t type;
         const void *buffer;
@@ -3401,9 +3408,9 @@ static int lfs_file_rawsync(lfs_t *lfs, lfs_file_t *file) {
         }
 
         // commit file data and attributes
-        err = lfs_dir_commit(lfs, &file->m, LFS_MKATTRS(
-                {LFS_MKTAG(type, file->id, size), buffer},
-                {LFS_MKTAG(LFS_FROM_USERATTRS, file->id,
+        err = lfs_dir_commit(lfs, &file->common.m, LFS_MKATTRS(
+                {LFS_MKTAG(type, file->common.id, size), buffer},
+                {LFS_MKTAG(LFS_FROM_USERATTRS, file->common.id,
                     file->cfg->attr_count), file->cfg->attrs}));
         if (err) {
             file->flags |= LFS_F_ERRED;
@@ -3452,10 +3459,10 @@ static lfs_ssize_t lfs_file_flushedread(lfs_t *lfs, lfs_file_t *file,
         // read as much as we can in current block
         lfs_size_t diff = lfs_min(nsize, lfs->cfg->block_size - file->off);
         if (file->flags & LFS_F_INLINE) {
-            int err = lfs_dir_getread(lfs, &file->m,
+            int err = lfs_dir_getread(lfs, &file->common.m,
                     NULL, &file->cache, lfs->cfg->block_size,
                     LFS_MKTAG(0xfff, 0x1ff, 0),
-                    LFS_MKTAG(LFS_TYPE_INLINESTRUCT, file->id, 0),
+                    LFS_MKTAG(LFS_TYPE_INLINESTRUCT, file->common.id, 0),
                     file->off, data, diff);
             if (err) {
                 return err;
@@ -4616,11 +4623,12 @@ int lfs_fs_rawtraverse(lfs_t *lfs,
 
 #ifndef LFS_READONLY
     // iterate over any open files
-    for (lfs_file_t *f = (lfs_file_t*)lfs->mlist; f; f = f->next) {
-        if (f->type != LFS_TYPE_REG) {
+    for (lfs_mlist_t *i = lfs->mlist; i; i = i->next) {
+        if (i->type != LFS_TYPE_REG) {
             continue;
         }
 
+        lfs_file_t *f = (lfs_file_t *)i;
         if ((f->flags & LFS_F_DIRTY) && !(f->flags & LFS_F_INLINE)) {
             int err = lfs_ctz_traverse(lfs, &f->cache, &lfs->rcache,
                     f->ctz.head, f->ctz.size, cb, data);
@@ -5049,39 +5057,37 @@ static lfs_ssize_t lfs_fs_rawsize(lfs_t *lfs) {
 #ifndef LFS_READONLY
 static int lfs_fs_rawgrow(lfs_t *lfs, lfs_size_t block_count) {
     // shrinking is not supported
-    LFS_ASSERT(block_count >= lfs->block_count);
-
-    if (block_count > lfs->block_count) {
-        lfs->block_count = block_count;
-
-        // fetch the root
-        lfs_mdir_t root;
-        int err = lfs_dir_fetch(lfs, &root, lfs->root);
-        if (err) {
-            return err;
-        }
-
-        // update the superblock
-        lfs_superblock_t superblock;
-        lfs_stag_t tag = lfs_dir_get(lfs, &root, LFS_MKTAG(0x7ff, 0x3ff, 0),
-                LFS_MKTAG(LFS_TYPE_INLINESTRUCT, 0, sizeof(superblock)),
-                &superblock);
-        if (tag < 0) {
-            return tag;
-        }
-        lfs_superblock_fromle32(&superblock);
-
-        superblock.block_count = lfs->block_count;
-
-        lfs_superblock_tole32(&superblock);
-        err = lfs_dir_commit(lfs, &root, LFS_MKATTRS(
-                {tag, &superblock}));
-        if (err) {
-            return err;
-        }
+    if (block_count < lfs->block_count) {
+        return LFS_ERR_INVAL;
+    }
+    else if (block_count == lfs->block_count) {
+        return 0;
     }
 
-    return 0;
+    lfs->block_count = block_count;
+
+    // fetch the root
+    lfs_mdir_t root;
+    int err = lfs_dir_fetch(lfs, &root, lfs->root);
+    if (err) {
+        return err;
+    }
+
+    // update the superblock
+    lfs_superblock_t superblock;
+    lfs_stag_t tag = lfs_dir_get(lfs, &root, LFS_MKTAG(0x7ff, 0x3ff, 0),
+            LFS_MKTAG(LFS_TYPE_INLINESTRUCT, 0, sizeof(superblock)),
+            &superblock);
+    if (tag < 0) {
+        return tag;
+    }
+    lfs_superblock_fromle32(&superblock);
+
+    superblock.block_count = lfs->block_count;
+
+    lfs_superblock_tole32(&superblock);
+
+    return lfs_dir_commit(lfs, &root, LFS_MKATTRS({tag, &superblock}));
 }
 #endif
 
