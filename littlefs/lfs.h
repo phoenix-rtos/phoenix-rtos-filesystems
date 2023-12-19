@@ -5,6 +5,7 @@
  * Copyright (c) 2017, Arm Limited. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  */
+/* clang-format off */
 #ifndef LFS_H
 #define LFS_H
 
@@ -267,7 +268,7 @@ struct lfs_config {
 #ifdef LFS_MULTIVERSION
     // On-disk version to use when writing in the form of 16-bit major version
     // + 16-bit minor version. This limiting metadata to what is supported by
-    // older minor versions. Note that some features will be lost. Defaults to 
+    // older minor versions. Note that some features will be lost. Defaults to
     // to the most recent minor version when zero.
     uint32_t disk_version;
 #endif
@@ -769,3 +770,4 @@ int lfs_migrate(lfs_t *lfs, const struct lfs_config *cfg);
 #endif
 
 #endif
+/* clang-format on */
