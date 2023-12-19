@@ -356,4 +356,11 @@ lfs_ssize_t lfs_fs_rawsize(lfs_t *lfs);
 
 /* clang-format on */
 
+static inline bool ph_lfs_isPhIdTag(lfs_tag_t tag)
+{
+	return (lfs_tag_type3(tag) & LFS_TYPE_PHID_MASK) == LFS_TYPE_PHID_ANY;
+}
+
+void ph_lfs_bumpLastPhId(lfs_t *lfs, id_t found);
+
 #endif /* _LFS_INTERNAL_H_ */

@@ -446,6 +446,8 @@ typedef struct lfs {
 #ifdef LFS_MIGRATE
     struct lfs1 *lfs1;
 #endif
+    id_t lastFileId;          /* Max valid file ID in the filesystem */
+    bool initialScan;         /* Flag that max file ID should be updated when scanning directories */
 } lfs_t;
 
 
@@ -762,6 +764,15 @@ int lfs_migrate(lfs_t *lfs, const struct lfs_config *cfg);
 #endif
 #endif
 
+#define LFS_TYPE_PHID_START 0xfc
+#define LFS_TYPE_PHID_MASK (0x700 | LFS_TYPE_PHID_START)
+#define LFS_TYPE_PHID_ANY (LFS_TYPE_USERATTR + LFS_TYPE_PHID_START)
+#define LFS_TYPE_PHID_REG (LFS_TYPE_USERATTR + LFS_TYPE_PHID_START + 0)
+#define LFS_TYPE_PHID_DIR (LFS_TYPE_USERATTR + LFS_TYPE_PHID_START + 1)
+
+#define LFS_ROOT_PHID 1 /* Phoenix ID representing root dir */
+
+#define ID_SIZE sizeof(id_t) /* Size of Phoenix IDs stored on disk */
 
 #ifdef __cplusplus
 } /* extern "C" */

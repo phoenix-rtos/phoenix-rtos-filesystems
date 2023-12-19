@@ -9,6 +9,7 @@
 #define LFS_UTIL_H
 
 /* clang-format off */
+#include "ph_lfs_util.h"
 
 // Users can override lfs_util.h with their own configuration by defining
 // LFS_CONFIG as a header file to include (-DLFS_CONFIG=lfs_config.h).
