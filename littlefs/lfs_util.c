@@ -5,6 +5,7 @@
  * Copyright (c) 2017, Arm Limited. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  */
+/* clang-format off */
 #include "lfs_util.h"
 
 // Only compile if user does not provide custom config
@@ -32,3 +33,4 @@ uint32_t lfs_crc(uint32_t crc, const void *buffer, size_t size) {
 
 
 #endif
+/* clang-format on */

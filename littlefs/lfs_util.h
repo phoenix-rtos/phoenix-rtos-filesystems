@@ -5,6 +5,7 @@
  * Copyright (c) 2017, Arm Limited. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  */
+/* clang-format off */
 #ifndef LFS_UTIL_H
 #define LFS_UTIL_H
 
@@ -241,3 +242,4 @@ static inline void lfs_free(void *p) {
 
 #endif
 #endif
+/* clang-format on */
