@@ -632,7 +632,7 @@ int dummyfs_unlink(void *ctx, oid_t *dir, const char *name)
 }
 
 
-static int _dummyfs_writeObject(dummyfs_t *fs, dummyfs_object_t *o, offs_t offs, const char *buff, size_t len);
+static int _dummyfs_writeObject(dummyfs_t *fs, dummyfs_object_t *o, off_t offs, const char *buff, size_t len);
 
 
 static int _dummyfs_create(dummyfs_t *fs, oid_t *dir, const char *name, oid_t *oid, unsigned mode, int type, oid_t *dev)
@@ -758,7 +758,7 @@ int dummyfs_destroy(void *ctx, oid_t *oid)
 }
 
 
-int dummyfs_readdir(void *ctx, oid_t *dir, offs_t offs, struct dirent *dent, unsigned int size)
+int dummyfs_readdir(void *ctx, oid_t *dir, off_t offs, struct dirent *dent, unsigned int size)
 {
 	TRACE();
 	dummyfs_t *fs = (dummyfs_t *)ctx;
@@ -876,7 +876,7 @@ int dummyfs_close(void *ctx, oid_t *oid)
 }
 
 
-int dummyfs_read(void *ctx, oid_t *oid, offs_t offs, char *buff, size_t len)
+int dummyfs_read(void *ctx, oid_t *oid, off_t offs, char *buff, size_t len)
 {
 	TRACE();
 	dummyfs_t *fs = (dummyfs_t *)ctx;
@@ -903,7 +903,7 @@ int dummyfs_read(void *ctx, oid_t *oid, offs_t offs, char *buff, size_t len)
 		return -EINVAL;
 	}
 
-	if (((offs_t)o->size <= offs) || (len == 0)) {
+	if (((off_t)o->size <= offs) || (len == 0)) {
 		dummyfs_object_put(fs, o);
 		mutexUnlock(fs->mutex);
 		return 0;
@@ -948,7 +948,7 @@ int dummyfs_read(void *ctx, oid_t *oid, offs_t offs, char *buff, size_t len)
 }
 
 
-static int _dummyfs_writeObject(dummyfs_t *fs, dummyfs_object_t *o, offs_t offs, const char *buff, size_t len)
+static int _dummyfs_writeObject(dummyfs_t *fs, dummyfs_object_t *o, off_t offs, const char *buff, size_t len)
 {
 	TRACE();
 	size_t cnt = 0;
@@ -1028,7 +1028,7 @@ static int _dummyfs_writeObject(dummyfs_t *fs, dummyfs_object_t *o, offs_t offs,
 }
 
 
-int dummyfs_write(void *ctx, oid_t *oid, offs_t offs, const char *buff, size_t len)
+int dummyfs_write(void *ctx, oid_t *oid, off_t offs, const char *buff, size_t len)
 {
 	TRACE();
 	dummyfs_t *fs = (dummyfs_t *)ctx;

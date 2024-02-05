@@ -22,10 +22,10 @@
 #include "fatdev.h"
 
 
-int fatdev_read(fat_info_t *info, offs_t off, size_t size, void *buff)
+int fatdev_read(fat_info_t *info, off_t off, size_t size, void *buff)
 {
 	storage_t *strg = info->strg;
-	offs_t offs = info->strg->start + off;
+	off_t offs = info->strg->start + off;
 	ssize_t size_ret = strg->dev->blk->ops->read(strg, offs, buff, size);
 	if (size_ret != size) {
 		if (size_ret < 0) {

@@ -56,7 +56,7 @@ extern int _ext2_dir_search(ext2_t *fs, ext2_obj_t *dir, const char *name, size_
 
 
 /* Reads directory entry (requires object to be locked) */
-extern int _ext2_dir_read(ext2_t *fs, ext2_obj_t *dir, offs_t offs, struct dirent *res, size_t len);
+extern int _ext2_dir_read(ext2_t *fs, ext2_obj_t *dir, off_t offs, struct dirent *res, size_t len);
 
 
 /* Adds directory entry (requires object to be locked) */

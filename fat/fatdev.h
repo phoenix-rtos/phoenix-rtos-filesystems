@@ -19,7 +19,7 @@
 
 #include "fatio.h"
 
-extern int fatdev_read(fat_info_t *info, offs_t off, size_t size, void *buff);
+extern int fatdev_read(fat_info_t *info, off_t off, size_t size, void *buff);
 
 
 #endif /* _FATDEV_H_ */

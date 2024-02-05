@@ -22,7 +22,7 @@
 #include "file.h"
 
 
-ssize_t _ext2_file_read(ext2_t *fs, ext2_obj_t *obj, offs_t offs, char *buff, size_t len)
+ssize_t _ext2_file_read(ext2_t *fs, ext2_obj_t *obj, off_t offs, char *buff, size_t len)
 {
 	uint32_t block = offs / fs->blocksz;
 	size_t l = 0;
@@ -79,7 +79,7 @@ ssize_t _ext2_file_read(ext2_t *fs, ext2_obj_t *obj, offs_t offs, char *buff, si
 }
 
 
-ssize_t _ext2_file_write(ext2_t *fs, ext2_obj_t *obj, offs_t offs, const char *buff, size_t len)
+ssize_t _ext2_file_write(ext2_t *fs, ext2_obj_t *obj, off_t offs, const char *buff, size_t len)
 {
 	uint32_t block = offs / fs->blocksz;
 	size_t l = 0;

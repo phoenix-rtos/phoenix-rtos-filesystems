@@ -670,7 +670,7 @@ static int libjffs2_destroy(void *info, oid_t *oid)
 }
 
 
-static int libjffs2_readdir(void *info, oid_t *dir, offs_t offs, struct dirent *dent, size_t size)
+static int libjffs2_readdir(void *info, oid_t *dir, off_t offs, struct dirent *dent, size_t size)
 {
 	struct inode *inode;
 	struct file file;
@@ -749,7 +749,7 @@ static int libjffs2_close(void *info, oid_t *oid)
 }
 
 
-static int libjffs2_read(void *info, oid_t *oid, offs_t offs, void *data, size_t len)
+static int libjffs2_read(void *info, oid_t *oid, off_t offs, void *data, size_t len)
 {
 	struct inode *inode;
 	struct jffs2_inode_info *f;
@@ -891,7 +891,7 @@ static int libjffs2_prepareWrite(struct inode *inode, loff_t offs, size_t len)
 }
 
 
-static int libjffs2_write(void *info, oid_t *oid, offs_t offs, const void *data, size_t len)
+static int libjffs2_write(void *info, oid_t *oid, off_t offs, const void *data, size_t len)
 {
 	struct inode *inode;
 	struct jffs2_inode_info *f;

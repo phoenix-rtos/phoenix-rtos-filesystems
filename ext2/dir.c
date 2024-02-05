@@ -115,7 +115,7 @@ int _ext2_dir_search(ext2_t *fs, ext2_obj_t *dir, const char *name, size_t len, 
 }
 
 
-int _ext2_dir_read(ext2_t *fs, ext2_obj_t *dir, offs_t offs, struct dirent *res, size_t len)
+int _ext2_dir_read(ext2_t *fs, ext2_obj_t *dir, off_t offs, struct dirent *res, size_t len)
 {
 	ext2_dirent_t *entry;
 	ssize_t ret;

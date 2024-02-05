@@ -41,8 +41,8 @@ typedef struct _ext2_objs_t ext2_objs_t; /* Filesystem objects */
 
 
 /* Device access callbacks */
-typedef ssize_t (*dev_read)(id_t, offs_t, char *, size_t);
-typedef ssize_t (*dev_write)(id_t, offs_t, const char *, size_t);
+typedef ssize_t (*dev_read)(id_t, off_t, char *, size_t);
+typedef ssize_t (*dev_write)(id_t, off_t, const char *, size_t);
 
 
 typedef struct {
@@ -95,11 +95,11 @@ extern int ext2_close(ext2_t *fs, id_t id);
 
 
 /* Reads from a file */
-extern ssize_t ext2_read(ext2_t *fs, id_t id, offs_t offs, char *buff, size_t len);
+extern ssize_t ext2_read(ext2_t *fs, id_t id, off_t offs, char *buff, size_t len);
 
 
 /* Writes to a file */
-extern ssize_t ext2_write(ext2_t *fs, id_t id, offs_t offs, const char *buff, size_t len);
+extern ssize_t ext2_write(ext2_t *fs, id_t id, off_t offs, const char *buff, size_t len);
 
 
 /* Truncates a file */

@@ -135,13 +135,13 @@ static int libext2_close(void *info, oid_t *oid)
 }
 
 
-static ssize_t libext2_read(void *info, oid_t *oid, offs_t offs, void *data, size_t len)
+static ssize_t libext2_read(void *info, oid_t *oid, off_t offs, void *data, size_t len)
 {
 	return ext2_read((ext2_t *)info, oid->id, offs, data, len);
 }
 
 
-static ssize_t libext2_write(void *info, oid_t *oid, offs_t offs, const void *data, size_t len)
+static ssize_t libext2_write(void *info, oid_t *oid, off_t offs, const void *data, size_t len)
 {
 	return ext2_write((ext2_t *)info, oid->id, offs, data, len);
 }
@@ -189,7 +189,7 @@ static int libext2_unlink(void *info, oid_t *oid, const char *name)
 }
 
 
-static int libext2_readdir(void *info, oid_t *oid, offs_t offs, struct dirent *dent, size_t size)
+static int libext2_readdir(void *info, oid_t *oid, off_t offs, struct dirent *dent, size_t size)
 {
 	return ext2_read((ext2_t *)info, oid->id, offs, (char *)dent, size);
 }

@@ -183,7 +183,7 @@ int ext2_close(ext2_t *fs, id_t id)
 }
 
 
-ssize_t ext2_read(ext2_t *fs, id_t id, offs_t offs, char *buff, size_t len)
+ssize_t ext2_read(ext2_t *fs, id_t id, off_t offs, char *buff, size_t len)
 {
 	ext2_obj_t *obj;
 	ssize_t ret;
@@ -215,7 +215,7 @@ ssize_t ext2_read(ext2_t *fs, id_t id, offs_t offs, char *buff, size_t len)
 }
 
 
-ssize_t ext2_write(ext2_t *fs, id_t id, offs_t offs, const char *buff, size_t len)
+ssize_t ext2_write(ext2_t *fs, id_t id, off_t offs, const char *buff, size_t len)
 {
 	ext2_obj_t *obj;
 	ssize_t ret;

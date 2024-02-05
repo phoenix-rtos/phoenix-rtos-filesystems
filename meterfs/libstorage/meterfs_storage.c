@@ -70,7 +70,7 @@ static int fsOpAdapter_close(void *info, oid_t *oid)
 }
 
 
-static ssize_t fsOpAdapter_read(void *info, oid_t *oid, offs_t offs, void *data, size_t len)
+static ssize_t fsOpAdapter_read(void *info, oid_t *oid, off_t offs, void *data, size_t len)
 {
 	int err;
 	meterfs_partition_t *ctx = (meterfs_partition_t *)info;
@@ -84,7 +84,7 @@ static ssize_t fsOpAdapter_read(void *info, oid_t *oid, offs_t offs, void *data,
 }
 
 
-static ssize_t fsOpAdapter_write(void *info, oid_t *oid, offs_t offs, const void *data, size_t len)
+static ssize_t fsOpAdapter_write(void *info, oid_t *oid, off_t offs, const void *data, size_t len)
 {
 	int err;
 	meterfs_partition_t *ctx = (meterfs_partition_t *)info;
