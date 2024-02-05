@@ -91,8 +91,8 @@ fat_cluster_t fatchain_scanFreeSpace(fat_info_t *info)
 
 	uint32_t buff[16];
 	/* The first two entries in FAT are reserved, but they are always non-zero */
-	offs_t byteOff = info->fatoffBytes;
-	offs_t byteEnd = byteOff + (info->dataClusters + RSVD_ENTRIES) * ((info->type == FAT32) ? 4 : 2);
+	off_t byteOff = info->fatoffBytes;
+	off_t byteEnd = byteOff + (info->dataClusters + RSVD_ENTRIES) * ((info->type == FAT32) ? 4 : 2);
 
 	while (byteOff < byteEnd) {
 		size_t toRead = min(sizeof(buff), byteEnd - byteOff);

@@ -65,7 +65,7 @@ typedef struct _fat_info_t {
 	fat_type_t type;
 	fat_bsbpbUnpacked_t bsbpb;
 
-	offs_t fatoffBytes;         /* Start of first FAT (in bytes) */
+	off_t fatoffBytes;          /* Start of first FAT (in bytes) */
 	fat_sector_t rootoff;       /* Start of root directory (for FAT12/16) */
 	fat_sector_t dataoff;       /* Start of data space */
 	fat_cluster_t dataClusters; /* Total clusters in data space */
@@ -149,7 +149,7 @@ typedef int (*fat_dirScanCb_t)(void *arg, fat_dirent_t *d, fat_name_t *name, uin
 extern int fatio_dirScan(fat_info_t *info, fatchain_cache_t *c, uint32_t offset, fat_dirScanCb_t cb, void *cbArg);
 
 
-extern ssize_t fatio_read(fat_info_t *info, fatchain_cache_t *c, offs_t offset, size_t size, void *buff);
+extern ssize_t fatio_read(fat_info_t *info, fatchain_cache_t *c, off_t offset, size_t size, void *buff);
 
 
 /* Lookup path from root to end (d is output only) */

@@ -21,10 +21,10 @@ int dummyfs_open(void *ctx, oid_t *oid);
 int dummyfs_close(void *ctx, oid_t *oid);
 
 
-int dummyfs_read(void *ctx, oid_t *oid, offs_t offs, char *buff, size_t len);
+int dummyfs_read(void *ctx, oid_t *oid, off_t offs, char *buff, size_t len);
 
 
-int dummyfs_write(void *ctx, oid_t *oid, offs_t offs, const char *buff, size_t len);
+int dummyfs_write(void *ctx, oid_t *oid, off_t offs, const char *buff, size_t len);
 
 
 int dummyfs_truncate(void *ctx, oid_t *oid, size_t size);
@@ -51,7 +51,7 @@ int dummyfs_link(void *ctx, oid_t *dir, const char *name, oid_t *oid);
 int dummyfs_unlink(void *ctx, oid_t *dir, const char *name);
 
 
-int dummyfs_readdir(void *ctx, oid_t *dir, offs_t offs, struct dirent *dent, unsigned int size);
+int dummyfs_readdir(void *ctx, oid_t *dir, off_t offs, struct dirent *dent, unsigned int size);
 
 
 int dummyfs_createMapped(void *ctx, oid_t *dir, const char *name, void *addr, size_t size, oid_t *oid);

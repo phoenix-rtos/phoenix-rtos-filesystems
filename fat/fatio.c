@@ -552,7 +552,7 @@ int fatio_lookupPath(fat_info_t *info, const char *path, fat_dirent_t *d, fat_fi
 }
 
 
-ssize_t fatio_read(fat_info_t *info, fatchain_cache_t *c, offs_t offset, size_t size, void *buff)
+ssize_t fatio_read(fat_info_t *info, fatchain_cache_t *c, off_t offset, size_t size, void *buff)
 {
 	size_t totalRead = 0;
 

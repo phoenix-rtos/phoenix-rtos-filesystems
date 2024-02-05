@@ -40,7 +40,7 @@ extern int libext2_unmount(void *fdata);
 
 
 /* Mounts filesystem */
-extern int libext2_mount(oid_t *dev, unsigned int sectorsz, ssize_t (*read)(id_t, offs_t, char *, size_t), ssize_t (*write)(id_t, offs_t, const char *, size_t), void **fdata);
+extern int libext2_mount(oid_t *dev, unsigned int sectorsz, ssize_t (*read)(id_t, off_t, char *, size_t), ssize_t (*write)(id_t, off_t, const char *, size_t), void **fdata);
 
 /* Unmount filesystem callback for libstorage */
 extern int libext2_storage_umount(storage_fs_t *fs);

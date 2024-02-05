@@ -90,7 +90,7 @@ static fat_obj_t *libfat_findObj(fat_info_t *info, id_t id)
 }
 
 
-ssize_t libfat_write(void *info, oid_t *oid, offs_t offs, const void *data, size_t len)
+ssize_t libfat_write(void *info, oid_t *oid, off_t offs, const void *data, size_t len)
 {
 	return -EROFS;
 }
@@ -296,7 +296,7 @@ static int libfat_close(void *infoVoid, oid_t *oid)
 }
 
 
-ssize_t libfat_read(void *infoVoid, oid_t *oid, offs_t offs, void *data, size_t len)
+ssize_t libfat_read(void *infoVoid, oid_t *oid, off_t offs, void *data, size_t len)
 {
 	if (infoVoid == NULL) {
 		return -EINVAL;
@@ -363,7 +363,7 @@ static int libfat_readdirCb(void *argVoid, fat_dirent_t *d, fat_name_t *name, ui
 }
 
 
-static int libfat_readdir(void *infoVoid, oid_t *oid, offs_t offs, struct dirent *dent, size_t size)
+static int libfat_readdir(void *infoVoid, oid_t *oid, off_t offs, struct dirent *dent, size_t size)
 {
 	if (infoVoid == NULL) {
 		return -EINVAL;
