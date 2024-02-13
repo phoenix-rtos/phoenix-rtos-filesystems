@@ -15,6 +15,7 @@
 #define _METERFS_H_
 
 #include <sys/rb.h>
+#include <sys/types.h>
 #include <stdint.h>
 
 #define MAX_NAME_LEN 8
