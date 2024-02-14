@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <sys/minmax.h>
 
 #include "block.h"
 #include "file.h"
@@ -81,29 +82,32 @@ ssize_t _ext2_file_read(ext2_t *fs, ext2_obj_t *obj, off_t offs, char *buff, siz
 
 ssize_t _ext2_file_write(ext2_t *fs, ext2_obj_t *obj, off_t offs, const char *buff, size_t len)
 {
+	if (len == 0) {
+		return 0;
+	}
+
 	uint32_t block = offs / fs->blocksz;
-	size_t l = 0;
-	void *data;
+	uint32_t offsInBlock = offs % fs->blocksz;
+	size_t written = 0;
 	int err;
 
-	if (!len)
-		return 0;
-
-	if (offs % fs->blocksz || len < fs->blocksz) {
-		if ((data = malloc(fs->blocksz)) == NULL)
+	if ((offsInBlock != 0) || (len < fs->blocksz)) {
+		void *data = malloc(fs->blocksz);
+		if (data == NULL) {
 			return -ENOMEM;
+		}
 
-		if ((err = ext2_block_init(fs, obj, block, data)) < 0) {
+		err = ext2_block_init(fs, obj, block, data);
+		if (err < 0) {
 			free(data);
 			return err;
 		}
 
-		if ((l = fs->blocksz - offs % fs->blocksz) > len)
-			l = len;
+		written = min(fs->blocksz - offsInBlock, len);
+		memcpy(data + offsInBlock, buff, written);
 
-		memcpy(data + offs % fs->blocksz, buff, l);
-
-		if ((err = ext2_block_syncone(fs, obj, block, data)) < 0) {
+		err = ext2_block_syncone(fs, obj, block, data);
+		if (err < 0) {
 			free(data);
 			return err;
 		}
@@ -112,26 +116,33 @@ ssize_t _ext2_file_write(ext2_t *fs, ext2_obj_t *obj, off_t offs, const char *bu
 		block++;
 	}
 
-	if (block < (offs + len) / fs->blocksz) {
-		if ((err = ext2_block_sync(fs, obj, block, buff + l, (offs + len) / fs->blocksz - block)) < 0)
+	const uint32_t fullBlocks = (len - written) / fs->blocksz;
+	if (fullBlocks > 0) {
+		err = ext2_block_sync(fs, obj, block, buff + written, fullBlocks);
+		if (err < 0) {
 			return err;
+		}
 
-		l += fs->blocksz * ((offs + len) / fs->blocksz - block);
-		block = (offs + len) / fs->blocksz;
+		written += fs->blocksz * fullBlocks;
+		block += fullBlocks;
 	}
 
-	if (len > l) {
-		if ((data = malloc(fs->blocksz)) == NULL)
+	if (len > written) {
+		void *data = malloc(fs->blocksz);
+		if (data == NULL) {
 			return -ENOMEM;
+		}
 
-		if ((err = ext2_block_init(fs, obj, block, data)) < 0) {
+		err = ext2_block_init(fs, obj, block, data);
+		if (err < 0) {
 			free(data);
 			return err;
 		}
 
-		memcpy(data, buff + l, len - l);
+		memcpy(data, buff + written, len - written);
 
-		if ((err = ext2_block_syncone(fs, obj, block, data)) < 0) {
+		err = ext2_block_syncone(fs, obj, block, data);
+		if (err < 0) {
 			free(data);
 			return err;
 		}
@@ -139,17 +150,22 @@ ssize_t _ext2_file_write(ext2_t *fs, ext2_obj_t *obj, off_t offs, const char *bu
 		free(data);
 	}
 
-	if (offs + len > obj->inode->size)
+	if ((offs + len) > obj->inode->size) {
 		obj->inode->size = offs + len;
+	}
 
 	obj->inode->mtime = obj->inode->atime = time(NULL);
 	obj->flags |= OFLAG_DIRTY;
 
-	if ((err = _ext2_obj_sync(fs, obj)) < 0)
+	err = _ext2_obj_sync(fs, obj);
+	if (err < 0) {
 		return err;
+	}
 
-	if ((err = ext2_sb_sync(fs)) < 0)
+	err = ext2_sb_sync(fs);
+	if (err < 0) {
 		return err;
+	}
 
 	return len;
 }
