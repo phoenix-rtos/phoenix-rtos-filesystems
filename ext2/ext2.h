@@ -129,12 +129,13 @@ extern int ext2_statfs(ext2_t *fs, void *buf, size_t len);
 /* Bitmap bit operations */
 static inline uint32_t ext2_findzerobit(uint32_t *bmp, uint32_t size, uint32_t offs)
 {
-	uint32_t len = (size - 1) / (CHAR_BIT * sizeof(uint32_t)) + 1;
-	uint32_t tmp, i;
+	static const uint32_t bitsInElem = CHAR_BIT * sizeof(uint32_t);
+	uint32_t len = ((size - 1) / bitsInElem) + 1;
 
-	for (i = offs / (CHAR_BIT * sizeof(uint32_t)); i < len; i++) {
-		if ((tmp = bmp[i] ^ ~0UL)) {
-			offs = i * (CHAR_BIT * sizeof(uint32_t)) + __builtin_ffsl(tmp);
+	for (uint32_t i = offs / bitsInElem; i < len; i++) {
+		uint32_t bit = __builtin_ffsl(~bmp[i]);
+		if (bit != 0) {
+			offs = (i * bitsInElem) + bit;
 			return (offs > size) ? 0 : offs;
 		}
 	}
