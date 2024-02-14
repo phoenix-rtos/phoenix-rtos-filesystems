@@ -242,7 +242,7 @@ static int ext2_block_create(ext2_t *fs, ext2_obj_t *obj, uint32_t block, uint32
 		}
 	} while (!offset);
 
-	for (i = 0; (i < n) && (offset + i < fs->sb->groupBlocks) && !ext2_checkbit(bmp, offset + i); i++) {
+	for (i = 0; (i < n) && (offset + i <= fs->sb->groupBlocks) && !ext2_checkbit(bmp, offset + i); i++) {
 		if ((err = ext2_block_get(fs, obj, block + i, &bno)) < 0) {
 			free(bmp);
 			return err;
@@ -250,6 +250,11 @@ static int ext2_block_create(ext2_t *fs, ext2_obj_t *obj, uint32_t block, uint32
 
 		ext2_togglebit(bmp, offset + i);
 		*bno = group * fs->sb->groupBlocks + offset + i;
+	}
+
+	if (i == 0) {
+		free(bmp);
+		return -ENOSPC;
 	}
 
 	if ((err = ext2_block_write(fs, fs->gdt[group].blockBmp, bmp, 1)) < 0) {
