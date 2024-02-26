@@ -25,6 +25,7 @@
 #include "meterfs.h"
 #include "files.h"
 #include "node.h"
+#include "crypt.h"
 
 /* clang-format off */
 #define TOTAL_SIZE(f)        (((f)->filesz / (f)->recordsz) * ((f)->recordsz + sizeof(entry_t)))
@@ -497,6 +498,12 @@ static int meterfs_updateFileInfo(fileheader_t *f, meterfs_ctx_t *ctx)
 
 	f->sector = u.t.sector;
 	f->sectorcnt = u.t.sectorcnt;
+	f->uid = u.t.uid + 1;
+
+	if (f->uid == 0xffffffff) {
+		/* Can't allow file to have uid it had before */
+		return -EPERM;
+	}
 
 	meterfs_powerCtrl(1, ctx);
 
@@ -708,17 +715,42 @@ static int meterfs_writeRecord(file_t *f, const void *buff, size_t bufflen, mete
 	entry_t e;
 	unsigned int offset;
 	ssize_t wrote = 0, stat = 0;
+	void *tdata = NULL;
+	const void *data = buff;
 
-	if (bufflen > f->header.recordsz)
+	if (bufflen > f->header.recordsz) {
 		bufflen = f->header.recordsz;
+	}
 
 	offset = f->lastoff;
 
-	if (!f->lastidx.nvalid)
+	if (f->lastidx.nvalid == 0) {
 		offset += f->header.recordsz + sizeof(entry_t);
+	}
 
-	if (offset + f->header.recordsz + sizeof(entry_t) > f->header.sectorcnt * ctx->sectorsz)
+	if ((offset + f->header.recordsz + sizeof(entry_t)) > (f->header.sectorcnt * ctx->sectorsz)) {
 		offset = 0;
+	}
+
+	e.id.no = f->lastidx.no + 1;
+	e.id.nvalid = 0;
+
+	if (f->header.ncrypt == 0) {
+		if (!ctx->keyInit) {
+			/* Key not initialized, inform the reader that the file can't be encrypted */
+			return -EPERM;
+		}
+		tdata = malloc(bufflen);
+		if (tdata == NULL) {
+			return -ENOMEM;
+		}
+
+		memcpy(tdata, buff, bufflen);
+
+		meterfs_encrypt(tdata, bufflen, ctx->key, f, &e);
+
+		data = tdata;
+	}
 
 	meterfs_powerCtrl(1, ctx);
 
@@ -727,21 +759,21 @@ static int meterfs_writeRecord(file_t *f, const void *buff, size_t bufflen, mete
 		stat = ctx->eraseSector(ctx->devCtx, ctx->offset + (f->header.sector * ctx->sectorsz) + (offset + f->header.recordsz + sizeof(entry_t)));
 		if (stat < 0) {
 			meterfs_powerCtrl(0, ctx);
+			free(tdata);
 			return stat;
 		}
 	}
 
-	e.id.no = f->lastidx.no + 1;
-	e.id.nvalid = 0;
-	e.checksum = meterfs_calcChecksum(buff, bufflen);
+	e.checksum = meterfs_calcChecksum(data, bufflen);
 
 	/* Not written part of the record are all 0xff. 0xff ^ 0xff = 0, so only odd number of non-programmed bytes matter */
 	if ((f->header.recordsz - bufflen) & 1)
 		e.checksum ^= 0xff;
 
-	wrote = meterfs_safeWrite(ctx->offset + f->header.sector * ctx->sectorsz + offset + sizeof(entry_t), (void *)buff, bufflen, ctx);
+	wrote = meterfs_safeWrite(ctx->offset + f->header.sector * ctx->sectorsz + offset + sizeof(entry_t), (void *)data, bufflen, ctx);
 	if (wrote < 0) {
 		meterfs_powerCtrl(0, ctx);
+		free(tdata);
 		return wrote;
 	}
 
@@ -751,6 +783,7 @@ static int meterfs_writeRecord(file_t *f, const void *buff, size_t bufflen, mete
 		/* Let's try cleaning record we failed to write */
 		(void)meterfs_startPartialErase(ctx->offset + f->header.sector * ctx->sectorsz + offset, ctx);
 		meterfs_powerCtrl(0, ctx);
+		free(tdata);
 		return stat;
 	}
 
@@ -761,6 +794,7 @@ static int meterfs_writeRecord(file_t *f, const void *buff, size_t bufflen, mete
 		/* Let's try cleaning record we failed to write */
 		(void)meterfs_startPartialErase(ctx->offset + f->header.sector * ctx->sectorsz + offset, ctx);
 		meterfs_powerCtrl(0, ctx);
+		free(tdata);
 		return stat;
 	}
 
@@ -781,11 +815,15 @@ static int meterfs_writeRecord(file_t *f, const void *buff, size_t bufflen, mete
 	else {
 		++f->firstidx.no;
 		f->firstoff += f->header.recordsz + sizeof(entry_t);
-		if (f->firstoff + f->header.recordsz + sizeof(entry_t) > f->header.sectorcnt * ctx->sectorsz)
+		if ((f->firstoff + f->header.recordsz + sizeof(entry_t)) > (f->header.sectorcnt * ctx->sectorsz)) {
 			f->firstoff = 0;
+		}
 	}
-	if ((size_t)wrote == bufflen && (size_t)wrote < f->header.recordsz)
+	if (((size_t)wrote == bufflen) && ((size_t)wrote < f->header.recordsz)) {
 		wrote += f->header.recordsz - bufflen;
+	}
+
+	free(tdata);
 
 	return wrote;
 }
@@ -851,6 +889,15 @@ static int meterfs_readRecord(file_t *f, void *buff, size_t bufflen, unsigned in
 			LOG_DEBUG("Read checksum fail\n");
 			err = -EIO;
 			continue; /* Retry */
+		}
+
+		if (f->header.ncrypt == 0) {
+			if (!ctx->keyInit) {
+				/* Key not initialized, inform the reader that the file can't be decrypted */
+				err = -EPERM;
+				break;
+			}
+			meterfs_encrypt(rbuff + sizeof(entry_t), f->header.recordsz, ctx->key, f, eptr);
 		}
 
 		memcpy(buff, rbuff + sizeof(entry_t) + offset, bufflen);
@@ -940,6 +987,8 @@ int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size
 	f.header.recordsz = recordsz;
 	f.header.sector = 0;
 	f.header.sectorcnt = sectorcnt;
+	f.header.uid = 0xffffffff;
+	f.header.ncrypt = 0xffff; /* Not encrypted by default */
 
 	/* Check if sectorcnt is valid */
 	if (SECTORS(&f.header, ctx->sectorsz) > f.header.sectorcnt || f.header.sectorcnt < 2)
@@ -1082,6 +1131,20 @@ int meterfs_resizeFile(const char *name, size_t filesz, size_t recordsz, meterfs
 }
 
 
+int meterfs_changeFileEncryption(const char *name, int state, meterfs_ctx_t *ctx)
+{
+	fileheader_t hdr;
+
+	if (meterfs_getFileInfoName(name, &hdr, ctx) < 0) {
+		return -ENOENT;
+	}
+
+	hdr.ncrypt = (state != 0) ? 0 : 0xffff;
+
+	return meterfs_updateFileInfo(&hdr, ctx);
+}
+
+
 int meterfs_readFile(id_t id, off_t off, char *buff, size_t bufflen, meterfs_ctx_t *ctx)
 {
 	file_t *f;
@@ -1212,6 +1275,7 @@ int meterfs_devctl(const meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_c
 			o->info.filesz = p->header.filesz;
 			o->info.recordsz = p->header.recordsz;
 			o->info.recordcnt = p->recordcnt;
+			o->info.encryption = (p->header.ncrypt == 0) ? 1 : 0;
 
 			break;
 
@@ -1243,6 +1307,35 @@ int meterfs_devctl(const meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_c
 			}
 			break;
 
+		case meterfs_setEncryption:
+			p = node_getById(i->setEncryption.id, &ctx->nodesTree);
+			if (p == NULL) {
+				return -ENOENT;
+			}
+
+			err = meterfs_changeFileEncryption(p->header.name, i->setEncryption.state, ctx);
+			if (err < 0) {
+				break;
+			}
+
+			/* Update cached file info */
+			err = meterfs_getFileInfoName(p->header.name, &p->header, ctx);
+
+			meterfs_powerCtrl(1, ctx);
+			err = meterfs_getFilePos(p, ctx);
+			if (err < 0) {
+				meterfs_powerCtrl(0, ctx);
+				return err;
+			}
+			meterfs_powerCtrl(0, ctx);
+
+			break;
+
+		case meterfs_setKey:
+			memcpy(ctx->key, i->setKey.key, sizeof(ctx->key));
+			ctx->keyInit = true;
+			break;
+
 		default:
 			err = -EINVAL;
 			break;
@@ -1255,6 +1348,8 @@ int meterfs_devctl(const meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_c
 int meterfs_init(meterfs_ctx_t *ctx)
 {
 	int err;
+
+	/* Don't touch key and keyInit to allow hacky key set by lib user */
 
 #if UNRELIABLE_WRITE
 	LOG_INFO("meterfs UNRELIABLE_WRITE is ON. Did you really intend that?");

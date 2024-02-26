@@ -34,6 +34,8 @@ typedef struct {
 	uint32_t filesz;
 	uint32_t recordsz;
 	char name[8];
+	uint32_t uid;    /* Unique file id, incremented on file header update */
+	uint16_t ncrypt; /* uint16_t for backward compatibility - so checksum is the same */
 } __attribute__((packed)) fileheader_t;
 
 

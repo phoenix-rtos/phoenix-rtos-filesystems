@@ -17,11 +17,13 @@
 #include <sys/rb.h>
 #include <sys/types.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 #define MAX_NAME_LEN 8
 
 /* clang-format off */
-enum { meterfs_allocate = 0, meterfs_resize, meterfs_info, meterfs_chiperase, meterfs_fsInfo };
+enum { meterfs_allocate = 0, meterfs_resize, meterfs_info, meterfs_chiperase,
+	meterfs_fsInfo, meterfs_setEncryption, meterfs_setKey };
 /* clang-format on */
 
 
@@ -42,6 +44,15 @@ typedef struct {
 			size_t filesz;
 			size_t recordsz;
 		} resize;
+
+		struct {
+			id_t id;
+			int state;
+		} setEncryption;
+
+		struct {
+			uint8_t key[32];
+		} setKey;
 	};
 } meterfs_i_devctl_t;
 
@@ -52,6 +63,7 @@ typedef struct {
 		size_t filesz;
 		size_t recordsz;
 		size_t recordcnt;
+		int encryption;
 	} info;
 
 	struct {
@@ -73,6 +85,9 @@ typedef struct {
 	unsigned int filecnt;
 
 	rbtree_t nodesTree;
+
+	uint8_t key[32];
+	bool keyInit;
 
 	/* meterfs externals - should be initialized before meterfs_init */
 	size_t sz;
