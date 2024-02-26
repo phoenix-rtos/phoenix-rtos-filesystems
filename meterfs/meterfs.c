@@ -20,6 +20,7 @@
 #include <string.h>
 #include <stddef.h>
 #include <sys/reboot.h>
+#include <stdbool.h>
 
 #include "meterfs.h"
 #include "files.h"
@@ -305,89 +306,57 @@ static int meterfs_eraseFileTable(unsigned int n, meterfs_ctx_t *ctx)
 
 static int meterfs_checkfs(meterfs_ctx_t *ctx)
 {
-	unsigned int valid0 = 0, valid1 = 0, src, dst, retry = 0, i;
-	index_t id = { 0 };
+	bool valid[2] = { false, false };
+	index_t id[2];
+	unsigned int filecnt[2];
 	ssize_t err;
-	uint32_t checksum, filecnt;
 	union {
 		header_t h;
 		fileheader_t f;
 	} u;
 
+	ctx->h1Addr = HEADER_SIZE(ctx->sectorsz);
+
 	meterfs_powerCtrl(1, ctx);
 
-	do {
-		/* Check if first header is valid */
-		err = ctx->read(ctx->devCtx, ctx->offset, &u.h, sizeof(u.h));
-		if (err < 0) {
-			meterfs_powerCtrl(0, ctx);
-			return err;
-		}
-
-		if (!(u.h.id.nvalid || memcmp(u.h.magic, magicConst, 4))) {
-			id = u.h.id;
-
-			checksum = meterfs_calcChecksum(&u.h, sizeof(u.h));
-			filecnt = u.h.filecnt;
-			for (i = 0; i < filecnt; ++i) {
-				/* We destroy the header (as it's a part of a union)!. But it's ok, we only
-				 * need to check if checksum == 0 */
-				err = ctx->read(ctx->devCtx, ctx->offset + HGRAIN + (i * HGRAIN), &u.f, sizeof(u.f));
-				if (err < 0) {
-					meterfs_powerCtrl(0, ctx);
-					return err;
-				}
-
-				checksum ^= meterfs_calcChecksum(&u.f, sizeof(u.f));
+	for (unsigned int retry = 0; retry < 3; ++retry) {
+		for (unsigned int headerIdx = 0; headerIdx < 2; ++headerIdx) {
+			err = ctx->read(ctx->devCtx, ctx->offset + (headerIdx * ctx->h1Addr), &u.h, sizeof(u.h));
+			if (err < 0) {
+				meterfs_powerCtrl(0, ctx);
+				return err;
 			}
 
-			valid0 = (checksum == 0) ? 1 : 0;
-		}
+			if ((u.h.id.nvalid == 0) && (memcmp(u.h.magic, magicConst, 4) == 0)) {
+				id[headerIdx] = u.h.id;
+				filecnt[headerIdx] = u.h.filecnt;
 
-		/* Check next header */
-		ctx->h1Addr = HEADER_SIZE(ctx->sectorsz);
+				uint32_t checksum = meterfs_calcChecksum(&u.h, sizeof(u.h));
+				uint32_t filecnt = u.h.filecnt;
+				for (uint32_t i = 0; i < filecnt; ++i) {
+					/* We destroy the header (as it's a part of a union)!. But it's ok, we only
+					 * need to check if checksum == 0 */
+					err = ctx->read(ctx->devCtx, ctx->offset + (headerIdx * ctx->h1Addr) + HGRAIN + (i * HGRAIN), &u.f, sizeof(u.f));
+					if (err < 0) {
+						meterfs_powerCtrl(0, ctx);
+						return err;
+					}
 
-		err = ctx->read(ctx->devCtx, ctx->offset + ctx->h1Addr, &u.h, sizeof(u.h));
-		if (err < 0) {
-			meterfs_powerCtrl(0, ctx);
-			return err;
-		}
-
-		if (!(u.h.id.nvalid || memcmp(u.h.magic, magicConst, 4))) {
-			/* Copy paste from check of header #0 - by design.
-			 * This way I can reuse union u and conserve stack
-			 * space. I would need new union if this was
-			 * a function. Sorry. */
-			checksum = meterfs_calcChecksum(&u.h, sizeof(u.h));
-			filecnt = u.h.filecnt;
-			for (i = 0; i < filecnt; ++i) {
-				/* We destroy the header (as it's a part of a union)!. But it's ok, we only
-				 * need to check if checksum == 0 */
-				err = ctx->read(ctx->devCtx, ctx->offset + ctx->h1Addr + HGRAIN + (i * HGRAIN), &u.f, sizeof(u.f));
-				if (err < 0) {
-					meterfs_powerCtrl(0, ctx);
-					return err;
+					checksum ^= meterfs_calcChecksum(&u.f, sizeof(u.f));
 				}
 
-				checksum ^= meterfs_calcChecksum(&u.f, sizeof(u.f));
+				valid[headerIdx] = (checksum == 0);
 			}
-
-			valid1 = (checksum == 0) ? 1 : 0;
 		}
-	} while (valid0 == 0 && valid1 == 0 && retry++ < 3);
 
-	if (!valid0 && !valid1) {
+		if (valid[0] && valid[1]) {
+			break;
+		}
+	}
+
+	if (!valid[0] && !valid[1]) {
 		LOG_INFO("meterfs: No valid filesystem detected. Formating.");
-		err = meterfs_eraseFileTable(0, ctx);
-		if (err < 0) {
-			meterfs_powerCtrl(0, ctx);
-			return err;
-		}
-		err = meterfs_eraseFileTable(1, ctx);
-		if (err < 0) {
-			meterfs_powerCtrl(0, ctx);
-			return err;
-		}
+
 		/* Not essential, ignore errors */
 		(void)ctx->eraseSector(ctx->devCtx, ctx->offset + JOURNAL_OFFSET(ctx->sectorsz));
 
@@ -400,18 +369,21 @@ static int meterfs_checkfs(meterfs_ctx_t *ctx)
 		u.h.checksum = 0;
 		memcpy(u.h.magic, magicConst, 4);
 
-		checksum = meterfs_calcChecksum(&u.h, sizeof(u.h));
+		uint32_t checksum = meterfs_calcChecksum(&u.h, sizeof(u.h));
 		u.h.checksum = checksum;
 
-		err = meterfs_writeVerify(ctx->offset + 0, &u.h, sizeof(u.h), ctx);
-		if (err < 0) {
-			meterfs_powerCtrl(0, ctx);
-			return err;
-		}
-		err = meterfs_writeVerify(ctx->offset + ctx->h1Addr, &u.h, sizeof(u.h), ctx);
-		if (err < 0) {
-			meterfs_powerCtrl(0, ctx);
-			return err;
+		for (unsigned int headerIdx = 0; headerIdx < 2; ++headerIdx) {
+			err = meterfs_eraseFileTable(headerIdx, ctx);
+			if (err < 0) {
+				meterfs_powerCtrl(0, ctx);
+				return err;
+			}
+
+			err = meterfs_writeVerify(ctx->offset + (ctx->h1Addr * headerIdx), &u.h, sizeof(u.h), ctx);
+			if (err < 0) {
+				meterfs_powerCtrl(0, ctx);
+				return err;
+			}
 		}
 
 		meterfs_powerCtrl(0, ctx);
@@ -419,54 +391,31 @@ static int meterfs_checkfs(meterfs_ctx_t *ctx)
 	}
 
 	/* Select active header and files table */
-	if (valid0 && valid1) {
-		err = ctx->read(ctx->devCtx, ctx->offset + ctx->h1Addr, &u.h, sizeof(u.h));
-		if (err < 0) {
-			meterfs_powerCtrl(0, ctx);
-			return err;
-		}
-
-		if (id.no + 1 == u.h.id.no)
+	if (valid[0] && valid[1]) {
+		if (id[0].no + 1 == id[1].no) {
 			ctx->hcurrAddr = ctx->h1Addr;
-		else
+			ctx->filecnt = filecnt[1];
+		}
+		else {
 			ctx->hcurrAddr = 0;
-
-		err = ctx->read(ctx->devCtx, ctx->offset + ctx->hcurrAddr + offsetof(header_t, filecnt), &ctx->filecnt, sizeof(ctx->filecnt));
-		if (err < 0) {
-			meterfs_powerCtrl(0, ctx);
-			return err;
+			ctx->filecnt = filecnt[0];
 		}
 	}
 	else {
-		/* There should be copy of file table at all times. Fix it if necessary */
-		if (!valid0) {
-			LOG_INFO("meterfs: Filetable header #0 is damaged - repairing.");
-			src = ctx->h1Addr;
-			dst = 0;
-			err = meterfs_eraseFileTable(0, ctx);
-			if (err < 0) {
-				meterfs_powerCtrl(0, ctx);
-				return err;
-			}
-			ctx->hcurrAddr = ctx->h1Addr;
-		}
-		else {
-			LOG_INFO("meterfs: Filetable header #1 is damaged - repairing.");
-			src = 0;
-			dst = ctx->h1Addr;
-			err = meterfs_eraseFileTable(1, ctx);
-			if (err < 0) {
-				meterfs_powerCtrl(0, ctx);
-				return err;
-			}
-			ctx->hcurrAddr = 0;
-		}
+		/* There should be a copy of file table at all times. Fix it if necessary */
+		unsigned int fixIdx = valid[0] ? 1 : 0;
 
-		err = ctx->read(ctx->devCtx, ctx->offset + ctx->hcurrAddr + offsetof(header_t, filecnt), &ctx->filecnt, sizeof(ctx->filecnt));
+		LOG_INFO("meterfs: Filetable header #%u is damaged - repairing.", fixIdx);
+		uint32_t src = (fixIdx == 0) ? ctx->h1Addr : 0;
+		uint32_t dst = (fixIdx == 0) ? 0 : ctx->h1Addr;
+		err = meterfs_eraseFileTable(fixIdx, ctx);
 		if (err < 0) {
 			meterfs_powerCtrl(0, ctx);
 			return err;
 		}
+
+		ctx->hcurrAddr = src;
+		ctx->filecnt = filecnt[(fixIdx == 0) ? 1 : 0];
 
 		err = meterfs_copyData(ctx->offset + dst, ctx->offset + src, HGRAIN * (ctx->filecnt + 1), ctx);
 		if (err < 0) {
