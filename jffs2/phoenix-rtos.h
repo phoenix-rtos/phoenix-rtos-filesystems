@@ -136,7 +136,7 @@ extern unsigned int dirty_writeback_interval; /* centiseconds */
 struct user_namespace {
 };
 
-struct user_namespace init_user_ns;
+extern struct user_namespace init_user_ns;
 
 uid_t from_kuid(struct user_namespace *to, kuid_t kuid);
 

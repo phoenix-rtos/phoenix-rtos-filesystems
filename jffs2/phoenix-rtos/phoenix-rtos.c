@@ -15,6 +15,7 @@
 
 #include "../phoenix-rtos.h"
 
+struct user_namespace init_user_ns;
 unsigned int dirty_writeback_interval = 5 * 100000; /* centiseconds */
 
 void *page_address(const struct page *page)
