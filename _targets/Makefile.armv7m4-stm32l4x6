@@ -6,4 +6,4 @@
 # Copyright 2020 Phoenix Systems
 #
 
-DEFAULT_COMPONENTS := libdummyfs dummyfs libmeterfs
+DEFAULT_COMPONENTS := libdummyfs dummyfs libmeterfs liblfs
