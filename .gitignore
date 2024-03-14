@@ -12,3 +12,4 @@
 *.files
 *.includes
 build/
+.vscode/
