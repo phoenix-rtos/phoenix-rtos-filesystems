@@ -69,4 +69,14 @@ extern int liblfs_storage_umount(storage_fs_t *fs);
 extern int liblfs_storage_mount(storage_t *strg, storage_fs_t *fs, const char *data, unsigned long mode, oid_t *root);
 
 
+/* Set configuration according to mode parameter */
+extern int liblfs_setConfig(struct lfs_config *cfg, size_t storageSize, unsigned long mode);
+
+/* Mount filesystem with explicit configuration. cfg must remain valid after return,
+ * it can only be freed after call to liblfs_rawcfg_unmount */
+extern int liblfs_rawcfg_mount(void **fs_handle, oid_t *root, const struct lfs_config *cfg);
+
+extern int liblfs_rawcfg_unmount(void *fs_handle, int freeCfg);
+
+
 #endif

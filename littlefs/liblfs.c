@@ -373,7 +373,7 @@ int liblfs_unmount(void *fdata)
 }
 
 
-static int liblfs_setConfig(struct lfs_config *cfg, size_t storageSize, unsigned long mode)
+int liblfs_setConfig(struct lfs_config *cfg, size_t storageSize, unsigned long mode)
 {
 	int blockSizeShift = mode & LIBLFS_BLOCK_SIZE_LOG_MASK;
 	if (blockSizeShift == 0) {
@@ -550,6 +550,7 @@ int liblfs_storage_umount(storage_fs_t *strg_fs)
 {
 	lfs_t *lfs = (lfs_t *)strg_fs->info;
 	ph_lfs_unmount(lfs);
+	resourceDestroy(lfs->mutex);
 	free((void *)lfs->cfg);
 	free(lfs);
 
@@ -632,5 +633,32 @@ int liblfs_storage_mount(storage_t *strg, storage_fs_t *fs, const char *data, un
 
 	root->id = LFS_ROOT_PHID;
 	fs->ops = (cfg->ph.readOnly != 0) ? &fsOpsReadOnly : &fsOps;
+	return EOK;
+}
+
+
+int liblfs_rawcfg_mount(void **fs_handle, oid_t *root, const struct lfs_config *cfg)
+{
+	int err = liblfs_mountCommon((lfs_t **)fs_handle, cfg, root->port);
+	if (err < 0) {
+		return err;
+	}
+
+	root->id = LFS_ROOT_PHID;
+	return EOK;
+}
+
+
+int liblfs_rawcfg_unmount(void *fs_handle, int freeCfg)
+{
+	lfs_t *lfs = (lfs_t *)fs_handle;
+	ph_lfs_unmount(lfs);
+	if (freeCfg != 0) {
+		free((void *)lfs->cfg);
+	}
+
+	resourceDestroy(lfs->mutex);
+	free(lfs);
+
 	return EOK;
 }

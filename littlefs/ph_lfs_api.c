@@ -229,7 +229,7 @@ static lfs_stag_t ph_lfs_scanForId(lfs_t *lfs, lfs_mdir_t *dir, id_t phId)
 		return LFS_MKTAG(LFS_TYPE_PHID_DIR, 0x3ff, ID_SIZE);
 	}
 
-	TRACE("scanning for ID %" PRId64, phId);
+	TRACE("scanning for ID %" PRId32, (uint32_t)phId);
 	lfs_block_t tortoise[2] = { LFS_BLOCK_NULL, LFS_BLOCK_NULL };
 	lfs_size_t tortoise_i = 1;
 	lfs_size_t tortoise_period = 1;
@@ -377,7 +377,7 @@ static void ph_lfs_addToLRU(lfs_t *lfs, ph_lfs_lru_t *obj)
 		 * and also shouldn't be removed because we are about to use it */
 		for (ph_lfs_lru_t *i = lfs->phLfsObjects; i != obj; i = i->next) {
 			if (ph_lfs_objIsEvictable(i)) {
-				TRACE2("evicting obj %" PRId64, i->phId);
+				TRACE2("evicting obj %" PRId32, (uint32_t)i->phId);
 				ph_lfs_removeLRU(lfs, i);
 				break;
 			}
@@ -1364,7 +1364,7 @@ static ssize_t ph_lfs_lookupFromObj(lfs_t *lfs, ph_lfs_lru_t *parentObj, const c
 			return phIdTag;
 		}
 		else {
-			TRACE2("lookup res %" PRIx64, *res);
+			TRACE2("lookup res %" PRId32, (uint32_t)*res);
 			obj = ph_lfs_getLRU(lfs, *res);
 			/* Add stub to LRU if not already in */
 			if (obj == NULL) {
@@ -1852,7 +1852,7 @@ int ph_lfs_readdir(lfs_t *lfs, id_t phId, size_t offs, struct dirent *dent, size
 
 	if (dirObj->extrasType != EXTRAS_TYPE_DIR) {
 		/* Object not open or not a directory */
-		TRACE("invalid %d (id %" PRId64 ")", dirObj->extrasType, dirObj->phId);
+		TRACE("invalid %d (id %" PRId32 ")", dirObj->extrasType, (uint32_t)dirObj->phId);
 		return LFS_ERR_INVAL;
 	}
 
@@ -2208,7 +2208,7 @@ static int ph_lfs_objectFixupOnCommit(lfs_t *lfs, const lfs_mdir_t *dir, ph_lfs_
 	bool isOpenFile = obj->extrasType == EXTRAS_TYPE_FILE;
 	lfs_file_t *f = isOpenFile ? (lfs_file_t *)obj->extras : NULL;
 
-	TRACE_FIXUP("fixing obj %x %x %d (ph %" PRId64 ") ", obj->parentBlock[0], obj->parentBlock[1], obj->id, obj->phId);
+	TRACE_FIXUP("fixing obj %x %x %d (ph %" PRId32 ") ", obj->parentBlock[0], obj->parentBlock[1], obj->id, (uint32_t)obj->phId);
 	bool wasDeleted;
 	if ((obj->flags & PH_LRU_FLAG_CREAT) != 0) {
 		/* If a file is being created or moved its ID already has the correct value.
@@ -2243,7 +2243,7 @@ static int ph_lfs_objectFixupOnCommit(lfs_t *lfs, const lfs_mdir_t *dir, ph_lfs_
 		obj->id -= dir->count;
 		obj->parentBlock[0] = dir->tail[0];
 		obj->parentBlock[1] = dir->tail[1];
-		TRACE_FIXUP("next dir: (%x %x) %d\n", obj->parentBlock[0], obj->parentBlock[1], obj->id);
+		TRACE_FIXUP("next dir: (%x %x) %d\n", obj->parentBlock[0], obj->parentBlock[1], (uint32_t)obj->id);
 		int err = lfs_dir_fetch(lfs, &nextdir, dir->tail);
 		if (err != 0) {
 			return err;
@@ -2348,7 +2348,7 @@ void ph_lfs_updateOnRelocate(lfs_t *lfs, const lfs_block_t oldPair[2], const lfs
 		do {
 			obj = obj->next;
 			if (lfs_pair_cmp(obj->parentBlock, oldPair) == 0) {
-				TRACE_FIXUP("relocating %" PRId64 "\n", obj->phId);
+				TRACE_FIXUP("relocating %" PRId32 "\n", (uint32_t)obj->phId);
 				obj->parentBlock[0] = newPair[0];
 				obj->parentBlock[1] = newPair[1];
 				if (obj->extrasType == EXTRAS_TYPE_FILE) {
