@@ -42,6 +42,9 @@ int dummyfs_setattr(void *ctx, oid_t *oid, int type, long long attr, const void 
 int dummyfs_getattr(void *ctx, oid_t *oid, int type, long long *attr);
 
 
+int dummyfs_getattrAll(void *ctx, oid_t *oid, struct _attrAll *attr);
+
+
 int dummyfs_lookup(void *ctx, oid_t *dir, const char *name, oid_t *res, oid_t *dev);
 
 

@@ -100,8 +100,9 @@ static ssize_t fsOpAdapter_write(void *info, oid_t *oid, off_t offs, const void 
 }
 
 
-static void fsOpAdapter_devctl(void *info, oid_t *oid, const void *i, void *o)
+static int fsOpAdapter_devctl(void *info, oid_t *oid, const void *i, void *o)
 {
+	int err;
 	meterfs_partition_t *ctx = (meterfs_partition_t *)info;
 	const meterfs_i_devctl_t *in = (const meterfs_i_devctl_t *)i;
 	meterfs_o_devctl_t *out = (meterfs_o_devctl_t *)o;
@@ -110,9 +111,11 @@ static void fsOpAdapter_devctl(void *info, oid_t *oid, const void *i, void *o)
 
 	(void)mutexLock(ctx->lock);
 
-	out->err = meterfs_devctl(in, out, &ctx->meterfsCtx);
+	err = meterfs_devctl(in, out, &ctx->meterfsCtx);
 
 	(void)mutexUnlock(ctx->lock);
+
+	return err;
 }
 
 
@@ -204,6 +207,7 @@ int meterfs_mount(storage_t *storage, storage_fs_t *fs, const char *data, unsign
 		.write = fsOpAdapter_write,
 		.setattr = NULL,
 		.getattr = NULL,
+		.getattrall = NULL,
 		.truncate = NULL,
 		.devctl = fsOpAdapter_devctl,
 		.create = NULL,

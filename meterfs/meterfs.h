@@ -47,8 +47,6 @@ typedef struct {
 
 
 typedef struct {
-	int err;
-
 	struct _info {
 		size_t sectors;
 		size_t filesz;

@@ -14,6 +14,7 @@
 
 #include <poll.h>
 #include <sys/statvfs.h>
+#include <phoenix/attribute.h>
 
 #include "phoenix-rtos.h"
 #include "nodelist.h"
@@ -104,7 +105,8 @@ static int libjffs2_lookup(void *info, oid_t *dir, const char *name, oid_t *res,
 			free(dentry->d_name.name);
 			dentry->d_name.len = 0;
 			continue;
-		} else if (!strcmp(dentry->d_name.name, "..")) {
+		}
+		else if (!strcmp(dentry->d_name.name, "..")) {
 			res->id = JFFS2_INODE_INFO(inode)->inocache->pino_nlink;
 			len += 2;
 			free(dentry->d_name.name);
@@ -121,19 +123,22 @@ static int libjffs2_lookup(void *info, oid_t *dir, const char *name, oid_t *res,
 				inode_lock_shared(inode);
 				dtemp = inode->i_op->lookup(inode, dentry, 0);
 				inode_unlock_shared(inode);
-			} else {
+			}
+			else {
 				res->id = inode->i_ino;
 				res->port = p->port;
 				free(dentry->d_name.name);
 				len--;
 				break;
 			}
-		} else if (S_ISLNK(inode->i_mode)) {
+		}
+		else if (S_ISLNK(inode->i_mode)) {
 			res->id = inode->i_ino;
 			res->port = p->port;
 			free(dentry->d_name.name);
 			break;
-		} else {
+		}
+		else {
 			free(dentry->d_name.name);
 			free(dentry);
 			iput(inode);
@@ -145,7 +150,8 @@ static int libjffs2_lookup(void *info, oid_t *dir, const char *name, oid_t *res,
 			free(dentry);
 			iput(inode);
 			return dtemp ? -ENAMETOOLONG : -ENOENT;
-		} else
+		}
+		else
 			res->id = dtemp->d_inode->i_ino;
 
 		len += dentry->d_name.len;
@@ -177,7 +183,7 @@ static int libjffs2_lookup(void *info, oid_t *dir, const char *name, oid_t *res,
 }
 
 
-static int libjffs2_setattr(void *info, oid_t *oid, int type, long long attr, void *data, size_t size)
+static int libjffs2_setattr(void *info, oid_t *oid, int type, long long attr, const void *data, size_t size)
 {
 	struct iattr iattr;
 	struct inode *inode;
@@ -359,7 +365,7 @@ static int libjffs2_getattr(void *info, oid_t *oid, int type, long long *attr)
 			break;
 		case (atPollStatus):
 			// trivial implementation: assume read/write is always possible
-			*attr = POLLIN|POLLRDNORM|POLLOUT|POLLWRNORM;
+			*attr = POLLIN | POLLRDNORM | POLLOUT | POLLWRNORM;
 			break;
 
 		default:
@@ -371,6 +377,81 @@ static int libjffs2_getattr(void *info, oid_t *oid, int type, long long *attr)
 	iput(inode);
 
 	return ret;
+}
+
+
+static int libjffs2_getattrAll(void *info, oid_t *oid, struct _attrAll *attrs)
+{
+	if ((info == NULL) || (oid->id == 0) || (attrs == NULL)) {
+		return -EINVAL;
+	}
+
+	jffs2_partition_t *p = (jffs2_partition_t *)info;
+	struct inode *inode = jffs2_iget(p->sb, oid->id);
+	struct jffs2_sb_info *c = JFFS2_SB_INFO(p->sb);
+
+	if (IS_ERR(inode)) {
+		return -ENOENT;
+	}
+
+	inode_lock_shared(inode);
+
+	_phoenix_initAttrsStruct(attrs, -ENOSYS);
+	attrs->mode.val = inode->i_mode;
+	attrs->mode.err = EOK;
+
+	attrs->uid.val = inode->i_uid.val;
+	attrs->uid.err = EOK;
+
+	attrs->gid.val = inode->i_gid.val;
+	attrs->gid.err = EOK;
+
+	attrs->size.val = inode->i_size;
+	attrs->size.err = EOK;
+
+	attrs->blocks.val = inode->i_blocks;
+	attrs->blocks.err = EOK;
+
+	attrs->ioblock.val = c->mtd->writesize;
+	attrs->ioblock.err = EOK;
+
+	if (S_ISDIR(inode->i_mode)) {
+		attrs->type.val = otDir;
+	}
+	else if (S_ISREG(inode->i_mode)) {
+		attrs->type.val = otFile;
+	}
+	else if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode) || S_ISFIFO(inode->i_mode)) {
+		attrs->type.val = otDev;
+	}
+	else if (S_ISLNK(inode->i_mode)) {
+		attrs->type.val = otSymlink;
+	}
+	else {
+		attrs->type.val = otUnknown;
+	}
+	attrs->type.err = EOK;
+
+	attrs->cTime.val = inode->i_ctime.tv_sec;
+	attrs->cTime.err = EOK;
+
+	attrs->mTime.val = inode->i_mtime.tv_sec;
+	attrs->mTime.err = EOK;
+
+	attrs->aTime.val = inode->i_atime.tv_sec;
+	attrs->aTime.err = EOK;
+
+	attrs->links.val = inode->i_nlink;
+	attrs->links.err = EOK;
+
+	/* trivial implementation: assume read/write is always possible */
+	attrs->pollStatus.val = POLLIN | POLLRDNORM | POLLOUT | POLLWRNORM;
+	attrs->pollStatus.err = EOK;
+
+	inode_unlock_shared(inode);
+	iput(inode);
+
+	return EOK;
 }
 
 
@@ -735,7 +816,7 @@ static int libjffs2_close(void *info, oid_t *oid)
 		return -EINVAL;
 	}
 
-	if(!oid->id)
+	if (!oid->id)
 		return -EINVAL;
 
 	struct inode *inode = ilookup(p->sb, oid->id);
@@ -771,16 +852,18 @@ static int libjffs2_read(void *info, oid_t *oid, off_t offs, void *data, size_t 
 
 	inode_lock_shared(inode);
 
-	if(S_ISDIR(inode->i_mode)) {
+	if (S_ISDIR(inode->i_mode)) {
 		inode_unlock_shared(inode);
 		iput(inode);
 		return -EISDIR;
-	} else if (S_ISCHR(inode->i_mode)) {
+	}
+	else if (S_ISCHR(inode->i_mode)) {
 		printf("jffs2: Used wrong oid to read from device\n");
 		inode_unlock_shared(inode);
 		iput(inode);
 		return -EINVAL;
-	} else if (S_ISLNK(inode->i_mode)) {
+	}
+	else if (S_ISLNK(inode->i_mode)) {
 		ret = strlen(inode->i_link);
 
 		if (len < ret)
@@ -826,10 +909,10 @@ static int libjffs2_prepareWrite(struct inode *inode, loff_t offs, size_t len)
 	if (len > inode->i_size) {
 
 		jffs2_dbg(1, "Writing new hole frag 0x%x-0x%x between current EOF and new page\n",
-			  (unsigned int)inode->i_size, len);
+			(unsigned int)inode->i_size, len);
 
 		ret = jffs2_reserve_space(c, sizeof(ri), &alloc_len,
-					  ALLOC_NORMAL, JFFS2_SUMMARY_INODE_SIZE);
+			ALLOC_NORMAL, JFFS2_SUMMARY_INODE_SIZE);
 		if (ret)
 			return ret;
 
@@ -852,7 +935,7 @@ static int libjffs2_prepareWrite(struct inode *inode, loff_t offs, size_t len)
 		ri.dsize = cpu_to_je32(len - inode->i_size);
 		ri.csize = cpu_to_je32(0);
 		ri.compr = JFFS2_COMPR_ZERO;
-		ri.node_crc = cpu_to_je32(crc32(0, &ri, sizeof(ri)-8));
+		ri.node_crc = cpu_to_je32(crc32(0, &ri, sizeof(ri) - 8));
 		ri.data_crc = cpu_to_je32(0);
 
 		fn = jffs2_write_dnode(c, f, &ri, NULL, 0, ALLOC_NORMAL);
@@ -874,7 +957,7 @@ static int libjffs2_prepareWrite(struct inode *inode, loff_t offs, size_t len)
 
 		if (ret) {
 			jffs2_dbg(1, "Eep. add_full_dnode_to_inode() failed in write_begin, returned %d\n",
-				  ret);
+				ret);
 			jffs2_mark_node_obsolete(c, fn->raw);
 			jffs2_free_full_dnode(fn);
 			jffs2_complete_reservation(c);
@@ -919,16 +1002,18 @@ static int libjffs2_write(void *info, oid_t *oid, off_t offs, const void *data, 
 
 	inode_lock(inode);
 
-	if(S_ISDIR(inode->i_mode)) {
+	if (S_ISDIR(inode->i_mode)) {
 		inode_unlock(inode);
 		iput(inode);
 		return -EISDIR;
-	} else if (S_ISCHR(inode->i_mode)) {
+	}
+	else if (S_ISCHR(inode->i_mode)) {
 		printf("jffs2: Used wrong oid to write to device\n");
 		inode_unlock(inode);
 		iput(inode);
 		return -EINVAL;
-	} else if (S_ISLNK(inode->i_mode)) {
+	}
+	else if (S_ISLNK(inode->i_mode)) {
 		inode_unlock(inode);
 		iput(inode);
 		return -EINVAL;
@@ -1042,6 +1127,7 @@ const static storage_fsops_t fsOps = {
 	.write = libjffs2_write,
 	.setattr = libjffs2_setattr,
 	.getattr = libjffs2_getattr,
+	.getattrall = libjffs2_getattrAll,
 	.truncate = libjffs2_truncate,
 	.devctl = NULL,
 	.create = libjffs2_create,
