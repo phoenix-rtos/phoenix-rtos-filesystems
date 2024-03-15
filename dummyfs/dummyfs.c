@@ -28,6 +28,7 @@
 #include <sys/mount.h>
 #include <sys/threads.h>
 #include <sys/mman.h>
+#include <phoenix/attribute.h>
 
 #include "dummyfs.h"
 #include "dir.h"
@@ -444,6 +445,69 @@ int dummyfs_getattr(void *ctx, oid_t *oid, int type, long long *attr)
 				ret = -EINVAL;
 				break;
 		}
+
+		dummyfs_object_put(fs, o);
+	}
+	else {
+		ret = -ENOENT;
+	}
+	mutexUnlock(fs->mutex);
+
+	return ret;
+}
+
+
+int dummyfs_getattrAll(void *ctx, oid_t *oid, struct _attrAll *attrs)
+{
+	TRACE();
+	dummyfs_t *fs = (dummyfs_t *)ctx;
+	int ret = 0;
+
+	mutexLock(fs->mutex);
+	dummyfs_object_t *o = dummyfs_object_get(fs, oid);
+	if (o != NULL) {
+		_phoenix_initAttrsStruct(attrs, -ENOSYS);
+
+		attrs->uid.val = o->uid;
+		attrs->uid.err = EOK;
+		attrs->gid.val = o->gid;
+		attrs->gid.err = EOK;
+		attrs->mode.val = o->mode;
+		attrs->mode.err = EOK;
+		attrs->size.val = o->size;
+		attrs->size.err = EOK;
+		attrs->blocks.val = (o->size + S_BLKSIZE - 1) / S_BLKSIZE;
+		attrs->blocks.err = EOK;
+		attrs->ioblock.val = DUMMYFS_CHUNKSZ;
+		attrs->ioblock.err = EOK;
+		if (S_ISDIR(o->mode)) {
+			attrs->type.val = otDir;
+		}
+		else if (S_ISREG(o->mode)) {
+			attrs->type.val = otFile;
+		}
+		else if (S_ISCHR(o->mode) || S_ISBLK(o->mode) || S_ISFIFO(o->mode)) {
+			attrs->type.val = otDev;
+		}
+		else if (S_ISLNK(o->mode)) {
+			attrs->type.val = otSymlink;
+		}
+		else {
+			attrs->type.val = otUnknown;
+		}
+		attrs->type.err = EOK;
+		attrs->cTime.val = o->ctime;
+		attrs->cTime.err = EOK;
+		attrs->mTime.val = o->mtime;
+		attrs->mTime.err = EOK;
+		attrs->aTime.val = o->atime;
+		attrs->aTime.err = EOK;
+		attrs->links.val = o->nlink;
+		attrs->links.err = EOK;
+
+		/* Always ready */
+		attrs->pollStatus.val = POLLIN | POLLRDNORM | POLLOUT | POLLWRNORM;
+		attrs->pollStatus.err = EOK;
 
 		dummyfs_object_put(fs, o);
 	}

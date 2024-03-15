@@ -147,7 +147,7 @@ static ssize_t libext2_write(void *info, oid_t *oid, off_t offs, const void *dat
 }
 
 
-static int libext2_setattr(void *info, oid_t *oid, int type, long long attr, void *data, size_t len)
+static int libext2_setattr(void *info, oid_t *oid, int type, long long attr, const void *data, size_t len)
 {
 	return ext2_setattr((ext2_t *)info, oid->id, type, attr, data, len);
 }
@@ -156,6 +156,12 @@ static int libext2_setattr(void *info, oid_t *oid, int type, long long attr, voi
 static int libext2_getattr(void *info, oid_t *oid, int type, long long *attr)
 {
 	return ext2_getattr((ext2_t *)info, oid->id, type, attr);
+}
+
+
+static int libext2_getattrAll(void *info, oid_t *oid, struct _attrAll *attrs)
+{
+	return ext2_getattrAll((ext2_t *)info, oid->id, attrs);
 }
 
 
@@ -205,63 +211,74 @@ int libext2_handler(void *fdata, msg_t *msg)
 {
 	switch (msg->type) {
 		case mtCreate:
-			msg->o.create.err = libext2_create(fdata, &msg->i.create.dir, msg->i.data, &msg->o.create.oid, msg->i.create.mode, msg->i.create.type, &msg->i.create.dev);
+			msg->o.err = libext2_create(fdata, &msg->oid, msg->i.data, &msg->o.create.oid, msg->i.create.mode, msg->i.create.type, &msg->i.create.dev);
 			break;
 
 		case mtDestroy:
-			msg->o.io.err = libext2_destroy(fdata, &msg->i.destroy.oid);
+			msg->o.err = libext2_destroy(fdata, &msg->oid);
 			break;
 
 		case mtLookup:
-			msg->o.lookup.err = libext2_lookup(fdata, &msg->i.lookup.dir, msg->i.data, &msg->o.lookup.fil, &msg->o.lookup.dev, msg->o.data, msg->o.size);
+			msg->o.err = libext2_lookup(fdata, &msg->oid, msg->i.data, &msg->o.lookup.fil, &msg->o.lookup.dev, msg->o.data, msg->o.size);
 			break;
 
 		case mtOpen:
-			msg->o.io.err = libext2_open(fdata, &msg->i.openclose.oid);
+			msg->o.err = libext2_open(fdata, &msg->oid);
 			break;
 
 		case mtClose:
-			msg->o.io.err = libext2_close(fdata, &msg->i.openclose.oid);
+			msg->o.err = libext2_close(fdata, &msg->oid);
 			break;
 
 		case mtRead:
-			msg->o.io.err = libext2_read(fdata, &msg->i.io.oid, msg->i.io.offs, msg->o.data, msg->o.size);
+			msg->o.err = libext2_read(fdata, &msg->oid, msg->i.io.offs, msg->o.data, msg->o.size);
 			break;
 
 		case mtReaddir:
-			msg->o.io.err = libext2_readdir(fdata, &msg->i.readdir.dir, msg->i.readdir.offs, msg->o.data, msg->o.size);
+			msg->o.err = libext2_readdir(fdata, &msg->oid, msg->i.readdir.offs, msg->o.data, msg->o.size);
 			break;
 
 		case mtWrite:
-			msg->o.io.err = libext2_write(fdata, &msg->i.io.oid, msg->i.io.offs, msg->i.data, msg->i.size);
+			msg->o.err = libext2_write(fdata, &msg->oid, msg->i.io.offs, msg->i.data, msg->i.size);
 			break;
 
 		case mtTruncate:
-			msg->o.io.err = libext2_truncate(fdata, &msg->i.io.oid, msg->i.io.len);
+			msg->o.err = libext2_truncate(fdata, &msg->oid, msg->i.io.len);
 			break;
 
 		case mtDevCtl:
-			msg->o.io.err = -EINVAL;
+			msg->o.err = -EINVAL;
 			break;
 
 		case mtGetAttr:
-			msg->o.attr.err = libext2_getattr(fdata, &msg->i.attr.oid, msg->i.attr.type, &msg->o.attr.val);
+			msg->o.err = libext2_getattr(fdata, &msg->oid, msg->i.attr.type, &msg->o.attr.val);
 			break;
 
+		case mtGetAttrAll: {
+			struct _attrAll *attrs = msg->o.data;
+			if ((attrs == NULL) || (msg->o.size < sizeof(struct _attrAll))) {
+				msg->o.err = -EINVAL;
+			}
+			else {
+				msg->o.err = libext2_getattrAll(fdata, &msg->oid, attrs);
+			}
+			break;
+		}
+
 		case mtSetAttr:
-			msg->o.attr.err = libext2_setattr(fdata, &msg->i.attr.oid, msg->i.attr.type, msg->i.attr.val, msg->i.data, msg->i.size);
+			msg->o.err = libext2_setattr(fdata, &msg->oid, msg->i.attr.type, msg->i.attr.val, msg->i.data, msg->i.size);
 			break;
 
 		case mtLink:
-			msg->o.io.err = libext2_link(fdata, &msg->i.ln.dir, msg->i.data, &msg->i.ln.oid);
+			msg->o.err = libext2_link(fdata, &msg->oid, msg->i.data, &msg->i.ln.oid);
 			break;
 
 		case mtUnlink:
-			msg->o.io.err = libext2_unlink(fdata, &msg->i.ln.dir, msg->i.data);
+			msg->o.err = libext2_unlink(fdata, &msg->oid, msg->i.data);
 			break;
 
 		case mtStat:
-			msg->o.io.err = libext2_statfs(fdata, msg->o.data, msg->o.size);
+			msg->o.err = libext2_statfs(fdata, msg->o.data, msg->o.size);
 			break;
 
 		default:
@@ -337,6 +354,7 @@ const static storage_fsops_t fsOps = {
 	.write = libext2_write,
 	.setattr = libext2_setattr,
 	.getattr = libext2_getattr,
+	.getattrall = libext2_getattrAll,
 	.truncate = libext2_truncate,
 	.devctl = NULL,
 	.create = libext2_create,

@@ -1194,7 +1194,7 @@ int meterfs_writeFile(id_t id, const char *buff, size_t bufflen, meterfs_ctx_t *
 }
 
 
-static int meterfs_doDevctl(const meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *ctx)
+int meterfs_devctl(const meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *ctx)
 {
 	fileheader_t h;
 	file_t *p;
@@ -1300,18 +1300,6 @@ static int meterfs_doDevctl(const meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, 
 	}
 
 	return err;
-}
-
-
-int meterfs_devctl(const meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *ctx)
-{
-	/*
-	 *  	Due to problems with current version of message passing we have to duplicate the error.
-	 *
-	 *		TODO Remove err from meterfs_o_devctl_t.
-	 */
-	o->err = meterfs_doDevctl(i, o, ctx);
-	return o->err;
 }
 
 

@@ -17,6 +17,7 @@
 #include <poll.h>
 #include <string.h>
 #include <time.h>
+#include <phoenix/attribute.h>
 
 #include <sys/file.h>
 #include <sys/stat.h>
@@ -365,7 +366,67 @@ int ext2_getattr(ext2_t *fs, id_t id, int type, long long *attr)
 }
 
 
-int ext2_setattr(ext2_t *fs, id_t id, int type, long long attr, void *data, size_t len)
+int ext2_getattrAll(ext2_t *fs, id_t id, struct _attrAll *attrs)
+{
+	ext2_obj_t *obj = ext2_obj_get(fs, id);
+
+	if (obj == NULL) {
+		return -EINVAL;
+	}
+
+	_phoenix_initAttrsStruct(attrs, -ENOSYS);
+
+	mutexLock(obj->lock);
+
+	attrs->mode.val = obj->inode->mode;
+	attrs->mode.err = EOK;
+	attrs->uid.val = obj->inode->uid;
+	attrs->uid.err = EOK;
+	attrs->gid.val = obj->inode->gid;
+	attrs->gid.err = EOK;
+	attrs->size.val = obj->inode->size;
+	attrs->size.err = EOK;
+	attrs->blocks.val = obj->inode->blocks;
+	attrs->blocks.err = EOK;
+	attrs->ioblock.val = fs->blocksz;
+	attrs->ioblock.err = EOK;
+
+	if (S_ISDIR(obj->inode->mode)) {
+		attrs->type.val = otDir;
+	}
+	else if (S_ISREG(obj->inode->mode)) {
+		attrs->type.val = otFile;
+	}
+	else if (EXT2_ISDEV(obj->inode->mode)) {
+		attrs->type.val = otDev;
+	}
+	else if (S_ISLNK(obj->inode->mode)) {
+		attrs->type.val = otSymlink;
+	}
+	else {
+		attrs->type.val = otUnknown;
+	}
+	attrs->type.err = EOK;
+
+	attrs->cTime.val = obj->inode->ctime;
+	attrs->cTime.err = EOK;
+	attrs->aTime.val = obj->inode->atime;
+	attrs->aTime.err = EOK;
+	attrs->mTime.val = obj->inode->mtime;
+	attrs->mTime.err = EOK;
+	attrs->links.val = obj->inode->links;
+	attrs->links.err = EOK;
+	attrs->pollStatus.val = POLLIN | POLLRDNORM | POLLOUT | POLLWRNORM;
+	attrs->pollStatus.err = EOK;
+
+	mutexUnlock(obj->lock);
+	ext2_obj_put(fs, obj);
+
+	return EOK;
+}
+
+
+int ext2_setattr(ext2_t *fs, id_t id, int type, long long attr, const void *data, size_t len)
 {
 	ext2_obj_t *obj;
 	int err = EOK;
@@ -375,60 +436,60 @@ int ext2_setattr(ext2_t *fs, id_t id, int type, long long attr, void *data, size
 
 	mutexLock(obj->lock);
 
-	switch(type) {
-	case atMode:
-		obj->inode->mode = (obj->inode->mode & ~ALLPERMS) | (attr & ALLPERMS);
-		break;
-
-	case atUid:
-		obj->inode->uid = attr;
-		break;
-
-	case atGid:
-		obj->inode->gid = attr;
-		break;
-
-	case atSize:
-		if ((err = _ext2_file_truncate(fs, obj, attr)) < 0)
+	switch (type) {
+		case atMode:
+			obj->inode->mode = (obj->inode->mode & ~ALLPERMS) | (attr & ALLPERMS);
 			break;
 
-		if ((err = _ext2_obj_sync(fs, obj)) < 0)
+		case atUid:
+			obj->inode->uid = attr;
 			break;
 
-		if ((err = ext2_sb_sync(fs)) < 0)
+		case atGid:
+			obj->inode->gid = attr;
 			break;
-		break;
 
-	case atMTime:
-		obj->inode->mtime = attr;
-		break;
+		case atSize:
+			if ((err = _ext2_file_truncate(fs, obj, attr)) < 0)
+				break;
 
-	case atATime:
-		obj->inode->atime = attr;
-		break;
+			if ((err = _ext2_obj_sync(fs, obj)) < 0)
+				break;
 
-	case atDev:
-		if (data != NULL && len == sizeof(oid_t)) {
-			oid_t dev;
-			memcpy(&dev, data, len);
-			if ((dev.port == fs->port) && (dev.id == id)) {
-				obj->flags &= ~OFLAG_MOUNTPOINT;
+			if ((err = ext2_sb_sync(fs)) < 0)
+				break;
+			break;
+
+		case atMTime:
+			obj->inode->mtime = attr;
+			break;
+
+		case atATime:
+			obj->inode->atime = attr;
+			break;
+
+		case atDev:
+			if (data != NULL && len == sizeof(oid_t)) {
+				oid_t dev;
+				memcpy(&dev, data, len);
+				if ((dev.port == fs->port) && (dev.id == id)) {
+					obj->flags &= ~OFLAG_MOUNTPOINT;
+				}
+				else {
+					obj->dev = dev;
+					obj->flags |= OFLAG_MOUNTPOINT;
+				}
 			}
 			else {
-				obj->dev = dev;
-				obj->flags |= OFLAG_MOUNTPOINT;
+				err = -EINVAL;
 			}
-		}
-		else {
+			break;
+
+
+		default:
+			/* unknown / invalid attribute to set */
 			err = -EINVAL;
-		}
-		break;
-
-
-	default:
-		/* unknown / invalid attribute to set */
-		err = -EINVAL;
-		break;
+			break;
 	}
 
 	if (err == EOK) {

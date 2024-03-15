@@ -24,6 +24,8 @@
 #include <sys/statvfs.h>
 #include <sys/threads.h>
 
+#include <phoenix/attribute.h>
+
 #include "fatio.h"
 #include "fatchain.h"
 #include "fatdev.h"
@@ -96,7 +98,7 @@ ssize_t libfat_write(void *info, oid_t *oid, off_t offs, const void *data, size_
 }
 
 
-static int libfat_setattr(void *info, oid_t *oid, int type, long long attr, void *data, size_t len)
+static int libfat_setattr(void *info, oid_t *oid, int type, long long attr, const void *data, size_t len)
 {
 	return -EROFS;
 }
@@ -213,6 +215,52 @@ static int libfat_getattr(void *infoVoid, oid_t *oid, int type, long long *attr)
 		default:
 			return -EINVAL;
 	}
+
+	return EOK;
+}
+
+
+static int libfat_getattrAll(void *infoVoid, oid_t *oid, struct _attrAll *attrs)
+{
+	if (infoVoid == NULL) {
+		return -EINVAL;
+	}
+
+	fat_info_t *info = infoVoid;
+	fat_dirent_t d;
+	int ret = getDirentById(info, oid->id, &d);
+	if (ret < 0) {
+		TRACE("getattr failed %d", ret);
+		return ret;
+	}
+
+	size_t clusterSize = info->bsbpb.BPB_BytesPerSec * info->bsbpb.BPB_SecPerClus;
+
+	_phoenix_initAttrsStruct(attrs, -ENOSYS);
+	attrs->mode.val = info->fsPermissions | (fat_isDirectory(&d) ? S_IFDIR : S_IFREG);
+	attrs->mode.err = EOK;
+	attrs->uid.val = 0;
+	attrs->uid.err = EOK;
+	attrs->gid.val = 0;
+	attrs->gid.err = EOK;
+	attrs->size.val = d.size;
+	attrs->size.err = EOK;
+	attrs->blocks.val = (d.size + clusterSize - 1) / clusterSize;
+	attrs->blocks.err = EOK;
+	attrs->ioblock.val = clusterSize;
+	attrs->ioblock.err = EOK;
+	attrs->type.val = fat_isDirectory(&d) ? otDir : otFile;
+	attrs->type.err = EOK;
+	attrs->cTime.val = fatdir_getFileTime(&d, FAT_FILE_CTIME);
+	attrs->cTime.err = EOK;
+	attrs->aTime.val = fatdir_getFileTime(&d, FAT_FILE_ATIME);
+	attrs->aTime.err = EOK;
+	attrs->mTime.val = fatdir_getFileTime(&d, FAT_FILE_MTIME);
+	attrs->mTime.err = EOK;
+	attrs->links.val = 1;
+	attrs->links.err = EOK;
+	attrs->pollStatus.val = 0;
+	attrs->pollStatus.err = EOK;
 
 	return EOK;
 }
@@ -440,6 +488,7 @@ const static storage_fsops_t fsOps = {
 	.write = libfat_write,     /* Only returns -EROFS */
 	.setattr = libfat_setattr, /* Only returns -EROFS */
 	.getattr = libfat_getattr,
+	.getattrall = libfat_getattrAll,
 	.truncate = libfat_truncate, /* Only returns -EROFS */
 	.devctl = NULL,
 	.create = libfat_create,   /* Only returns -EROFS */

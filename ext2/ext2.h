@@ -110,8 +110,11 @@ extern int ext2_truncate(ext2_t *fs, id_t id, size_t size);
 extern int ext2_getattr(ext2_t *fs, id_t id, int type, long long *attr);
 
 
+extern int ext2_getattrAll(ext2_t *fs, id_t id, struct _attrAll *attr);
+
+
 /* Sets file attributes */
-extern int ext2_setattr(ext2_t *fs, id_t id, int type, long long attr, void *data, size_t len);
+extern int ext2_setattr(ext2_t *fs, id_t id, int type, long long attr, const void *data, size_t len);
 
 
 /* Adds a link */
