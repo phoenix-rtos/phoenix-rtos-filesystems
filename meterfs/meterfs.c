@@ -20,6 +20,11 @@
 #include <string.h>
 #include <stddef.h>
 #include <sys/reboot.h>
+#include <sys/stat.h>
+#include <sys/file.h>
+#include <dirent.h>
+#include <poll.h>
+#include <sys/statvfs.h>
 
 #include "meterfs.h"
 #include "files.h"
@@ -36,6 +41,8 @@
 #define MIN_PARTITIONS_SECTORS_NB ((2 * HEADER_SECTOR_CNT) + 2)
 #define JOURNAL_OFFSET(ssz)       (2 * HEADER_SIZE(ssz))
 #define SPARE_SECTOR_OFFSET(ssz)  (JOURNAL_OFFSET(ssz) + (ssz))
+
+#define ROOTDIR_ID 0
 
 #define UNRELIABLE_WRITE 0 /* DEBUG ONLY! */
 #if UNRELIABLE_WRITE
@@ -740,7 +747,7 @@ static int meterfs_rbTreeFill(meterfs_ctx_t *ctx)
 			break;
 		}
 
-		err = node_add(&f, (id_t)i, &ctx->nodesTree);
+		err = node_add(&f, (id_t)(ROOTDIR_ID + 1 + i), &ctx->nodesTree);
 		if (err < 0) {
 			ret = err;
 			break;
@@ -920,8 +927,9 @@ static int meterfs_readRecord(file_t *f, void *buff, size_t bufflen, unsigned in
 
 int meterfs_open(id_t id, meterfs_ctx_t *ctx)
 {
-	if (node_getById(id, &ctx->nodesTree) != NULL)
+	if ((id == ROOTDIR_ID) || (node_getById(id, &ctx->nodesTree) != NULL)) {
 		return 0;
+	}
 
 	return -ENOENT;
 }
@@ -929,40 +937,65 @@ int meterfs_open(id_t id, meterfs_ctx_t *ctx)
 
 int meterfs_close(id_t id, meterfs_ctx_t *ctx)
 {
-	if (node_getById(id, &ctx->nodesTree) != NULL)
+	if ((id == ROOTDIR_ID) || (node_getById(id, &ctx->nodesTree) != NULL)) {
 		return 0;
+	}
 
 	return -ENOENT;
 }
 
 
-int meterfs_lookup(const char *name, id_t *res, meterfs_ctx_t *ctx)
+int meterfs_lookupOid(const char *name, oid_t *res, meterfs_ctx_t *ctx)
 {
-	file_t f;
-	char bname[sizeof(f.header.name)];
-	int i = 0;
-	size_t j, len = strnlen(&name[1], sizeof(f.header.name) + 1);
+	size_t len = 0;
 
-	if (len < 1 || len > sizeof(f.header.name))
-		return -EINVAL;
+	while (name[len] != '\0') {
+		while (name[len] == '/') {
+			++len;
+		}
 
-	if (name[0] == '/')
-		++i;
-
-	for (j = 0; j < sizeof(bname); ++j, ++i) {
-		bname[j] = name[i];
-
-		if (name[i] == '/')
-			return -ENOENT;
-
-		if (name[i] == '\0')
+		if (name[len] == '\0') {
 			break;
+		}
+
+		char *end = strchrnul(name + len, '/');
+		const size_t size = end - name + len;
+		if ((strncmp(name + len, "..", size) == 0)) {
+			if (ctx->mountpoint != NULL) {
+				*res = ctx->parent;
+				return len - 1;
+			}
+			else {
+				res->id = ROOTDIR_ID;
+				len += size;
+				continue;
+			}
+		}
+		else if ((strncmp(name + len, ".", size) == 0)) {
+			res->id = ROOTDIR_ID;
+			len += size;
+			continue;
+		}
+		else {
+			if (node_getByName(name + len, &res->id, &ctx->nodesTree) == NULL) {
+				return -ENOENT;
+			}
+
+			return len + size;
+		}
 	}
 
-	if (node_getByName(bname, res, &ctx->nodesTree) == NULL)
-		return -ENOENT;
+	return -ENOENT;
+}
 
-	return i;
+
+/* Backward compatibility, remove after adapting all flashsrvs */
+int meterfs_lookup(const char *name, id_t *res, meterfs_ctx_t *ctx)
+{
+	oid_t oid;
+	int ret = meterfs_lookupOid(name, &oid, ctx);
+	*res = oid.id;
+	return ret;
 }
 
 
@@ -1099,7 +1132,7 @@ int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size
 
 	meterfs_powerCtrl(0, ctx);
 
-	err = node_add(&f, (id_t)ctx->filecnt, &ctx->nodesTree);
+	err = node_add(&f, (id_t)(ROOTDIR_ID + 1 + ctx->filecnt), &ctx->nodesTree);
 	if (err < 0)
 		return err;
 
@@ -1315,9 +1348,229 @@ int meterfs_devctl(const meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_c
 }
 
 
+int meterfs_setAttr(id_t id, int type, long long int attr, const void *data, size_t size, meterfs_ctx_t *ctx)
+{
+	int ret = 0;
+	file_t *f = node_getById(id, &ctx->nodesTree);
+
+	if ((id == ROOTDIR_ID) || (f != NULL)) {
+		switch (type) {
+			case atUid:
+			case atGid:
+			case atMode:
+			case atMTime:
+			case atATime:
+				/* Ignore */
+				ret = 0;
+				break;
+
+			case atDev:
+			case atSize:
+				/* Not supported explicitly */
+				ret = -ENOSYS;
+				break;
+
+			default:
+				ret = -EINVAL;
+				break;
+		}
+	}
+	else {
+		ret = -ENOENT;
+	}
+
+	return ret;
+}
+
+
+static inline size_t meterfs_size2block(size_t size)
+{
+	return (size + S_BLKSIZE - 1) / S_BLKSIZE;
+}
+
+
+int meterfs_getAttr(id_t id, int type, long long int *attr, meterfs_ctx_t *ctx)
+{
+	int ret = 0;
+	file_t *f = node_getById(id, &ctx->nodesTree);
+
+	if ((id == ROOTDIR_ID) || (f != NULL)) {
+		switch (type) {
+			case atUid:
+			case atGid:
+				*attr = 0;
+				break;
+
+			case atMode:
+				*attr = DEFFILEMODE;
+				break;
+
+			case atSize:
+				*attr = (id == ROOTDIR_ID) ? 0 : f->recordcnt * (f->header.recordsz);
+				break;
+
+			case atBlocks:
+				*attr = (id == ROOTDIR_ID) ? 0 : meterfs_size2block(f->header.sectorcnt * ctx->sectorsz);
+				break;
+
+			case atIOBlock:
+				*attr = (id == ROOTDIR_ID) ? 0 : ctx->sectorsz;
+				break;
+
+			case atType:
+				/* Handle fs rootdir, otherwise regular file */
+				/* TODO - remove redundant custom enums */
+				*attr = (id == ROOTDIR_ID) ? otDir : otFile;
+				break;
+
+			case atCTime:
+			case atMTime:
+			case atATime:
+				*attr = 0;
+				break;
+
+			case atLinks:
+				*attr = 1;
+				break;
+
+			case atPollStatus:
+				/* Always ready */
+				*attr = POLLIN | POLLRDNORM | POLLOUT | POLLWRNORM;
+				break;
+
+			default:
+				ret = -EINVAL;
+				break;
+		}
+	}
+	else {
+		ret = -ENOENT;
+	}
+
+	return ret;
+}
+
+
+int meterfs_readdir(id_t dir, off_t offs, struct dirent *dent, unsigned int size, meterfs_ctx_t *ctx)
+{
+	if (dir != ROOTDIR_ID) {
+		/* Only rootdir support */
+		return -ENOENT;
+	}
+
+	if (offs < 0) {
+		return -EINVAL;
+	}
+
+	/* Hack-ish - handle virtual "." and ".." */
+	if (offs == 0) { /* "."" */
+		if (size < 2) {
+			return -EINVAL;
+		}
+		dent->d_ino = ROOTDIR_ID;
+		dent->d_reclen = 1;
+		dent->d_namlen = 1;
+		dent->d_type = DT_DIR;
+		strcpy(dent->d_name, ".");
+	}
+	else if (offs == 1) { /* ".."" */
+		if (size < 3) {
+			return -EINVAL;
+		}
+		dent->d_ino = (unsigned long)-1;
+		dent->d_reclen = 2;
+		dent->d_namlen = 2;
+		dent->d_type = DT_DIR;
+		strcpy(dent->d_name, "..");
+	}
+	else {
+		if (offs < 3) {
+			return -EINVAL;
+		}
+
+		id_t id;
+		/* Adjust offset to space taken by "." and ".." */
+		file_t *f = node_getByOffset(offs - 3, &id, &ctx->nodesTree);
+		if (f == NULL) {
+			return -ENOENT;
+		}
+
+		size_t len = strnlen(f->header.name, sizeof(f->header.name));
+		if ((sizeof(struct dirent) + len + 1) > size) {
+			return -EINVAL;
+		}
+
+		dent->d_ino = id;
+		dent->d_reclen = len;
+		dent->d_namlen = len;
+		dent->d_type = DT_REG;
+		strncpy(dent->d_name, f->header.name, len);
+		dent->d_name[len] = '\0';
+	}
+
+	return 0;
+}
+
+
+int meterfs_stat(void *buf, size_t len, meterfs_ctx_t *ctx)
+{
+	struct statvfs *st = buf;
+
+	st->f_bsize = ctx->sectorsz;
+	st->f_frsize = st->f_bsize;
+	st->f_blocks = ctx->sz / ctx->sectorsz;
+	st->f_bavail = st->f_blocks - (node_totalSectors(&ctx->nodesTree) + (HEADER_SECTOR_CNT * 2));
+	st->f_bfree = st->f_bavail;
+	st->f_files = ctx->filecnt + 2; /* files + "." + ".." */
+	st->f_ffree = MAX_FILE_CNT(ctx->sectorsz) - ctx->filecnt;
+	st->f_favail = st->f_ffree;
+	st->f_fsid = (unsigned long)ctx; /* TODO: filesystem ID should be generated at mount time */
+	st->f_flag = ctx->mountopt;
+	st->f_namemax = sizeof(((fileheader_t *)0)->name);
+
+	return 0;
+}
+
+
+int meterfs_mount(meterfs_ctx_t *ctx, const char *data, unsigned long mode)
+{
+	ctx->mountopt = mode;
+
+	if (data == NULL) {
+		return -EINVAL;
+	}
+
+	ctx->mountpoint = resolve_path(data, NULL, 1, 0);
+	if (ctx->mountpoint == NULL) {
+		return -ENOMEM;
+	}
+
+	size_t mntlen = strlen(ctx->mountpoint);
+	char *parent = malloc(mntlen + 3 + 1);
+	if (parent == NULL) {
+		return -ENOMEM;
+	}
+	memcpy(parent, ctx->mountpoint, mntlen + 1);
+	strcpy(parent + mntlen, "/..");
+	int ret = lookup(parent, &ctx->parent, NULL);
+	free(parent);
+	if (ret < 0) {
+		return -ENOENT;
+	}
+
+	void *mountPoint = realloc(ctx->mountpoint, mntlen + 1);
+	if (mountPoint == NULL) {
+		return -ENOMEM;
+	}
+	ctx->mountpoint = mountPoint;
+
+	return 0;
+}
+
+
 int meterfs_init(meterfs_ctx_t *ctx)
 {
-	int err;
+	ctx->mountpoint = NULL;
 
 #if UNRELIABLE_WRITE
 	LOG_INFO("meterfs UNRELIABLE_WRITE is ON. Did you really intend that?");
@@ -1334,14 +1587,14 @@ int meterfs_init(meterfs_ctx_t *ctx)
 
 	node_init(&ctx->nodesTree);
 
-	err = meterfs_checkfs(ctx);
-	if (err < 0) {
-		return err;
+	int ret = meterfs_checkfs(ctx);
+	if (ret < 0) {
+		return ret;
 	}
 
-	err = meterfs_rbTreeFill(ctx);
-	if (err < 0) {
-		return err;
+	ret = meterfs_rbTreeFill(ctx);
+	if (ret < 0) {
+		return ret;
 	}
 
 	LOG_INFO("meterfs: Filesystem check done. Found %u files.", ctx->filecnt);
