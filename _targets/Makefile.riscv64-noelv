@@ -1,0 +1,9 @@
+#
+# Makefile for Phoenix-RTOS 3 filesystems
+#
+# riscv64-noelv drivers
+#
+# Copyright 2024 Phoenix Systems
+#
+
+DEFAULT_COMPONENTS := dummyfs
