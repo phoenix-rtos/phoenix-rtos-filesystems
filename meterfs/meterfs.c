@@ -588,6 +588,7 @@ static int meterfs_getFilePos(file_t *f, meterfs_ctx_t *ctx)
 	f->lastidx.nvalid = 1;
 	f->lastoff = 0;
 	f->recordcnt = 0;
+	f->earlyErased = false;
 
 	baddr = f->header.sector * ctx->sectorsz;
 	eaddr = baddr + f->header.sectorcnt * ctx->sectorsz;
@@ -755,13 +756,18 @@ static int meterfs_writeRecord(file_t *f, const void *buff, size_t bufflen, mete
 	meterfs_powerCtrl(1, ctx);
 
 	/* Check if we have to erase sector to write new data */
-	if (offset == 0 || (offset / ctx->sectorsz) != ((offset + f->header.recordsz + sizeof(entry_t)) / ctx->sectorsz)) {
-		stat = ctx->eraseSector(ctx->devCtx, ctx->offset + (f->header.sector * ctx->sectorsz) + (offset + f->header.recordsz + sizeof(entry_t)));
-		if (stat < 0) {
-			meterfs_powerCtrl(0, ctx);
-			free(tdata);
-			return stat;
+	if (!f->earlyErased) {
+		if (offset == 0 || (offset / ctx->sectorsz) != ((offset + f->header.recordsz + sizeof(entry_t)) / ctx->sectorsz)) {
+			stat = ctx->eraseSector(ctx->devCtx, ctx->offset + (f->header.sector * ctx->sectorsz) + (offset + f->header.recordsz + sizeof(entry_t)));
+			if (stat < 0) {
+				meterfs_powerCtrl(0, ctx);
+				free(tdata);
+				return stat;
+			}
 		}
+	}
+	else {
+		f->earlyErased = false;
 	}
 
 	e.checksum = meterfs_calcChecksum(data, bufflen);
@@ -798,11 +804,27 @@ static int meterfs_writeRecord(file_t *f, const void *buff, size_t bufflen, mete
 		return stat;
 	}
 
-	meterfs_powerCtrl(0, ctx);
-
 	f->lastidx.no += 1;
 	f->lastidx.nvalid = 0;
 	f->lastoff = offset;
+
+	if (ctx->earlyErase) {
+		offset += f->header.recordsz + sizeof(entry_t);
+
+		if ((offset + f->header.recordsz + sizeof(entry_t)) > (f->header.sectorcnt * ctx->sectorsz)) {
+			offset = 0;
+		}
+
+		/* Check if we have to erase sector to write new data */
+		if (offset == 0 || (offset / ctx->sectorsz) != ((offset + f->header.recordsz + sizeof(entry_t)) / ctx->sectorsz)) {
+			stat = ctx->eraseSector(ctx->devCtx, ctx->offset + (f->header.sector * ctx->sectorsz) + (offset + f->header.recordsz + sizeof(entry_t)));
+			if (stat == 0) {
+				f->earlyErased = true;
+			}
+		}
+	}
+
+	meterfs_powerCtrl(0, ctx);
 
 	if (f->recordcnt < (f->header.filesz / f->header.recordsz)) {
 		++f->recordcnt;
@@ -1284,6 +1306,7 @@ int meterfs_devctl(const meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_c
 			o->fsInfo.sz = ctx->sz;
 			o->fsInfo.filecnt = ctx->filecnt;
 			o->fsInfo.fileLimit = MAX_FILE_CNT(ctx->sectorsz);
+			o->fsInfo.earlyErase = ctx->earlyErase;
 
 			break;
 
@@ -1334,6 +1357,10 @@ int meterfs_devctl(const meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_c
 		case meterfs_setKey:
 			memcpy(ctx->key, i->setKey.key, sizeof(ctx->key));
 			ctx->keyInit = true;
+			break;
+
+		case meterfs_setEarlyErase:
+			ctx->earlyErase = i->setEarlyErase.enable;
 			break;
 
 		default:

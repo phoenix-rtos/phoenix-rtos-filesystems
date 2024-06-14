@@ -15,6 +15,7 @@
 #define _METERFS_FILES_H_
 
 #include <stdint.h>
+#include <stdbool.h>
 
 #define HGRAIN            32u /* Must be able divide sector size */
 #define HEADER_SECTOR_CNT 2u
@@ -61,6 +62,7 @@ typedef struct {
 	index_t firstidx;
 	unsigned int firstoff;
 	unsigned int recordcnt;
+	bool earlyErased;
 } file_t;
 
 

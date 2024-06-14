@@ -23,7 +23,7 @@
 
 /* clang-format off */
 enum { meterfs_allocate = 0, meterfs_resize, meterfs_info, meterfs_chiperase,
-	meterfs_fsInfo, meterfs_setEncryption, meterfs_setKey };
+	meterfs_fsInfo, meterfs_setEncryption, meterfs_setKey, meterfs_setEarlyErase };
 /* clang-format on */
 
 
@@ -53,6 +53,10 @@ typedef struct {
 		struct {
 			uint8_t key[32];
 		} setKey;
+
+		struct {
+			bool enable;
+		} setEarlyErase;
 	};
 } meterfs_i_devctl_t;
 
@@ -71,6 +75,7 @@ typedef struct {
 		size_t sectorsz;
 		size_t fileLimit;
 		size_t filecnt;
+		bool earlyErase;
 	} fsInfo;
 } meterfs_o_devctl_t;
 
@@ -88,6 +93,9 @@ typedef struct {
 
 	uint8_t key[32];
 	bool keyInit;
+
+	/* erase sector for next write early */
+	bool earlyErase;
 
 	/* meterfs externals - should be initialized before meterfs_init */
 	size_t sz;
