@@ -251,6 +251,7 @@ int meterfs_mount(storage_t *storage, storage_fs_t *fs, const char *data, unsign
 	ctx->meterfsCtx.eraseSector = meterfsAdapter_eraseSector;
 	ctx->meterfsCtx.powerCtrl = meterfsAdapter_powerCtrl;
 	ctx->meterfsCtx.devCtx = &ctx->devCtx;
+	ctx->meterfsCtx.keyInit = false;
 
 	err = meterfs_init(&ctx->meterfsCtx);
 	if (err < 0) {
