@@ -867,6 +867,11 @@ static int meterfs_readRecord(file_t *f, void *buff, size_t bufflen, unsigned in
 		return -ENOENT;
 	}
 
+	if ((f->header.ncrypt == 0) && (!ctx->keyInit)) {
+		/* Key not initialized, inform the reader that the file can't be decrypted */
+		return -EPERM;
+	}
+
 	/* Calculate record position in a storage */
 	pos = (f->firstoff / (f->header.recordsz + sizeof(entry_t))) + idx;
 	pos = pos % ((f->header.sectorcnt * ctx->sectorsz) / (f->header.recordsz + sizeof(entry_t)));
@@ -901,7 +906,7 @@ static int meterfs_readRecord(file_t *f, void *buff, size_t bufflen, unsigned in
 
 		eptr = (entry_t *)rbuff;
 
-		if (eptr->id.nvalid || eptr->id.no != f->firstidx.no + idx) {
+		if ((stat == 0) || (eptr->id.nvalid != 0) || (eptr->id.no != f->firstidx.no + idx)) {
 			LOG_DEBUG("ENOENT\n");
 			err = -ENOENT;
 			break;
@@ -914,11 +919,6 @@ static int meterfs_readRecord(file_t *f, void *buff, size_t bufflen, unsigned in
 		}
 
 		if (f->header.ncrypt == 0) {
-			if (!ctx->keyInit) {
-				/* Key not initialized, inform the reader that the file can't be decrypted */
-				err = -EPERM;
-				break;
-			}
 			meterfs_encrypt(rbuff + sizeof(entry_t), f->header.recordsz, ctx->key, f, eptr);
 		}
 
@@ -1172,19 +1172,28 @@ int meterfs_readFile(id_t id, off_t off, char *buff, size_t bufflen, meterfs_ctx
 	file_t *f;
 	unsigned int idx;
 	size_t chunk, i = 0, pos = off;
+	int err = 0;
 
-	if (bufflen == 0 || off < 0)
+	if ((bufflen == 0) || (off < 0)) {
 		return -EINVAL;
+	}
 
 	f = node_getById(id, &ctx->nodesTree);
-	if (f == NULL)
+	if (f == NULL) {
 		return -ENOENT;
+	}
 
-	if (f->recordcnt == 0)
+	if (f->recordcnt == 0) {
 		return 0;
+	}
 
-	if (!f->header.filesz || !f->header.recordsz)
+	if (f->header.recordsz == 0) {
 		return 0;
+	}
+
+	if (off >= (off_t)f->header.filesz) {
+		return 0;
+	}
 
 	idx = pos / f->header.recordsz;
 	pos %= f->header.recordsz;
@@ -1193,8 +1202,10 @@ int meterfs_readFile(id_t id, off_t off, char *buff, size_t bufflen, meterfs_ctx
 
 	while (i < bufflen) {
 		chunk = (bufflen - i <= f->header.recordsz) ? bufflen - i : f->header.recordsz;
-		if (meterfs_readRecord(f, buff + i, chunk, idx, pos, ctx) <= 0)
+		err = meterfs_readRecord(f, buff + i, chunk, idx, pos, ctx);
+		if (err <= 0) {
 			break;
+		}
 
 		pos = 0;
 		i += chunk;
@@ -1203,7 +1214,7 @@ int meterfs_readFile(id_t id, off_t off, char *buff, size_t bufflen, meterfs_ctx
 
 	meterfs_powerCtrl(0, ctx);
 
-	return i;
+	return (i > 0) ? i : err;
 }
 
 
