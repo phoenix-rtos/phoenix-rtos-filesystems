@@ -1,0 +1,9 @@
+#
+# Makefile for Phoenix-RTOS 3 filesystems
+#
+# sparcv8leon3-generic components
+#
+# Copyright 2023 Phoenix Systems
+#
+
+DEFAULT_COMPONENTS := dummyfs
