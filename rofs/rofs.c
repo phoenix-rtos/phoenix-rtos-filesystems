@@ -11,6 +11,7 @@
  * %LICENSE%
  */
 
+#include <endian.h>
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
@@ -27,14 +28,14 @@
 #define LOG(fmt, ...) printf(LOG_PREFIX fmt "\n", ##__VA_ARGS__)
 
 #if 0
-#define TRACE(fmt, ...) printf(LOG_prefix fmt "\n", ##__VA_ARGS__)
+#define TRACE(fmt, ...) printf(LOG_PREFIX fmt "\n", ##__VA_ARGS__)
 #else
 #define TRACE(fmt, ...)
 #endif
 
 
 /*
- * NOTE: This implementation is for little endian targets
+ * NOTE: Implementation assumes filesystem is prepared for target native endianness
  */
 
 
@@ -65,13 +66,21 @@ struct rofs_node {
 
 static uint32_t calc_crc32(const uint8_t *buf, uint32_t len, uint32_t base)
 {
-#define CRC32POLY_LE 0xedb88320
+
+#if __BYTE_ORDER == __BIG_ENDIAN
+#define CRC32POLY 0x04c11db7
+#elif __BYTE_ORDER == __LITTLE_ENDIAN
+#define CRC32POLY 0xedb88320
+#else
+#error "Unsupported byte order"
+#endif
+
 	uint32_t crc = base;
 	int i;
 	while (len--) {
 		crc = (crc ^ (*buf++ & 0xff));
 		for (i = 0; i < 8; i++) {
-			crc = (crc >> 1) ^ ((crc & 1) ? CRC32POLY_LE : 0);
+			crc = (crc >> 1) ^ ((crc & 1) ? CRC32POLY : 0);
 		}
 	}
 	return crc;
@@ -187,7 +196,7 @@ int rofs_read(struct rofs_ctx *ctx, oid_t *oid, off_t offs, char *buff, size_t l
 	struct rofs_node *node;
 	int ret = getNode(ctx, oid, &node);
 
-	TRACE("read id=%d, of=%zd, buf=0x%p, len=%zu, ret=%d", oid->id, offs, buff, len, ret);
+	TRACE("read id=%d, of=%jd, buf=0x%p, len=%zu, ret=%d", oid->id, (intmax_t)offs, buff, len, ret);
 
 	if (ret != 0) {
 		return ret;

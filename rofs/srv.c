@@ -97,7 +97,7 @@ int main(int argc, char **argv)
 	}
 
 
-	/* addres in AHB memory where whole ROFS image is loaded by other process */
+	/* address in AHB memory where whole ROFS image is loaded by other process */
 	if (rofs_init(&ctx, imgAddr) < 0) {
 		LOG("error");
 		return EXIT_FAILURE;
