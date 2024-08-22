@@ -74,7 +74,7 @@ int rofs_link(struct rofs_ctx *ctx, oid_t *dir, const char *name, oid_t *oid);
 int rofs_unlink(struct rofs_ctx *ctx, oid_t *dir, const char *name);
 
 
-int rofs_readdir(struct rofs_ctx *ctx, oid_t *dir, off_t offs, struct dirent *dent, unsigned int size);
+int rofs_readdir(struct rofs_ctx *ctx, oid_t *dir, off_t offs, struct dirent *dent, size_t size);
 
 
 int rofs_createMapped(struct rofs_ctx *ctx, oid_t *dir, const char *name, void *addr, size_t size, oid_t *oid);
