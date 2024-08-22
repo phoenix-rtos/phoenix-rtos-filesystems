@@ -417,10 +417,11 @@ static int dirfind(struct rofs_ctx *ctx, struct rofs_node **pNode, int parent_id
 	for (i = 0; i < ctx->nodeCount; i++) {
 		node = &ctx->tree[i];
 		if ((node->parent_id == parent_id) && (memcmp(name, node->name, len) == 0)) {
+			size_t nlen = strlen(node->name);
 			o->id = node->id;
 			o->port = ctx->oid.port;
 			*pNode = node;
-			return strlen(node->name);
+			return (nlen == len) ? len : -ENOENT;
 		}
 	}
 
