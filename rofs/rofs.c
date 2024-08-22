@@ -177,7 +177,7 @@ int rofs_open(struct rofs_ctx *ctx, oid_t *oid)
 {
 	struct rofs_node *node;
 	int ret = getNode(ctx, oid, &node);
-	TRACE("open id=%d ret=%d", oid->id, ret);
+	TRACE("open id=%ju ret=%d", (uintmax_t)oid->id, ret);
 	return ret;
 }
 
@@ -186,7 +186,7 @@ int rofs_close(struct rofs_ctx *ctx, oid_t *oid)
 {
 	struct rofs_node *node;
 	int ret = getNode(ctx, oid, &node);
-	TRACE("close id=%d ret=%d", oid->id, ret);
+	TRACE("close id=%ju ret=%d", (uintmax_t)oid->id, ret);
 	return ret;
 }
 
@@ -196,7 +196,7 @@ int rofs_read(struct rofs_ctx *ctx, oid_t *oid, off_t offs, char *buff, size_t l
 	struct rofs_node *node;
 	int ret = getNode(ctx, oid, &node);
 
-	TRACE("read id=%d, of=%jd, buf=0x%p, len=%zu, ret=%d", oid->id, (intmax_t)offs, buff, len, ret);
+	TRACE("read id=%ju, of=%jd, buf=0x%p, len=%zu, ret=%d", (uintmax_t)oid->id, (intmax_t)offs, buff, len, ret);
 
 	if (ret != 0) {
 		return ret;
@@ -218,7 +218,7 @@ int rofs_read(struct rofs_ctx *ctx, oid_t *oid, off_t offs, char *buff, size_t l
 int rofs_write(struct rofs_ctx *ctx, oid_t *oid, off_t offs, const char *buff, size_t len)
 {
 	(void)ctx;
-	TRACE("write id=%d, of=%lld, buf=0x%p, len=%zu", oid->id, offs, buff, len);
+	TRACE("write id=%ju, of=%jd, buf=0x%p, len=%zu", (uintmax_t)oid->id, (intmax_t)offs, buff, len);
 	return -ENOSYS;
 }
 
@@ -226,7 +226,7 @@ int rofs_write(struct rofs_ctx *ctx, oid_t *oid, off_t offs, const char *buff, s
 int rofs_truncate(struct rofs_ctx *ctx, oid_t *oid, size_t size)
 {
 	(void)ctx;
-	TRACE("truncate id=%d, size=%zu", oid->id, size);
+	TRACE("truncate id=%ju, size=%zu", (uintmax_t)oid->id, size);
 	return -ENOSYS;
 }
 
@@ -242,7 +242,7 @@ int rofs_create(struct rofs_ctx *ctx, oid_t *dir, const char *name, oid_t *oid, 
 int rofs_destroy(struct rofs_ctx *ctx, oid_t *oid)
 {
 	(void)ctx;
-	TRACE("destroy id=%d", oid->id);
+	TRACE("destroy id=%jd", (uintmax_t)oid->id);
 	return -ENOSYS;
 }
 
@@ -250,7 +250,7 @@ int rofs_destroy(struct rofs_ctx *ctx, oid_t *oid)
 int rofs_setattr(struct rofs_ctx *ctx, oid_t *oid, int type, long long attr, const void *data, size_t size)
 {
 	(void)ctx;
-	TRACE("setattr id=%d, typ=%d, attr=%llx", oid->id, type, attr);
+	TRACE("setattr id=%ju, type=%d, attr=%llx", (uintmax_t)oid->id, type, attr);
 	return -ENOSYS;
 }
 
@@ -260,7 +260,7 @@ int rofs_getattr(struct rofs_ctx *ctx, oid_t *oid, int type, long long *attr)
 	int ret = 0;
 	struct rofs_node *node;
 
-	TRACE("getattr id=%d, typ=%d, attr=0x%llx", oid->id, type, attr ? *attr : -1);
+	TRACE("getattr id=%ju, type=%d, attr=0x%llx", (uintmax_t)oid->id, type, attr ? *attr : -1);
 
 	if (oid->id >= ctx->nodeCount) {
 		return -EPIPE;
@@ -339,7 +339,7 @@ int rofs_getattrall(struct rofs_ctx *ctx, oid_t *oid, struct _attrAll *attrs, si
 {
 	struct rofs_node *node;
 
-	TRACE("getattrall id=%d, attr=0x%p sz=%zu", oid->id, attrs, attrSize);
+	TRACE("getattrall id=%ju, attr=0x%p sz=%zu", (uintmax_t)oid->id, attrs, attrSize);
 
 	if ((attrs == NULL) || (attrSize < sizeof(struct _attrAll))) {
 		return -EINVAL;
@@ -431,7 +431,7 @@ static int dirfind(struct rofs_ctx *ctx, struct rofs_node **pNode, int parent_id
 
 int rofs_lookup(struct rofs_ctx *ctx, oid_t *dir, const char *name, oid_t *fil, oid_t *dev)
 {
-	TRACE("lookup name='%s' oid=%d.%d port=%d", name, dir->port, dir->id, ctx->oid.port);
+	TRACE("lookup name='%s' oid=%u.%ju port=%d", name, dir->port, (uintmax_t)dir->id, ctx->oid.port);
 
 	struct rofs_node *node = NULL;
 	int parent_id = 0;
@@ -475,7 +475,7 @@ int rofs_lookup(struct rofs_ctx *ctx, oid_t *dir, const char *name, oid_t *fil, 
 int rofs_link(struct rofs_ctx *ctx, oid_t *dir, const char *name, oid_t *oid)
 {
 	(void)ctx;
-	TRACE("link dir=%d, name=%s, oid=%p", dir->id, name, oid);
+	TRACE("link dir=%ju, name=%s, oid=%p", (uintmax_t)dir->id, name, oid);
 	return -ENOSYS;
 }
 
@@ -483,14 +483,14 @@ int rofs_link(struct rofs_ctx *ctx, oid_t *dir, const char *name, oid_t *oid)
 int rofs_unlink(struct rofs_ctx *ctx, oid_t *dir, const char *name)
 {
 	(void)ctx;
-	TRACE("unlink dir=%d, name=%s", dir->id, name);
+	TRACE("unlink dir=%ju, name=%s", (uintmax_t)dir->id, name);
 	return -ENOSYS;
 }
 
 
-int rofs_readdir(struct rofs_ctx *ctx, oid_t *dir, off_t offs, struct dirent *dent, unsigned int size)
+int rofs_readdir(struct rofs_ctx *ctx, oid_t *dir, off_t offs, struct dirent *dent, size_t size)
 {
-	TRACE("readdir id=%d, of=%lld, dent=0x%p, size=%zu", dir->id, offs, dent, size);
+	TRACE("readdir id=%ju, of=%jd, dent=0x%p, size=%zu", (uintmax_t)dir->id, (intmax_t)offs, dent, size);
 
 	struct rofs_node *node;
 	uint32_t i, count = 2;
