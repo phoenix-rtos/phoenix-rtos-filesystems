@@ -12,6 +12,9 @@
 
 
 #include "phoenix-rtos.h"
+#include <stdio.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include "jffs2_fs_i.h"
 #include "jffs2_fs_sb.h"
 #include "nodelist.h"
@@ -136,12 +139,14 @@ static int jffs2_readdir(struct file *file, struct dir_context *ctx)
 			jffs2_dbg(2, "Skipping deletion dirent \"%s\"\n",
 				  fd->name);
 			ctx->pos++;
+			// printf("Del name: %s\n", fd->name);
 			continue;
 		}
 		jffs2_dbg(2, "Dirent %ld: \"%s\", ino #%u, type %d\n",
 			  (unsigned long)ctx->pos, fd->name, fd->ino, fd->type);
-		if (!dir_emit(ctx, fd->name, strlen(fd->name), fd->ino, fd->type))
+		if (!dir_emit(ctx, fd->name, strlen(fd->name), fd->ino, fd->type)) {
 			break;
+		}
 		ctx->pos++;
 	}
 	mutex_unlock(&f->sem);

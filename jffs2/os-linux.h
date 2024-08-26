@@ -56,6 +56,7 @@ static inline void jffs2_init_inode_info(struct jffs2_inode_info *f)
 	f->target = NULL;
 	f->flags = 0;
 	f->usercompr = 0;
+	f->drefs = 0;
 }
 
 

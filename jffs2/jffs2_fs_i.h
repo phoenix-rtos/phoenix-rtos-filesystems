@@ -47,6 +47,9 @@ struct jffs2_inode_info {
 	/* Some stuff we just have to keep in-core at all times, for each inode. */
 	struct jffs2_inode_cache *inocache;
 
+	/* Number of opened directory streams */
+	uint16_t drefs;
+
 	uint16_t flags;
 	uint8_t usercompr;
 	struct inode vfs_inode;

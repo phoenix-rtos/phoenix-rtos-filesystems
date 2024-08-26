@@ -562,8 +562,9 @@ static int jffs2_garbage_collect_live(struct jffs2_sb_info *c,  struct jffs2_era
 	}
 
 	if (fd && fd->ino) {
+		// printf("gc: %s\n", fd->name);
 		ret = jffs2_garbage_collect_dirent(c, jeb, f, fd);
-	} else if (fd) {
+	} else if (fd && !f->drefs) {
 		ret = jffs2_garbage_collect_deletion_dirent(c, jeb, f, fd);
 	} else {
 		pr_warn("Raw node at 0x%08x wasn't in node lists for ino #%u\n",
@@ -988,6 +989,7 @@ static int jffs2_garbage_collect_deletion_dirent(struct jffs2_sb_info *c, struct
 	/* No need for it any more. Just mark it obsolete and remove it from the list */
 	while (*fdp) {
 		if ((*fdp) == fd) {
+			printf("del: %s\n", fd->name);
 			found = 1;
 			*fdp = fd->next;
 			break;

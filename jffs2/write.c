@@ -13,6 +13,7 @@
 #include "phoenix-rtos.h"
 #include "nodelist.h"
 #include "compr.h"
+#include <stdio.h>
 
 
 int jffs2_do_new_inode(struct jffs2_sb_info *c, struct jffs2_inode_info *f,

@@ -298,6 +298,7 @@ struct inode *jffs2_iget(struct super_block *sb, unsigned long ino)
 
 		inode->i_op = &jffs2_dir_inode_operations;
 		inode->i_fop = &jffs2_dir_operations;
+		f->drefs++;
 		break;
 	}
 	case S_IFREG:
