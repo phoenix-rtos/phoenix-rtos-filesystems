@@ -361,7 +361,7 @@ int rofs_getattrall(struct rofs_ctx *ctx, oid_t *oid, struct _attrAll *attrs, si
 	if (S_ISDIR(node->mode)) {
 		attrs->type.val = otDir;
 	}
-	else if (S_ISDIR(node->mode)) {
+	else if (S_ISREG(node->mode)) {
 		attrs->type.val = otFile;
 	}
 	else {

@@ -63,11 +63,12 @@ static int mount_oid(const char *mntPoint, oid_t *oid)
 }
 
 
-int getArgMountPoint(const char *arg, unsigned long *imgAddr, const char **mntPoint)
+static int getArgMountPoint(const char *arg, unsigned long *imgAddr, const char **mntPoint)
 {
 	char *end;
+	errno = 0;
 	*imgAddr = strtoul(arg, &end, 0);
-	if ((end[0] != ':') || (end[1] != '/') || (end[2] == '\0')) {
+	if ((errno != 0) || (end[0] != ':') || (end[1] != '/') || (end[2] == '\0')) {
 		return -1;
 	}
 
