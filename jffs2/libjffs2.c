@@ -13,6 +13,7 @@
  */
 
 #include <poll.h>
+#include <stdio.h>
 #include <sys/statvfs.h>
 #include <phoenix/attribute.h>
 
@@ -820,6 +821,10 @@ static int libjffs2_close(void *info, oid_t *oid)
 		return -EINVAL;
 
 	struct inode *inode = ilookup(p->sb, oid->id);
+	struct jffs2_inode_info *f = JFFS2_INODE_INFO(inode);
+	// mutex_lock(&f->sem);
+	f->drefs--;
+	// mutex_unlock(&f->sem);
 
 	if (inode != NULL) {
 		iput(inode);
