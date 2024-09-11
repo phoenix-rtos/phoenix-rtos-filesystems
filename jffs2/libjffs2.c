@@ -609,6 +609,10 @@ static int libjffs2_unlink(void *info, oid_t *dir, const char *name)
 		ret = idir->i_op->unlink(idir, dentry);
 	inode_unlock(idir);
 
+	if (libjffs2_isDevice(p, &oid)) {
+		dev_destroy(p->devs, dev_find_ino(p->devs, inode->i_ino));
+	}
+
 	iput(idir);
 	iput(inode);
 
