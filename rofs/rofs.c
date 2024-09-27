@@ -436,7 +436,7 @@ int rofs_lookup(struct rofs_ctx *ctx, oid_t *dir, const char *name, oid_t *fil, 
 	struct rofs_node *node = NULL;
 	int parent_id = 0;
 	int len = 0;
-	int res;
+	int res = -ENOENT;
 
 	fil->port = ctx->oid.port;
 	if (name == NULL) {
@@ -448,7 +448,7 @@ int rofs_lookup(struct rofs_ctx *ctx, oid_t *dir, const char *name, oid_t *fil, 
 	}
 
 	while (name[len] != '\0') {
-		while (name[len] == '/' && name[len] != '\0') {
+		while (name[len] == '/') {
 			len++;
 		}
 
