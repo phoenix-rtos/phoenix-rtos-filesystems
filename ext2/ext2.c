@@ -121,7 +121,7 @@ int ext2_lookup(ext2_t *fs, id_t id, const char *name, size_t len, oid_t *res, o
 
 			obj = ext2_obj_get(fs, res->id);
 			if (obj == NULL) {
-				ext2_unlink(fs, dir->id, name + i, j - i);
+				_ext2_dir_remove(fs, dir, name + i, j - i);
 				err = -ENOENT;
 				break;
 			}
