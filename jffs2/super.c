@@ -208,7 +208,8 @@ static int jffs2_parse_options(struct jffs2_sb_info *c, char *data)
 			opt *= 1024;
 			if (opt > c->mtd->size) {
 				pr_warn("Too large reserve pool specified, max "
-					"is %llu KB\n", c->mtd->size / 1024);
+						"is %" PRIu64 " KB\n",
+						c->mtd->size / 1024);
 				return -EINVAL;
 			}
 			c->mount_opts.rp_size = opt;
