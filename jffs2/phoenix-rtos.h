@@ -27,6 +27,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <syslog.h>
+#include <inttypes.h>
 
 #include <mtd/mtd.h>
 

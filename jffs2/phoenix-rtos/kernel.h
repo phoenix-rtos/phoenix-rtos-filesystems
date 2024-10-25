@@ -75,7 +75,7 @@ struct jffs2_inode_info;
 
 
 #define container_of(ptr, type, member) ({ \
-	int _off = (int) &(((type *) 0)->member); \
-	(type *)(((void *)ptr) - _off); })
+	uintptr_t _off = (uintptr_t) &(((type *) 0)->member); \
+	(type *)((char *)(ptr) - _off); })
 
 #endif /* KERNEL_H */
