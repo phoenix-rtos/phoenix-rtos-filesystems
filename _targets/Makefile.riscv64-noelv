@@ -6,4 +6,4 @@
 # Copyright 2024 Phoenix Systems
 #
 
-DEFAULT_COMPONENTS := dummyfs
+DEFAULT_COMPONENTS := dummyfs libjffs2
