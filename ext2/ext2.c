@@ -156,12 +156,6 @@ int ext2_open(ext2_t *fs, id_t id)
 	if ((obj = ext2_obj_get(fs, id)) == NULL)
 		return -EINVAL;
 
-	mutexLock(obj->lock);
-
-	obj->inode->atime = time(NULL);
-
-	mutexUnlock(obj->lock);
-
 	return EOK;
 }
 
