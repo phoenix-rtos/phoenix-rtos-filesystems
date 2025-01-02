@@ -834,7 +834,7 @@ static int libjffs2_close(void *info, oid_t *oid)
 }
 
 
-static int libjffs2_read(void *info, oid_t *oid, off_t offs, void *data, size_t len)
+static ssize_t libjffs2_read(void *info, oid_t *oid, off_t offs, void *data, size_t len)
 {
 	struct inode *inode;
 	struct jffs2_inode_info *f;
@@ -913,7 +913,7 @@ static int libjffs2_prepareWrite(struct inode *inode, loff_t offs, size_t len)
 	if (len > inode->i_size) {
 
 		jffs2_dbg(1, "Writing new hole frag 0x%x-0x%x between current EOF and new page\n",
-			(unsigned int)inode->i_size, len);
+			(unsigned int)inode->i_size, (unsigned int)len);
 
 		ret = jffs2_reserve_space(c, sizeof(ri), &alloc_len,
 			ALLOC_NORMAL, JFFS2_SUMMARY_INODE_SIZE);
@@ -978,7 +978,7 @@ static int libjffs2_prepareWrite(struct inode *inode, loff_t offs, size_t len)
 }
 
 
-static int libjffs2_write(void *info, oid_t *oid, off_t offs, const void *data, size_t len)
+static ssize_t libjffs2_write(void *info, oid_t *oid, off_t offs, const void *data, size_t len)
 {
 	struct inode *inode;
 	struct jffs2_inode_info *f;

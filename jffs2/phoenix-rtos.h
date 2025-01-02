@@ -20,6 +20,7 @@
 #include <sys/threads.h>
 #include <sys/mman.h>
 #include <sys/rb.h>
+#include <inttypes.h>
 #include <stdint.h>
 #include <string.h>
 #include <errno.h>
