@@ -154,7 +154,7 @@ ssize_t _ext2_file_write(ext2_t *fs, ext2_obj_t *obj, off_t offs, const char *bu
 		obj->inode->size = offs + len;
 	}
 
-	obj->inode->mtime = obj->inode->atime = time(NULL);
+	obj->inode->mtime = obj->inode->ctime = time(NULL);
 	obj->flags |= OFLAG_DIRTY;
 
 	err = _ext2_obj_sync(fs, obj);
@@ -209,7 +209,7 @@ int _ext2_file_truncate(ext2_t *fs, ext2_obj_t *obj, size_t size)
 	obj->inode->size = size;
 	/* FIXME: blocks counting is broken, move it to iblock_destroy */
 	obj->inode->blocks -= (end - start) * fs->blocksz / fs->sectorsz;
-	obj->inode->mtime = obj->inode->atime = time(NULL);
+	obj->inode->mtime = obj->inode->ctime = time(NULL);
 	obj->flags |= OFLAG_DIRTY;
 
 	return EOK;

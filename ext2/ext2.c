@@ -156,12 +156,6 @@ int ext2_open(ext2_t *fs, id_t id)
 	if ((obj = ext2_obj_get(fs, id)) == NULL)
 		return -EINVAL;
 
-	mutexLock(obj->lock);
-
-	obj->inode->atime = time(NULL);
-
-	mutexUnlock(obj->lock);
-
 	return EOK;
 }
 
@@ -493,10 +487,7 @@ int ext2_setattr(ext2_t *fs, id_t id, int type, long long attr, const void *data
 	}
 
 	if (err == EOK) {
-		if (type != atMTime && type != atATime) {
-			obj->inode->mtime = obj->inode->atime = time(NULL);
-		}
-
+		obj->inode->ctime = time(NULL);
 		obj->flags |= OFLAG_DIRTY;
 		err = _ext2_obj_sync(fs, obj);
 	}
