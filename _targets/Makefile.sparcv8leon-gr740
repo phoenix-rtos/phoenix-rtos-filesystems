@@ -1,0 +1,9 @@
+#
+# Makefile for Phoenix-RTOS 3 filesystems
+#
+# sparcv8leon-gr740 components
+#
+# Copyright 2025 Phoenix Systems
+#
+
+DEFAULT_COMPONENTS := dummyfs libjffs2
