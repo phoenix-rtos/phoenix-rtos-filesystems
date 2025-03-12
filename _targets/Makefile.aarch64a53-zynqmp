@@ -1,0 +1,9 @@
+#
+# Makefile for Phoenix-RTOS 3 filesystems
+#
+# ZynqMP filesystems
+#
+# Copyright 2024 Phoenix Systems
+#
+
+DEFAULT_COMPONENTS := dummyfs libext2 libjffs2
