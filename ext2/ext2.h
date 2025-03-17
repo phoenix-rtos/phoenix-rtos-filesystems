@@ -25,9 +25,10 @@
 
 
 /* Misc definitions */
-#define ROOT_INO    2   /* Root inode number */
-#define MAX_NAMELEN 255 /* Max filename length */
-#define MAX_OBJECTS 512 /* Max number of filesystem objects in use */
+#define ROOT_INO                 2   /* Root inode number */
+#define MAX_NAMELEN              255 /* Max filename length */
+#define MAX_OBJECTS              512 /* Max number of filesystem objects in use */
+#define MAX_SYMLINK_LEN_IN_INODE 60  /* Maximum length of symlink that will be stored in inode instead of the file. */
 
 
 #define EXT2_ISDEV(x) (S_ISCHR(x) || S_ISBLK(x) || S_ISFIFO(x) || S_ISSOCK(x))
