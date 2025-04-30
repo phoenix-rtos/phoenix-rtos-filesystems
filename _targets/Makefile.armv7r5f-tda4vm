@@ -1,0 +1,9 @@
+#
+# Makefile for Phoenix-RTOS 3 filesystems
+#
+# TDA4VM filesystems
+#
+# Copyright 2025 Phoenix Systems
+#
+
+DEFAULT_COMPONENTS := dummyfs
