@@ -1,0 +1,9 @@
+#
+# Makefile for Phoenix-RTOS 3 filesystems
+#
+# riscv64-gr765 drivers
+#
+# Copyright 2025 Phoenix Systems
+#
+
+DEFAULT_COMPONENTS := dummyfs
