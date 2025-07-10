@@ -18,10 +18,23 @@
 #include <sys/stat.h>
 #include <sys/file.h>
 #include <unistd.h>
+#include <string.h>
+
 #include "rofs.h"
 
 #define LOG_PREFIX    "rofs: "
 #define LOG(fmt, ...) printf(LOG_PREFIX fmt "\n", ##__VA_ARGS__)
+
+
+static int rofs_ahbRead(struct rofs_ctx *ctx, void *buf, size_t len, size_t offset)
+{
+	void *ptr = rofs_getImgPtr(ctx);
+	if (ptr == NULL) {
+		return -EINVAL;
+	}
+	memcpy(buf, (uint8_t *)ptr + offset, len);
+	return len;
+}
 
 
 static int mount_oid(const char *mntPoint, oid_t *oid)
@@ -99,7 +112,7 @@ int main(int argc, char **argv)
 
 
 	/* address in AHB memory where whole ROFS image is loaded by other process */
-	if (rofs_init(&ctx, imgAddr) < 0) {
+	if (rofs_init(&ctx, rofs_ahbRead, imgAddr) < 0) {
 		LOG("error");
 		return EXIT_FAILURE;
 	}

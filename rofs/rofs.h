@@ -16,7 +16,15 @@
 
 #include <stdint.h>
 #include <sys/types.h>
+#include <sys/file.h>
+#include <sys/msg.h>
 
+
+#define ROFS_BUFSZ (256)
+
+struct rofs_ctx;
+
+typedef int (*rofs_devRead_t)(struct rofs_ctx *ctx, void *buf, size_t len, size_t offset);
 
 struct rofs_ctx {
 	void *imgPtr;
@@ -25,14 +33,23 @@ struct rofs_ctx {
 	uint32_t checksum;
 	struct rofs_node *tree;
 	uint32_t nodeCount;
+	uint32_t indexOffs;
 	oid_t oid;
+
+	rofs_devRead_t devRead;
+
+	uint8_t buf[ROFS_BUFSZ];
 };
 
 
-int rofs_init(struct rofs_ctx *ctx, unsigned long imgAddr);
+/* if imageAddr != 0, maps partition directly; assumes indirect access otherwise */
+int rofs_init(struct rofs_ctx *ctx, rofs_devRead_t devRead, unsigned long imageAddr);
 
 
 void rofs_setdev(struct rofs_ctx *ctx, oid_t *oid);
+
+
+oid_t rofs_getdev(struct rofs_ctx *ctx);
 
 
 int rofs_open(struct rofs_ctx *ctx, oid_t *oid);
@@ -90,6 +107,9 @@ int rofs_mount(struct rofs_ctx *ctx, oid_t *oid, mount_i_msg_t *imnt, mount_o_ms
 
 
 int rofs_unmount(struct rofs_ctx *ctx);
+
+
+void *rofs_getImgPtr(struct rofs_ctx *ctx);
 
 
 #endif /* end of ROFS_H */
