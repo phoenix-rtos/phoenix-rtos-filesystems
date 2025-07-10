@@ -7,4 +7,4 @@
 #
 #
 
-DEFAULT_COMPONENTS := rofs dummyfs libdummyfs libmeterfs
+DEFAULT_COMPONENTS := rofs librofs dummyfs libdummyfs libmeterfs
