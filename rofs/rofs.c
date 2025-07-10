@@ -19,6 +19,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <sys/file.h>
+#include <sys/minmax.h>
 #include <sys/mman.h>
 #include <phoenix/attribute.h>
 
@@ -45,6 +46,7 @@
 #define ROFS_HDR_IMAGESIZE 8
 #define ROFS_HDR_INDEXOFFS 16
 #define ROFS_HDR_NODECOUNT 24
+#define ROFS_HDRSIZE       32
 
 
 struct rofs_node {
@@ -61,7 +63,7 @@ struct rofs_node {
 	uint32_t reserved2;
 	char name[207];
 	uint8_t zero;
-}; /* 256 bytes */
+} __attribute__((packed)); /* 256 bytes */
 
 
 static uint32_t calc_crc32(const uint8_t *buf, uint32_t len, uint32_t base)
@@ -87,6 +89,33 @@ static uint32_t calc_crc32(const uint8_t *buf, uint32_t len, uint32_t base)
 }
 
 
+/* WARN: returned pointer valid until next nodeFromTree call */
+static struct rofs_node *nodeFromTree(struct rofs_ctx *ctx, int id)
+{
+	int ret;
+	uint32_t ofs = ctx->indexOffs + id * sizeof(struct rofs_node);
+
+	TRACE("nodeFromTree id=%d, ofs=%u", id, ofs);
+
+	if (ctx->tree != NULL) {
+		return &ctx->tree[id];
+	}
+
+	if (ofs >= ctx->imgSize) {
+		return NULL;
+	}
+
+	ret = ctx->devRead(ctx, ctx->buf, sizeof(struct rofs_node), ofs);
+	if (ret != sizeof(struct rofs_node)) {
+		return NULL;
+	}
+
+	TRACE("nodeFromTree res: id=%d, ofs=%u name=%s", id, ofs, ((struct rofs_node *)ctx->buf)->name);
+
+	return (struct rofs_node *)ctx->buf;
+}
+
+
 static int getNode(struct rofs_ctx *ctx, oid_t *oid, struct rofs_node **retNode)
 {
 	if ((sizeof(oid->id) == sizeof(uint64_t)) && (oid->id >= UINT32_MAX)) {
@@ -99,69 +128,121 @@ static int getNode(struct rofs_ctx *ctx, oid_t *oid, struct rofs_node **retNode)
 		return -ENOENT;
 	}
 
-	if (ctx->tree[oid->id].zero != 0) {
+	struct rofs_node *node = nodeFromTree(ctx, oid->id);
+
+	if (node == NULL) {
+		*retNode = NULL;
+		return -EINVAL;
+	}
+
+	if (node->zero != 0) {
 		*retNode = NULL;
 		return -EBADF;
 	}
 
-	*retNode = &ctx->tree[oid->id];
+	*retNode = node;
+
 	return 0;
 }
 
 
-int rofs_init(struct rofs_ctx *ctx, unsigned long imageAddr)
+int rofs_init(struct rofs_ctx *ctx, rofs_devRead_t devRead, unsigned long imageAddr)
 {
-	uint8_t *imagePtr;
-	uint32_t crc = ~0;
-	uint32_t indexOffs;
+	_Static_assert(ROFS_BUFSZ >= sizeof(struct rofs_node), "buffer must fit rofs_node");
 
-	if ((imageAddr & (_PAGE_SIZE - 1)) != 0) {
-		LOG("Image address needs to be aligned to PAGE_SIZE");
-		return -EINVAL;
+	uint8_t *imagePtr = NULL;
+	uint32_t crc = ~0;
+	int ret;
+
+	ctx->tree = NULL;
+	ctx->imgPtr = NULL;
+	ctx->devRead = devRead;
+
+	if (imageAddr != 0) {
+		if ((imageAddr & (_PAGE_SIZE - 1)) != 0) {
+			LOG("Image address needs to be aligned to PAGE_SIZE");
+			return -EINVAL;
+		}
+
+		/* Temporarily map PAGE_SIZE to read ROFS header */
+		imagePtr = mmap(NULL, _PAGE_SIZE, PROT_READ, MAP_PHYSMEM | MAP_ANONYMOUS, -1, imageAddr);
+		if (imagePtr == MAP_FAILED) {
+			return -ENODEV;
+		}
+
+		ctx->imgPtr = imagePtr;
 	}
 
-	/* Temporarily map PAGE_SIZE to read ROFS header */
-	imagePtr = mmap(NULL, _PAGE_SIZE, PROT_READ, MAP_PHYSMEM | MAP_ANONYMOUS, -1, imageAddr);
-	if (imagePtr == MAP_FAILED) {
-		return -ENODEV;
+	ret = ctx->devRead(ctx, ctx->buf, ROFS_HDRSIZE, 0);
+	if (ret != ROFS_HDRSIZE) {
+		return -EIO;
+	}
+
+	if (imageAddr != 0) {
+		if (munmap(imagePtr, _PAGE_SIZE) < 0) {
+			LOG("munmap failed: %d", errno);
+			return -errno;
+		}
+		ctx->imgPtr = NULL;
 	}
 
 	/* Check image signature */
-	if (memcmp((imagePtr + ROFS_HDR_SIGNATURE), ROFS_SIGNATURE, sizeof(ROFS_SIGNATURE) - 1) != 0) {
+	if (memcmp((ctx->buf + ROFS_HDR_SIGNATURE), ROFS_SIGNATURE, sizeof(ROFS_SIGNATURE) - 1) != 0) {
 		return -EINVAL;
 	}
 
-	ctx->checksum = *(uint32_t *)(imagePtr + ROFS_HDR_CHECKSUM);
-	ctx->imgSize = *(uint32_t *)(imagePtr + ROFS_HDR_IMAGESIZE);
-	ctx->nodeCount = *(uint32_t *)(imagePtr + ROFS_HDR_NODECOUNT);
-	indexOffs = *(uint32_t *)(imagePtr + ROFS_HDR_INDEXOFFS);
+	ctx->checksum = *(uint32_t *)(ctx->buf + ROFS_HDR_CHECKSUM);
+	ctx->imgSize = *(uint32_t *)(ctx->buf + ROFS_HDR_IMAGESIZE);
+	ctx->nodeCount = *(uint32_t *)(ctx->buf + ROFS_HDR_NODECOUNT);
+	ctx->indexOffs = *(uint32_t *)(ctx->buf + ROFS_HDR_INDEXOFFS);
 
-	munmap(imagePtr, _PAGE_SIZE);
-
-	if ((indexOffs & (sizeof(uint64_t) - 1)) != 0) {
+	if ((ctx->indexOffs & (sizeof(uint64_t) - 1)) != 0) {
 		LOG("Image index offset is invalid");
 		return -EINVAL;
 	}
 
-	/* Map whole image */
-	ctx->imgAlignedSize = ((ctx->imgSize + _PAGE_SIZE - 1) & ~(_PAGE_SIZE - 1));
-	imagePtr = mmap(NULL, ctx->imgAlignedSize, PROT_READ, MAP_PHYSMEM | MAP_ANONYMOUS, -1, imageAddr);
-	if (imagePtr == MAP_FAILED) {
-		return -ENODEV;
+	if (imageAddr != 0) {
+		/* Map whole image */
+		ctx->imgAlignedSize = ((ctx->imgSize + _PAGE_SIZE - 1) & ~(_PAGE_SIZE - 1));
+		imagePtr = mmap(NULL, ctx->imgAlignedSize, PROT_READ, MAP_PHYSMEM | MAP_ANONYMOUS, -1, imageAddr);
+		if (imagePtr == MAP_FAILED) {
+			return -ENODEV;
+		}
+		ctx->imgPtr = imagePtr;
+		crc = ~calc_crc32((uint8_t *)(imagePtr + ROFS_HDR_IMAGESIZE), ctx->imgSize - ROFS_HDR_IMAGESIZE, crc);
 	}
+	else {
+		uint32_t ofs = ROFS_HDR_IMAGESIZE, len = 0;
 
-	crc = ~calc_crc32((uint8_t *)(imagePtr + ROFS_HDR_IMAGESIZE), ctx->imgSize - ROFS_HDR_IMAGESIZE, crc);
+		while (ofs < ctx->imgSize) {
+			len = min(ROFS_BUFSZ, ctx->imgSize - ofs);
+
+			ret = ctx->devRead(ctx, ctx->buf, len, ofs);
+			if (ret != len) {
+				LOG("devRead failed: %d", ret);
+				return -EIO;
+			}
+
+			crc = calc_crc32(ctx->buf, len, crc);
+			ofs += len;
+		}
+
+		crc = ~crc;
+	}
 
 	if (crc != ctx->checksum) {
 		LOG("invalid crc %08X vs %08X", crc, ctx->checksum);
-		munmap(imagePtr, ctx->imgAlignedSize);
+		if (ctx->imgPtr != NULL) {
+			munmap(ctx->imgPtr, ctx->imgAlignedSize);
+		}
 		return -EINVAL;
 	}
 
-	ctx->tree = (struct rofs_node *)(imagePtr + indexOffs);
-	ctx->imgPtr = imagePtr;
+	TRACE("SIG OK: crc32=%08X imgSize=%zu nodes=%d", crc, ctx->imgSize, ctx->nodeCount);
 
-	LOG("image=0x%p, nodes=%d", imagePtr, ctx->nodeCount);
+	if (ctx->imgPtr != NULL) {
+		ctx->tree = (struct rofs_node *)(ctx->imgPtr + ctx->indexOffs);
+	}
 
 	return 0;
 }
@@ -170,6 +251,12 @@ int rofs_init(struct rofs_ctx *ctx, unsigned long imageAddr)
 void rofs_setdev(struct rofs_ctx *ctx, oid_t *oid)
 {
 	ctx->oid = *oid;
+}
+
+
+oid_t rofs_getdev(struct rofs_ctx *ctx)
+{
+	return ctx->oid;
 }
 
 
@@ -210,8 +297,7 @@ int rofs_read(struct rofs_ctx *ctx, oid_t *oid, off_t offs, char *buff, size_t l
 		len = (size_t)node->size - offs;
 	}
 
-	memcpy(buff, (uint8_t *)ctx->imgPtr + node->offset + offs, len);
-	return len;
+	return ctx->devRead(ctx, buff, len, node->offset + offs);
 }
 
 
@@ -266,7 +352,10 @@ int rofs_getattr(struct rofs_ctx *ctx, oid_t *oid, int type, long long *attr)
 		return -EPIPE;
 	}
 
-	node = &ctx->tree[oid->id];
+	node = nodeFromTree(ctx, oid->id);
+	if (node == NULL) {
+		return -EINVAL;
+	}
 
 	switch (type) {
 		case atMode:
@@ -349,7 +438,7 @@ int rofs_getattrall(struct rofs_ctx *ctx, oid_t *oid, struct _attrAll *attrs, si
 		return -EBADF;
 	}
 
-	node = &ctx->tree[oid->id];
+	node = nodeFromTree(ctx, oid->id);
 
 	_phoenix_initAttrsStruct(attrs, -ENOSYS);
 	attrs->size.val = node->size;
@@ -415,8 +504,12 @@ static int dirfind(struct rofs_ctx *ctx, struct rofs_node **pNode, int parent_id
 	}
 
 	for (i = 0; i < ctx->nodeCount; i++) {
-		node = &ctx->tree[i];
-		if ((node->parent_id == parent_id) && (strlen(node->name) == len) && (strncmp(name, node->name, len) == 0)) {
+		node = nodeFromTree(ctx, i);
+		if (node == NULL) {
+			return -EIO;
+		}
+
+		if ((node->parent_id == parent_id) && (strnlen(node->name, len + 1) == len) && (strncmp(name, node->name, len) == 0)) {
 			o->id = node->id;
 			o->port = ctx->oid.port;
 			*pNode = node;
@@ -509,7 +602,11 @@ int rofs_readdir(struct rofs_ctx *ctx, oid_t *dir, off_t offs, struct dirent *de
 	}
 
 	for (i = 0; i < ctx->nodeCount; i++) {
-		node = &ctx->tree[i];
+		node = nodeFromTree(ctx, i);
+		if (node == NULL) {
+			return -EIO;
+		}
+
 		if (node->parent_id == dir->id) {
 			if (count++ < offs) {
 				continue;
@@ -566,4 +663,10 @@ int rofs_unmount(struct rofs_ctx *ctx)
 	(void)ctx;
 	TRACE("umount");
 	return -ENOSYS;
+}
+
+
+void *rofs_getImgPtr(struct rofs_ctx *ctx)
+{
+	return ctx->imgPtr;
 }
