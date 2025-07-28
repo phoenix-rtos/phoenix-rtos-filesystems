@@ -11,6 +11,7 @@
  * %LICENSE%
  */
 
+#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
@@ -45,6 +46,7 @@ int node_add(file_t *file, id_t id, rbtree_t *tree)
 {
 	node_t *r;
 
+	assert(id != 0);
 	r = malloc(sizeof(node_t));
 	if (r == NULL)
 		return -ENOMEM;
