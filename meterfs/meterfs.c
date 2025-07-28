@@ -697,7 +697,7 @@ static int meterfs_rbTreeFill(meterfs_ctx_t *ctx)
 			break;
 		}
 
-		err = node_add(&f, (id_t)i, &ctx->nodesTree);
+		err = node_add(&f, (id_t)(i + 1), &ctx->nodesTree);
 		if (err < 0) {
 			ret = err;
 			break;
@@ -1119,7 +1119,8 @@ int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size
 
 	meterfs_powerCtrl(0, ctx);
 
-	err = node_add(&f, (id_t)ctx->filecnt, &ctx->nodesTree);
+	/* Files starts from 1, add 1 to filecnt */
+	err = node_add(&f, (id_t)(ctx->filecnt + 1), &ctx->nodesTree);
 	if (err < 0)
 		return err;
 
