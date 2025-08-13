@@ -175,7 +175,8 @@ int rofs_init(struct rofs_ctx *ctx, rofs_devRead_t devRead, unsigned long imageA
 
 	ret = ctx->devRead(ctx, ctx->buf, ROFS_HDRSIZE, 0);
 	if (ret != ROFS_HDRSIZE) {
-		return -EIO;
+		ret = -EIO;
+		/* defer return on failure to after munmap in case imageAddr != 0 */
 	}
 
 	if (imageAddr != 0) {
@@ -184,6 +185,10 @@ int rofs_init(struct rofs_ctx *ctx, rofs_devRead_t devRead, unsigned long imageA
 			return -errno;
 		}
 		ctx->imgPtr = NULL;
+	}
+
+	if (ret < 0) {
+		return ret;
 	}
 
 	/* Check image signature */
