@@ -23,12 +23,19 @@
 #include <sys/mman.h>
 #include <phoenix/attribute.h>
 
+#include <tinyaes/aes.h>
+#include <tinyaes/cmac.h>
+
 #include "rofs.h"
 
 #define LOG_PREFIX    "rofs: "
 #define LOG(fmt, ...) printf(LOG_PREFIX fmt "\n", ##__VA_ARGS__)
 
-#if 0
+#ifndef ROFS_DEBUG
+#define ROFS_DEBUG 0
+#endif
+
+#if ROFS_DEBUG
 #define TRACE(fmt, ...) printf(LOG_PREFIX fmt "\n", ##__VA_ARGS__)
 #else
 #define TRACE(fmt, ...)
@@ -40,13 +47,21 @@
  */
 
 
-#define ROFS_SIGNATURE     "ROFS"
-#define ROFS_HDR_SIGNATURE 0
-#define ROFS_HDR_CHECKSUM  4
-#define ROFS_HDR_IMAGESIZE 8
-#define ROFS_HDR_INDEXOFFS 16
-#define ROFS_HDR_NODECOUNT 24
-#define ROFS_HDRSIZE       32
+#define ROFS_SIGNATURE      "ROFS"
+#define ROFS_HDR_SIGNATURE  0
+#define ROFS_HDR_CHECKSUM   4
+#define ROFS_HDR_IMAGESIZE  8
+#define ROFS_HDR_INDEXOFFS  16
+#define ROFS_HDR_NODECOUNT  24
+#define ROFS_HDR_ENCRYPTION 32
+#define ROFS_HDR_CRYPT_SIG  34 /* let CRYPT_SIG to be at least 64-byte long to allow for future signatures schemes (e.g. ed25519) */
+#define ROFS_HEADER_SIZE    128
+
+_Static_assert(AES_BLOCKLEN <= ROFS_HEADER_SIZE - ROFS_HDR_CRYPT_SIG, "AES_MAC does not fit into the rofs header");
+
+/* clang-format off */
+enum { encryption_none, encryption_aes };
+/* clang-format on */
 
 
 struct rofs_node {
@@ -64,6 +79,8 @@ struct rofs_node {
 	char name[207];
 	uint8_t zero;
 } __attribute__((packed)); /* 256 bytes */
+
+_Static_assert(ROFS_BUFSZ >= sizeof(struct rofs_node), "buffer must fit rofs_node");
 
 
 static uint32_t calc_crc32(const uint8_t *buf, uint32_t len, uint32_t base)
@@ -86,6 +103,65 @@ static uint32_t calc_crc32(const uint8_t *buf, uint32_t len, uint32_t base)
 		}
 	}
 	return crc;
+}
+
+
+static int calc_AESCMAC(struct rofs_ctx *ctx, uint32_t ofs, uint32_t len, uint8_t mac[AES_BLOCKLEN])
+{
+	size_t todo = len;
+	struct CMAC_ctx cmacCtx;
+
+	CMAC_init_ctx(&cmacCtx, ctx->key);
+
+	while (todo > 0) {
+		size_t chunksz = (todo > sizeof(ctx->buf)) ? sizeof(ctx->buf) : todo;
+		ssize_t rlen = ctx->devRead(ctx, ctx->buf, chunksz, ofs + len - todo);
+
+		if (chunksz != rlen) {
+			LOG("devRead failed: %zd", rlen);
+			return -1;
+		}
+
+		CMAC_append(&cmacCtx, ctx->buf, rlen);
+		todo -= rlen;
+	}
+
+	CMAC_calculate(&cmacCtx, mac);
+
+	return 0;
+}
+
+
+static uint8_t *ivSerializeU32(uint8_t *buff, uint32_t d)
+{
+	buff[0] = (d >> 0) & 0xff;
+	buff[1] = (d >> 8) & 0xff;
+	buff[2] = (d >> 16) & 0xff;
+	buff[3] = (d >> 24) & 0xff;
+
+	return &buff[4];
+}
+
+
+static inline void constructIV(uint8_t *iv, const struct rofs_node *node)
+{
+	/* TODO: ESSIV? */
+	uint8_t *tbuff = ivSerializeU32(iv, node->id);
+	tbuff = ivSerializeU32(tbuff, node->offset);
+	tbuff = ivSerializeU32(tbuff, node->uid);
+	uint32_t t = 0;
+	ivSerializeU32(tbuff, t);
+}
+
+
+static void xcrypt(void *buff, size_t bufflen, const uint8_t *key, const struct rofs_node *node)
+{
+	struct AES_ctx ctx;
+	uint8_t iv[AES_BLOCKLEN];
+
+	constructIV(iv, node);
+	AES_init_ctx_iv(&ctx, key, iv);
+	AES_CTR_xcrypt_buffer(&ctx, buff, bufflen);
 }
 
 
@@ -146,10 +222,8 @@ static int getNode(struct rofs_ctx *ctx, oid_t *oid, struct rofs_node **retNode)
 }
 
 
-int rofs_init(struct rofs_ctx *ctx, rofs_devRead_t devRead, unsigned long imageAddr)
+int rofs_init(struct rofs_ctx *ctx, rofs_devRead_t devRead, unsigned long imageAddr, const uint8_t *key)
 {
-	_Static_assert(ROFS_BUFSZ >= sizeof(struct rofs_node), "buffer must fit rofs_node");
-
 	uint8_t *imagePtr = NULL;
 	uint32_t crc = ~0;
 	int ret;
@@ -173,8 +247,8 @@ int rofs_init(struct rofs_ctx *ctx, rofs_devRead_t devRead, unsigned long imageA
 		ctx->imgPtr = imagePtr;
 	}
 
-	ret = ctx->devRead(ctx, ctx->buf, ROFS_HDRSIZE, 0);
-	if (ret != ROFS_HDRSIZE) {
+	ret = ctx->devRead(ctx, ctx->buf, ROFS_HEADER_SIZE, 0);
+	if (ret != ROFS_HEADER_SIZE) {
 		ret = -EIO;
 		/* defer return on failure to after munmap in case imageAddr != 0 */
 	}
@@ -200,11 +274,25 @@ int rofs_init(struct rofs_ctx *ctx, rofs_devRead_t devRead, unsigned long imageA
 	ctx->imgSize = *(uint32_t *)(ctx->buf + ROFS_HDR_IMAGESIZE);
 	ctx->nodeCount = *(uint32_t *)(ctx->buf + ROFS_HDR_NODECOUNT);
 	ctx->indexOffs = *(uint32_t *)(ctx->buf + ROFS_HDR_INDEXOFFS);
+	ctx->encryption = *(uint16_t *)(ctx->buf + ROFS_HDR_ENCRYPTION);
+
+	uint8_t target_mac[AES_BLOCKLEN];
+	memcpy(target_mac, ctx->buf + ROFS_HDR_CRYPT_SIG, AES_BLOCKLEN);
 
 	if ((ctx->indexOffs & (sizeof(uint64_t) - 1)) != 0) {
 		LOG("Image index offset is invalid");
 		return -EINVAL;
 	}
+
+#if ROFS_DEBUG
+	char buf[2 * AES_BLOCKLEN + 1];
+	size_t ofs = 0;
+	for (int i = 0; i < AES_BLOCKLEN; i++) {
+		ofs += snprintf(buf + ofs, 2 * AES_BLOCKLEN - ofs, "%.2x", target_mac[i]);
+	}
+	buf[ofs] = '\0';
+	TRACE("target AES-CMAC: %s", buf);
+#endif
 
 	if (imageAddr != 0) {
 		/* Map whole image */
@@ -235,18 +323,48 @@ int rofs_init(struct rofs_ctx *ctx, rofs_devRead_t devRead, unsigned long imageA
 		crc = ~crc;
 	}
 
-	if (crc != ctx->checksum) {
-		LOG("invalid crc %08X vs %08X", crc, ctx->checksum);
+	do {
+		if (crc != ctx->checksum) {
+			LOG("invalid crc %08X vs %08X", crc, ctx->checksum);
+			ret = -EINVAL;
+			break;
+		}
+
+		TRACE("SIG OK: crc32=%08X imgSize=%zu nodes=%d", crc, ctx->imgSize, ctx->nodeCount);
+
+		if (ctx->imgPtr != NULL) {
+			ctx->tree = (struct rofs_node *)(ctx->imgPtr + ctx->indexOffs);
+		}
+
+		if (key != NULL) {
+			if (ctx->encryption != encryption_aes) {
+				LOG("image encryption type mismatch: %d != %d", ctx->encryption, encryption_aes);
+				ret = -EINVAL;
+				break;
+			}
+
+			ctx->key = key;
+			uint8_t actual_mac[AES_BLOCKLEN];
+			ret = calc_AESCMAC(ctx, ROFS_HEADER_SIZE, ctx->imgSize - ROFS_HEADER_SIZE, actual_mac);
+			if (ret < 0) {
+				LOG("failed to calculate AES-CMAC: %d", ret);
+				ret = -EIO;
+				break;
+			}
+
+			if (memcmp(actual_mac, target_mac, AES_BLOCKLEN) != 0) {
+				LOG("AES-CMAC mismatch");
+				ret = -EINVAL;
+				break;
+			}
+		}
+	} while (0);
+
+	if (ret < 0) {
 		if (ctx->imgPtr != NULL) {
 			munmap(ctx->imgPtr, ctx->imgAlignedSize);
 		}
-		return -EINVAL;
-	}
-
-	TRACE("SIG OK: crc32=%08X imgSize=%zu nodes=%d", crc, ctx->imgSize, ctx->nodeCount);
-
-	if (ctx->imgPtr != NULL) {
-		ctx->tree = (struct rofs_node *)(ctx->imgPtr + ctx->indexOffs);
+		return ret;
 	}
 
 	return 0;
@@ -302,7 +420,16 @@ int rofs_read(struct rofs_ctx *ctx, oid_t *oid, off_t offs, char *buff, size_t l
 		len = (size_t)node->size - offs;
 	}
 
-	return ctx->devRead(ctx, buff, len, node->offset + offs);
+	ret = ctx->devRead(ctx, buff, len, node->offset + offs);
+	if (ret < 0) {
+		return ret;
+	}
+
+	if (ctx->key != NULL) {
+		xcrypt(buff, (size_t)ret, ctx->key, node);
+	}
+
+	return ret;
 }
 
 
