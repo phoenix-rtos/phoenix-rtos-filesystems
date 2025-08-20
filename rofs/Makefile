@@ -13,6 +13,6 @@ include $(static-lib.mk)
 
 NAME := rofs
 LOCAL_SRCS := srv.c
-LIBS := librofs
+LIBS := librofs libtinyaes
 
 include $(binary.mk)
