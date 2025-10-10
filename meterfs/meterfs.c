@@ -177,8 +177,8 @@ static int meterfs_doPartialErase(meterfs_ctx_t *ctx)
 
 		/* Copy backup up to the erase offset */
 		err = meterfs_copyData(ctx->offset + journal.sector * ctx->sectorsz,
-			ctx->offset + SPARE_SECTOR_OFFSET(ctx->sectorsz),
-			journal.eraseOffset, ctx);
+				ctx->offset + SPARE_SECTOR_OFFSET(ctx->sectorsz),
+				journal.eraseOffset, ctx);
 
 		if (err < 0)
 			break;
@@ -228,8 +228,8 @@ static int meterfs_startPartialErase(uint32_t addr, meterfs_ctx_t *ctx)
 
 		/* Backup original sector */
 		err = meterfs_copyData(ctx->offset + SPARE_SECTOR_OFFSET(ctx->sectorsz),
-			ctx->offset + journal.sector * ctx->sectorsz,
-			journal.eraseOffset, ctx);
+				ctx->offset + journal.sector * ctx->sectorsz,
+				journal.eraseOffset, ctx);
 		if (err < 0) {
 			break;
 		}
@@ -472,15 +472,70 @@ static int meterfs_getFileInfoName(const char *name, fileheader_t *f, meterfs_ct
 }
 
 
-static int meterfs_updateFileInfo(fileheader_t *f, meterfs_ctx_t *ctx)
+static int meterfs_commitFileChange(fileheader_t *f, meterfs_ctx_t *ctx)
 {
+	/* This function assumes power is enabled */
 	unsigned int headerNew, i;
 	ssize_t err = 0;
 	union {
 		header_t h;
 		fileheader_t t;
 	} u;
+	fileheader_t *toWrite;
 	uint32_t checksum = 0;
+
+	headerNew = (ctx->hcurrAddr == ctx->h1Addr) ? 0 : ctx->h1Addr;
+
+	/* Make space for new file table */
+	err = meterfs_eraseFileTable((headerNew == 0) ? 0 : 1, ctx);
+	if (err < 0) {
+		return err;
+	}
+
+	/* Can't use meterfs_copyData - we need to modify one file in flight */
+	for (i = 0; i < ctx->filecnt; ++i) {
+		err = ctx->read(ctx->devCtx, ctx->offset + ctx->hcurrAddr + HGRAIN + (i * HGRAIN), &u.t, sizeof(u.t));
+		if (err < 0) {
+			return err;
+		}
+
+		toWrite = strncmp(f->name, u.t.name, sizeof(f->name)) == 0 ? f : &u.t;
+		err = meterfs_writeVerify(ctx->offset + headerNew + HGRAIN + (i * HGRAIN), toWrite, sizeof(*toWrite), ctx);
+		if (err < 0) {
+			return err;
+		}
+		checksum ^= meterfs_calcChecksum(toWrite, sizeof(*toWrite));
+	}
+
+	/* Prepare new header */
+	err = ctx->read(ctx->devCtx, ctx->offset + ctx->hcurrAddr, &u.h, sizeof(u.h));
+	if (err < 0) {
+		return err;
+	}
+	++u.h.id.no;
+	u.h.checksum = 0; /* 0 is a neutral value for BCC checksum */
+	u.h.checksum = checksum ^ meterfs_calcChecksum(&u.h, sizeof(u.h));
+
+	err = meterfs_writeVerify(ctx->offset + headerNew, &u.h, sizeof(u.h), ctx);
+	if (err < 0) {
+		return err;
+	}
+
+	/* Use new header from now on */
+	ctx->hcurrAddr = headerNew;
+
+	return 0;
+}
+
+
+static int meterfs_updateFileInfo(fileheader_t *f, meterfs_ctx_t *ctx)
+{
+	unsigned int i;
+	ssize_t err = 0;
+	union {
+		header_t h;
+		fileheader_t t;
+	} u;
 
 	if (f == NULL)
 		return -1;
@@ -492,7 +547,7 @@ static int meterfs_updateFileInfo(fileheader_t *f, meterfs_ctx_t *ctx)
 	if (!f->recordsz)
 		return -EINVAL;
 
-	/* File can not exceed prealocated sector count */
+	/* File can not exceed preallocated sector count */
 	if ((f->filesz != u.t.filesz || f->recordsz != u.t.recordsz) && (SECTORS(f, ctx->sectorsz) > u.t.sectorcnt))
 		return -ENOMEM;
 
@@ -516,64 +571,11 @@ static int meterfs_updateFileInfo(fileheader_t *f, meterfs_ctx_t *ctx)
 		}
 	}
 
-	headerNew = (ctx->hcurrAddr == ctx->h1Addr) ? 0 : ctx->h1Addr;
-
-	/* Make space for new file table */
-	err = meterfs_eraseFileTable((headerNew == 0) ? 0 : 1, ctx);
-	if (err < 0) {
-		meterfs_powerCtrl(0, ctx);
-		return err;
-	}
-
-	/* Can't use meterfs_copyData - we need to modify one file in flight */
-	for (i = 0; i < ctx->filecnt; ++i) {
-		err = ctx->read(ctx->devCtx, ctx->offset + ctx->hcurrAddr + HGRAIN + (i * HGRAIN), &u.t, sizeof(u.t));
-		if (err < 0) {
-			meterfs_powerCtrl(0, ctx);
-			return err;
-		}
-		if (strncmp(f->name, u.t.name, sizeof(f->name)) == 0) {
-			err = meterfs_writeVerify(ctx->offset + headerNew + HGRAIN + (i * HGRAIN), f, sizeof(*f), ctx);
-			if (err < 0) {
-				meterfs_powerCtrl(0, ctx);
-				return err;
-			}
-
-			checksum ^= meterfs_calcChecksum(f, sizeof(*f));
-		}
-		else {
-			err = meterfs_writeVerify(ctx->offset + headerNew + HGRAIN + (i * HGRAIN), &u.t, sizeof(u.t), ctx);
-			if (err < 0) {
-				meterfs_powerCtrl(0, ctx);
-				return err;
-			}
-
-			checksum ^= meterfs_calcChecksum(&u.t, sizeof(u.t));
-		}
-	}
-
-	/* Prepare new header */
-	err = ctx->read(ctx->devCtx, ctx->offset + ctx->hcurrAddr, &u.h, sizeof(u.h));
-	if (err < 0) {
-		meterfs_powerCtrl(0, ctx);
-		return err;
-	}
-	++u.h.id.no;
-	u.h.checksum = 0; /* 0 is a neutral value for BCC checksum */
-	u.h.checksum = checksum ^ meterfs_calcChecksum(&u.h, sizeof(u.h));
-
-	err = meterfs_writeVerify(ctx->offset + headerNew, &u.h, sizeof(u.h), ctx);
-	if (err < 0) {
-		meterfs_powerCtrl(0, ctx);
-		return err;
-	}
+	err = meterfs_commitFileChange(f, ctx);
 
 	meterfs_powerCtrl(0, ctx);
 
-	/* Use new header from now on */
-	ctx->hcurrAddr = headerNew;
-
-	return 0;
+	return err;
 }
 
 
@@ -604,7 +606,7 @@ static int meterfs_getFilePos(file_t *f, meterfs_ctx_t *ctx)
 		err = ctx->read(ctx->devCtx, ctx->offset + baddr + offset + offsetof(entry_t, id), &id, sizeof(id));
 		if (err < 0)
 			return err;
-		if (!id.nvalid) {
+		if (!id.nvalid && id.no >= f->header.firstid) {
 			f->lastidx = id;
 			f->lastoff = offset;
 			break;
@@ -994,14 +996,21 @@ int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size
 	int err = 0;
 	uint32_t checksum = 0;
 
-	if (len < 1 || len > sizeof(f.header.name))
+	if (len < 1 || len > sizeof(f.header.name)) {
 		return -EINVAL;
+	}
 
-	if (meterfs_getFileInfoName(name, &f.header, ctx) >= 0)
+	if (meterfs_getFileInfoName(name, &f.header, ctx) >= 0) {
 		return -EEXIST;
+	}
 
-	if (recordsz > filesz || !recordsz)
+	if (recordsz > filesz || !recordsz) {
 		return -EINVAL;
+	}
+
+	if (sectorcnt > (1 << 17) - 1) {
+		return -EINVAL;
+	}
 
 	memset(f.header.name, 0, sizeof(f.header.name));
 	memcpy(f.header.name, name, len);
@@ -1010,7 +1019,8 @@ int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size
 	f.header.sector = 0;
 	f.header.sectorcnt = sectorcnt;
 	f.header.uid = 0xffffffff;
-	f.header.ncrypt = 0xffff; /* Not encrypted by default */
+	f.header.ncrypt = 1; /* Not encrypted by default */
+	f.header.firstid = 0;
 
 	/* Check if sectorcnt is valid */
 	if (SECTORS(&f.header, ctx->sectorsz) > f.header.sectorcnt || f.header.sectorcnt < 2)
@@ -1153,6 +1163,39 @@ int meterfs_resizeFile(const char *name, size_t filesz, size_t recordsz, meterfs
 }
 
 
+int meterfs_resetFile(file_t *f, meterfs_ctx_t *ctx)
+{
+	fileheader_t hdr;
+	int err;
+
+	if (meterfs_getFileInfoName(f->header.name, &hdr, ctx) < 0) {
+		return -ENOENT;
+	}
+
+	if (!hdr.sector || !hdr.sectorcnt) {
+		return -EFAULT;
+	}
+
+	hdr.uid = hdr.uid + 1;
+
+	if (hdr.uid == 0xffffffff) {
+		/* Can't allow file to have uid it had before */
+		return -EPERM;
+	}
+
+	/* Set all current entries to be ignored by read ops */
+	hdr.firstid = f->lastidx.no + 1;
+
+	meterfs_powerCtrl(1, ctx);
+
+	err = meterfs_commitFileChange(&hdr, ctx);
+
+	meterfs_powerCtrl(0, ctx);
+
+	return err;
+}
+
+
 int meterfs_changeFileEncryption(const char *name, int state, meterfs_ctx_t *ctx)
 {
 	fileheader_t hdr;
@@ -1161,7 +1204,7 @@ int meterfs_changeFileEncryption(const char *name, int state, meterfs_ctx_t *ctx
 		return -ENOENT;
 	}
 
-	hdr.ncrypt = (state != 0) ? 0 : 0xffff;
+	hdr.ncrypt = (state != 0) ? 0 : 1;
 
 	return meterfs_updateFileInfo(&hdr, ctx);
 }
@@ -1372,6 +1415,28 @@ int meterfs_devctl(const meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_c
 
 		case meterfs_setEarlyErase:
 			ctx->earlyErase = i->setEarlyErase.enable;
+			break;
+
+		case meterfs_reset:
+			p = node_getById(i->id, &ctx->nodesTree);
+			if (p == NULL) {
+				return -ENOENT;
+			}
+
+			err = meterfs_resetFile(p, ctx);
+			if (err < 0) {
+				return err;
+			}
+
+			err = meterfs_getFileInfoName(p->header.name, &p->header, ctx);
+			if (err < 0) {
+				return err;
+			}
+
+			meterfs_powerCtrl(1, ctx);
+			err = meterfs_getFilePos(p, ctx);
+			meterfs_powerCtrl(0, ctx);
+
 			break;
 
 		default:
