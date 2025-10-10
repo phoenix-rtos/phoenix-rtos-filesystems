@@ -23,7 +23,7 @@
 
 /* clang-format off */
 enum { meterfs_allocate = 0, meterfs_resize, meterfs_info, meterfs_chiperase,
-	meterfs_fsInfo, meterfs_setEncryption, meterfs_setKey, meterfs_setEarlyErase };
+	meterfs_fsInfo, meterfs_setEncryption, meterfs_setKey, meterfs_setEarlyErase, meterfs_reset };
 /* clang-format on */
 
 
