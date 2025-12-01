@@ -51,6 +51,7 @@ typedef struct {
 	uint32_t filecnt;
 	uint32_t checksum;
 	unsigned char magic[4];
+	uint8_t version;
 } __attribute__((packed)) header_t;
 
 _Static_assert(sizeof(header_t) <= HGRAIN);
