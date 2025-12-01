@@ -51,7 +51,10 @@ static struct {
 #warning "meterfs UNRELIABLE_WRITE is ON. Did you really intend that?"
 #endif
 
-static const unsigned char magicConst[4] = { 0x66, 0x41, 0x4b, 0xbb };
+static const unsigned char magicConst[4] = { 0x6d, 0x74, 0x72, 0x0a };
+
+static const uint8_t meterfsVersion = 0x01;
+
 
 struct partialEraseJournal_s {
 	unsigned int sector;
@@ -328,7 +331,7 @@ static int meterfs_checkfs(meterfs_ctx_t *ctx)
 				return err;
 			}
 
-			if ((u.h.id.nvalid == 0) && (memcmp(u.h.magic, magicConst, 4) == 0)) {
+			if ((u.h.id.nvalid == 0) && (memcmp(u.h.magic, magicConst, 4) == 0) && (u.h.version == meterfsVersion)) {
 				id[headerIdx] = u.h.id;
 				filecnt[headerIdx] = u.h.filecnt;
 
@@ -369,6 +372,7 @@ static int meterfs_checkfs(meterfs_ctx_t *ctx)
 		u.h.id.nvalid = 0;
 		u.h.checksum = 0;
 		memcpy(u.h.magic, magicConst, 4);
+		u.h.version = meterfsVersion;
 
 		uint32_t checksum = meterfs_calcChecksum(&u.h, sizeof(u.h));
 		u.h.checksum = checksum;
