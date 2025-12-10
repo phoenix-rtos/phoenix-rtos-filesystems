@@ -77,4 +77,30 @@ typedef struct {
 } file_t;
 
 
+/* pre-v1 typedefs - used for migration */
+
+
+typedef struct {
+	unsigned int sector;
+	uint32_t sectorcnt;
+	uint32_t filesz;
+	uint32_t recordsz;
+	char name[8];
+	uint32_t uid;    /* Unique file id, incremented on file header update */
+	uint16_t ncrypt; /* uint16_t for backward compatibility - so checksum is the same */
+} __attribute__((packed)) fileheaderOld_t;
+
+_Static_assert(sizeof(fileheaderOld_t) <= HGRAIN);
+
+
+typedef struct {
+	index_t id;
+	uint32_t filecnt;
+	uint32_t checksum;
+	unsigned char magic[4];
+} __attribute__((packed)) headerOld_t;
+
+_Static_assert(sizeof(headerOld_t) <= HGRAIN);
+
+
 #endif
