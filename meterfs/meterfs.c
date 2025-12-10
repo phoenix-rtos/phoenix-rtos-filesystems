@@ -39,7 +39,7 @@
 #define JOURNAL_OFFSET(ssz)       (2 * HEADER_SIZE(ssz))
 #define SPARE_SECTOR_OFFSET(ssz)  (JOURNAL_OFFSET(ssz) + (ssz))
 
-#define UNRELIABLE_WRITE 0 /* DEBUG ONLY! */
+#define UNRELIABLE_WRITE 1 /* DEBUG ONLY! */
 #if UNRELIABLE_WRITE
 static struct {
 	int rwcnt;
