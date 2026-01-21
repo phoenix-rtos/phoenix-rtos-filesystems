@@ -19,6 +19,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include <board_config.h>
+
 #define MAX_NAME_LEN 8
 
 /* clang-format off */
@@ -26,6 +28,18 @@ enum { meterfs_allocate = 0, meterfs_resize, meterfs_info, meterfs_chiperase,
 	meterfs_fsInfo, meterfs_setEncryption, meterfs_setKey, meterfs_setEarlyErase, meterfs_reset };
 /* clang-format on */
 
+#ifndef METERFS_DEBUG_UTILS
+#define METERFS_DEBUG_UTILS 0
+#endif
+
+#if METERFS_DEBUG_UTILS
+typedef struct {
+	int rebootTrigger;
+	int unreliableWriteTrigger;
+	bool dryErase;
+	void (*onRebootCb)(void);
+} meterfs_debugCtx_t;
+#endif
 
 typedef struct {
 	int type;
@@ -109,6 +123,10 @@ typedef struct {
 	ssize_t (*write)(struct _meterfs_devCtx_t *devCtx, off_t offs, const void *buff, size_t bufflen);
 	int (*eraseSector)(struct _meterfs_devCtx_t *devCtx, off_t offs);
 	void (*powerCtrl)(struct _meterfs_devCtx_t *devCtx, int state);
+
+#if METERFS_DEBUG_UTILS
+	meterfs_debugCtx_t debugCtx;
+#endif
 } meterfs_ctx_t;
 
 

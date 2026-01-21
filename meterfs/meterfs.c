@@ -11,6 +11,7 @@
  * %LICENSE%
  */
 
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -39,16 +40,36 @@
 #define JOURNAL_OFFSET(ssz)       (2 * HEADER_SIZE(ssz))
 #define SPARE_SECTOR_OFFSET(ssz)  (JOURNAL_OFFSET(ssz) + (ssz))
 
-#define UNRELIABLE_WRITE 0 /* DEBUG ONLY! */
-#if UNRELIABLE_WRITE
+#if METERFS_DEBUG_UTILS
 static struct {
 	int rwcnt;
 	int wrreboot;
+	meterfs_debugCtx_t ctx;
 } debug_common;
-#define UNRELIABLE_WRITE_TRIGGER        32
-#define UNRELIABLE_WRITE_REBOOT         1
-#define UNRELIABLE_WRITE_REBOOT_TRIGGER 5
-#warning "meterfs UNRELIABLE_WRITE is ON. Did you really intend that?"
+
+#define DEBUG_UNRELIABLE_WRITE_TRIGGER(msg) \
+	do { \
+		if (debug_common.ctx.unreliableWriteTrigger > 0 && ++debug_common.rwcnt >= debug_common.ctx.unreliableWriteTrigger) { \
+			LOG_DEBUG("Unreliable write trigger - " msg); \
+			debug_common.rwcnt = 0; \
+			return -EIO; \
+		} \
+	} while (0)
+
+#define DEBUG_REBOOT_TRIGGER(msg) \
+	do { \
+		if (debug_common.ctx.rebootTrigger > 0 && ++debug_common.wrreboot >= debug_common.ctx.rebootTrigger) { \
+			if (debug_common.ctx.onRebootCb != NULL) { \
+				LOG_DEBUG("Reboot trigger - " msg); \
+				debug_common.ctx.onRebootCb(); \
+			} \
+		} \
+	} while (0)
+
+#pragma message("meterfs METERFS_DEBUG_UTILS is ON!")
+#else
+#define DEBUG_UNRELIABLE_WRITE_TRIGGER(msg)
+#define DEBUG_REBOOT_TRIGGER(msg)
 #endif
 
 
@@ -96,13 +117,7 @@ static ssize_t meterfs_writeVerify(unsigned int addr, const void *buff, size_t b
 	unsigned char vbuff[32];
 	size_t i, chunk;
 
-#if UNRELIABLE_WRITE
-	if (++debug_common.rwcnt > UNRELIABLE_WRITE_TRIGGER) {
-		LOG_DEBUG("Unreliable write trigger - write");
-		debug_common.rwcnt = 0;
-		return -EIO;
-	}
-#endif
+	DEBUG_UNRELIABLE_WRITE_TRIGGER("write");
 
 	err = ctx->write(ctx->devCtx, addr, buff, bufflen);
 	if (err < 0)
@@ -117,13 +132,7 @@ static ssize_t meterfs_writeVerify(unsigned int addr, const void *buff, size_t b
 		if (err < 0)
 			return err;
 
-#if UNRELIABLE_WRITE
-		if (++debug_common.rwcnt > UNRELIABLE_WRITE_TRIGGER) {
-			LOG_DEBUG("Unreliable write trigger - verify");
-			debug_common.rwcnt = 0;
-			return -EIO;
-		}
-#endif
+		DEBUG_UNRELIABLE_WRITE_TRIGGER("verify");
 
 		if (memcmp((const unsigned char *)buff + i, vbuff, chunk))
 			return -EIO;
@@ -142,7 +151,7 @@ static ssize_t meterfs_copyData(unsigned int dst, unsigned int src, size_t len, 
 	for (offs = 0; offs < len; offs += chunk) {
 		chunk = (offs + sizeof(buff) >= len) ? len - offs : sizeof(buff);
 
-#if UNRELIABLE_WRITE
+#if METERFS_DEBUG_UTILS
 		/* Let it copy data... We need to do partial erase */
 		debug_common.rwcnt = 0;
 #endif
@@ -249,12 +258,7 @@ static int meterfs_startPartialErase(uint32_t addr, meterfs_ctx_t *ctx)
 			break;
 		}
 
-#if UNRELIABLE_WRITE
-		if (++debug_common.wrreboot > UNRELIABLE_WRITE_REBOOT) {
-			LOG_DEBUG("Unreliable write trigger - reboot during partial erase");
-			reboot(PHOENIX_REBOOT_MAGIC);
-		}
-#endif
+		DEBUG_REBOOT_TRIGGER("during partial erase");
 
 		/* Now finish the operation */
 		err = meterfs_doPartialErase(ctx);
@@ -400,6 +404,8 @@ static int meterfs_fixFileTable(unsigned int fixIdx, unsigned int backupFilecnt,
 		return err;
 	}
 
+	DEBUG_REBOOT_TRIGGER("in fixFileTable between erase and copy");
+
 	ctx->hcurrAddr = src;
 	ctx->filecnt = backupFilecnt;
 
@@ -434,6 +440,8 @@ static int meterfs_migrateFileTable(unsigned int srcIdx, unsigned int srcFilecnt
 		return err;
 	}
 
+	DEBUG_REBOOT_TRIGGER("after dest header erase, before migration");
+
 	uint32_t checksum = 0;
 
 	for (uint32_t i = 0; i < srcFilecnt; ++i) {
@@ -456,12 +464,7 @@ static int meterfs_migrateFileTable(unsigned int srcIdx, unsigned int srcFilecnt
 		new.ncrypt = u.fOld.ncrypt != 0 ? 1 : 0;
 		new.unused = 0;
 
-#if UNRELIABLE_WRITE
-		if (++debug_common.wrreboot > UNRELIABLE_WRITE_REBOOT) {
-			LOG_DEBUG("Unreliable write trigger - reboot during migration");
-			reboot(PHOENIX_REBOOT_MAGIC);
-		}
-#endif
+		DEBUG_REBOOT_TRIGGER("during fileheader migration");
 
 		retry = 0;
 		do {
@@ -489,6 +492,8 @@ static int meterfs_migrateFileTable(unsigned int srcIdx, unsigned int srcFilecnt
 	u.h.checksum = 0; /* 0 is a neutral value for BCC checksum */
 	u.h.checksum = checksum ^ meterfs_calcChecksum(&u.h, sizeof(u.h));
 
+	DEBUG_REBOOT_TRIGGER("before header migration");
+
 	/* write migrated header */
 	retry = 0;
 	do {
@@ -512,12 +517,7 @@ static int meterfs_migrateFileTable(unsigned int srcIdx, unsigned int srcFilecnt
 		return -1;
 	}
 
-#if UNRELIABLE_WRITE
-	if (++debug_common.wrreboot > UNRELIABLE_WRITE_REBOOT) {
-		LOG_DEBUG("Unreliable write trigger - reboot during migration");
-		reboot(PHOENIX_REBOOT_MAGIC);
-	}
-#endif
+	DEBUG_REBOOT_TRIGGER("before erasing copy dest filetable");
 
 	LOG_INFO("meterfs: Copying migrated header #%u to #%u", dstIdx, srcIdx);
 	err = meterfs_eraseFileTable(srcIdx, ctx);
@@ -527,6 +527,8 @@ static int meterfs_migrateFileTable(unsigned int srcIdx, unsigned int srcFilecnt
 
 	ctx->hcurrAddr = dst;
 	ctx->filecnt = srcFilecnt;
+
+	DEBUG_REBOOT_TRIGGER("before copying migrated filetable");
 
 	retry = 0;
 	do {
@@ -628,6 +630,13 @@ static int meterfs_checkfs(meterfs_ctx_t *ctx)
 	if (!valid[0] && !valid[1]) {
 		LOG_INFO("meterfs: No valid filesystem detected. Formating.");
 
+#if METERFS_DEBUG_UTILS
+		if (debug_common.ctx.dryErase) {
+			LOG_INFO("metefs debug: Would erase partition. Exiting.");
+			exit(1);
+		}
+#endif
+
 		/* Not essential, ignore errors */
 		(void)ctx->eraseSector(ctx->devCtx, ctx->offset + JOURNAL_OFFSET(ctx->sectorsz));
 
@@ -647,12 +656,14 @@ static int meterfs_checkfs(meterfs_ctx_t *ctx)
 		for (unsigned int headerIdx = 0; headerIdx < 2; ++headerIdx) {
 			err = meterfs_eraseFileTable(headerIdx, ctx);
 			if (err < 0) {
+				LOG_DEBUG("meterfs: Failed to erase file table.");
 				meterfs_powerCtrl(0, ctx);
 				return err;
 			}
 
 			err = meterfs_writeVerify(ctx->offset + (ctx->h1Addr * headerIdx), &u.h, sizeof(u.h), ctx);
 			if (err < 0) {
+				LOG_DEBUG("meterfs: Failed to write.");
 				meterfs_powerCtrl(0, ctx);
 				return err;
 			}
@@ -1712,9 +1723,6 @@ int meterfs_init(meterfs_ctx_t *ctx)
 
 	/* Don't touch key and keyInit to allow hacky key set by lib user */
 
-#if UNRELIABLE_WRITE
-	LOG_INFO("meterfs UNRELIABLE_WRITE is ON. Did you really intend that?");
-#endif
 	/* clang-format off */
 	if ((ctx == NULL) ||
 			(ctx->sz < (MIN_PARTITIONS_SECTORS_NB * ctx->sectorsz)) ||
@@ -1724,6 +1732,13 @@ int meterfs_init(meterfs_ctx_t *ctx)
 		return -EINVAL;
 	}
 	/* clang-format on */
+
+#if METERFS_DEBUG_UTILS
+	LOG_INFO("meterfs METERFS_DEBUG_UTILS is ON!");
+	debug_common.rwcnt = 0;
+	debug_common.wrreboot = 0;
+	debug_common.ctx = ctx->debugCtx;
+#endif
 
 	node_init(&ctx->nodesTree);
 
