@@ -7,12 +7,12 @@
 
 NAME := librofs
 LOCAL_SRCS := rofs.c
-LOCAL_HEADERS := rofs.h
+LOCAL_HEADERS := rofs.h rofs_layout.h
 
 include $(static-lib.mk)
 
 NAME := rofs
 LOCAL_SRCS := srv.c
-LIBS := librofs
+LIBS := librofs libtinyaes
 
 include $(binary.mk)
