@@ -26,7 +26,10 @@
 #include <tinyaes/aes.h>
 #include <tinyaes/cmac.h>
 
+#include "rofs_layout.h"
 #include "rofs.h"
+
+_Static_assert(ROFS_BUFSZ >= sizeof(struct rofs_node), "buffer must fit rofs_node");
 
 #define LOG_PREFIX    "rofs: "
 #define LOG(fmt, ...) printf(LOG_PREFIX fmt "\n", ##__VA_ARGS__)
@@ -41,47 +44,9 @@
 #define TRACE(fmt, ...)
 #endif
 
-
 /*
  * NOTE: Implementation assumes filesystem is prepared for target native endianness
  */
-
-
-#define ROFS_SIGNATURE      "ROFS"
-#define ROFS_HDR_SIGNATURE  0
-#define ROFS_HDR_CHECKSUM   4
-#define ROFS_HDR_IMAGESIZE  8
-#define ROFS_HDR_INDEXOFFS  16
-#define ROFS_HDR_NODECOUNT  24
-#define ROFS_HDR_ENCRYPTION 32
-#define ROFS_HDR_CRYPT_SIG  34 /* let CRYPT_SIG to be at least 64-byte long to allow for future signatures schemes (e.g. ed25519) */
-#define ROFS_HEADER_SIZE    128
-
-_Static_assert(AES_BLOCKLEN <= ROFS_HEADER_SIZE - ROFS_HDR_CRYPT_SIG, "AES_MAC does not fit into the rofs header");
-
-/* clang-format off */
-enum { encryption_none, encryption_aes };
-/* clang-format on */
-
-
-struct rofs_node {
-	uint64_t timestamp;
-	uint32_t parent_id;
-	uint32_t id;
-	uint32_t mode;
-	uint32_t reserved0;
-	int32_t uid;
-	int32_t gid;
-	uint32_t offset;
-	uint32_t reserved1;
-	uint32_t size;
-	uint32_t reserved2;
-	char name[207];
-	uint8_t zero;
-} __attribute__((packed)); /* 256 bytes */
-
-_Static_assert(ROFS_BUFSZ >= sizeof(struct rofs_node), "buffer must fit rofs_node");
-
 
 static uint32_t calc_crc32(const uint8_t *buf, uint32_t len, uint32_t base)
 {
@@ -337,8 +302,8 @@ int rofs_init(struct rofs_ctx *ctx, rofs_devRead_t devRead, unsigned long imageA
 		}
 
 		if (key != NULL) {
-			if (ctx->encryption != encryption_aes) {
-				LOG("image encryption type mismatch: %d != %d", ctx->encryption, encryption_aes);
+			if (ctx->encryption != rofs_encryption_aes) {
+				LOG("image encryption type mismatch: %d != %d", ctx->encryption, rofs_encryption_aes);
 				ret = -EINVAL;
 				break;
 			}
@@ -620,7 +585,7 @@ int rofs_getattrall(struct rofs_ctx *ctx, oid_t *oid, struct _attrAll *attrs, si
 }
 
 
-static int dirfind(struct rofs_ctx *ctx, struct rofs_node **pNode, int parent_id, const char *name, oid_t *o)
+static int dirfind(struct rofs_ctx *ctx, struct rofs_node **pNode, int parentId, const char *name, oid_t *o)
 {
 	struct rofs_node *node;
 	uint32_t i;
@@ -641,7 +606,7 @@ static int dirfind(struct rofs_ctx *ctx, struct rofs_node **pNode, int parent_id
 			return -EIO;
 		}
 
-		if ((node->parent_id == parent_id) && (strnlen(node->name, len + 1) == len) && (strncmp(name, node->name, len) == 0)) {
+		if ((node->parentId == parentId) && (strnlen(node->name, len + 1) == len) && (strncmp(name, node->name, len) == 0)) {
 			o->id = node->id;
 			o->port = ctx->oid.port;
 			*pNode = node;
@@ -658,7 +623,7 @@ int rofs_lookup(struct rofs_ctx *ctx, oid_t *dir, const char *name, oid_t *fil, 
 	TRACE("lookup name='%s' oid=%u.%ju port=%d", name, dir->port, (uintmax_t)dir->id, ctx->oid.port);
 
 	struct rofs_node *node = NULL;
-	int parent_id = 0;
+	int parentId = 0;
 	int len = 0;
 	int res = -ENOENT;
 
@@ -668,7 +633,7 @@ int rofs_lookup(struct rofs_ctx *ctx, oid_t *dir, const char *name, oid_t *fil, 
 	}
 
 	if ((dir != NULL) && (dir->port == ctx->oid.port)) {
-		parent_id = dir->id;
+		parentId = dir->id;
 	}
 
 	while (name[len] != '\0') {
@@ -676,14 +641,14 @@ int rofs_lookup(struct rofs_ctx *ctx, oid_t *dir, const char *name, oid_t *fil, 
 			len++;
 		}
 
-		res = dirfind(ctx, &node, parent_id, &name[len], fil);
+		res = dirfind(ctx, &node, parentId, &name[len], fil);
 		if (res <= 0) {
 			break;
 		}
 		else {
 			len += res;
 		}
-		parent_id = node->id;
+		parentId = node->id;
 	}
 
 	if (res < 0) {
@@ -726,7 +691,7 @@ int rofs_readdir(struct rofs_ctx *ctx, oid_t *dir, off_t offs, struct dirent *de
 
 	if (count > offs) {
 		strcpy(dent->d_name, (offs == 0) ? "." : "..");
-		dent->d_ino = (offs == 0) ? node->id : node->parent_id;
+		dent->d_ino = (offs == 0) ? node->id : node->parentId;
 		dent->d_namlen = (offs == 0) ? 1 : 2;
 		dent->d_reclen = 1;
 		dent->d_type = DT_DIR;
@@ -739,7 +704,7 @@ int rofs_readdir(struct rofs_ctx *ctx, oid_t *dir, off_t offs, struct dirent *de
 			return -EIO;
 		}
 
-		if (node->parent_id == dir->id) {
+		if (node->parentId == dir->id) {
 			if (count++ < offs) {
 				continue;
 			}

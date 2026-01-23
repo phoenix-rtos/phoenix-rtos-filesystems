@@ -7,7 +7,7 @@
 
 NAME := librofs
 LOCAL_SRCS := rofs.c
-LOCAL_HEADERS := rofs.h
+LOCAL_HEADERS := rofs.h rofs_layout.h
 
 include $(static-lib.mk)
 
