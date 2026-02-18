@@ -343,7 +343,7 @@ static int meterfs_isHeaderValid(unsigned int headerIdx, index_t *id, unsigned i
 		}
 	}
 
-	if (!headerOk) {
+	if (!headerOk || u.h.filecnt > MAX_FILE_CNT(ctx->sectorsz)) {
 		return 0;
 	}
 
