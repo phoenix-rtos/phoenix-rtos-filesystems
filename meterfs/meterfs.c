@@ -384,7 +384,7 @@ static int meterfs_isHeaderValid(unsigned int headerIdx, index_t *id, unsigned i
 	}
 
 	if (checksum != 0) {
-		LOG_INFO("meterfs: header bad checksum 0x04%x", checksum);
+		LOG_INFO("meterfs: header bad checksum 0x%04x", checksum);
 	}
 
 	return (checksum == 0);
@@ -470,7 +470,7 @@ static int meterfs_migrateFileTable(unsigned int srcIdx, unsigned int srcFilecnt
 		do {
 			err = meterfs_writeVerify(fileheaderAddrOfs + dst, &new, sizeof(new), ctx);
 			retry++;
-		} while (err < 0 || retry < writeAttempts);
+		} while (err < 0 && retry < writeAttempts);
 		if (err < 0) {
 			return err;
 		}
@@ -499,7 +499,7 @@ static int meterfs_migrateFileTable(unsigned int srcIdx, unsigned int srcFilecnt
 	do {
 		err = meterfs_writeVerify(ctx->offset + dst, &u.h, sizeof(u.h), ctx);
 		retry++;
-	} while (err < 0 || retry < writeAttempts);
+	} while (err < 0 && retry < writeAttempts);
 	if (err < 0) {
 		return err;
 	}
@@ -534,7 +534,7 @@ static int meterfs_migrateFileTable(unsigned int srcIdx, unsigned int srcFilecnt
 	do {
 		err = meterfs_copyData(ctx->offset + src, ctx->offset + dst, HGRAIN * (ctx->filecnt + 1), ctx);
 		retry++;
-	} while (err < 0 || retry < writeAttempts);
+	} while (err < 0 && retry < writeAttempts);
 	if (err < 0) {
 		return err;
 	}
