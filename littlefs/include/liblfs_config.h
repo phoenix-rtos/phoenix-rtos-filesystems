@@ -202,6 +202,20 @@ struct lfs_config {
 	 */
 	uint32_t disk_version;
 #endif
+
+	struct {
+		/* Port for accessing this filesystem */
+		unsigned int port;
+		uint32_t objectEvictThreshold;
+		/* Set to 1 to enable storing creation times of files */
+		uint8_t useCTime;
+		/* Set to 1 to automatically update modification times on files */
+		uint8_t useMTime;
+		/* Set to 1 to automatically update access times on files */
+		uint8_t useATime;
+		/* Set to 1 to mount file system in read only mode */
+		uint8_t readOnly;
+	} ph;
 };
 
 #endif /* _LIBLFS_CONFIG_H_ */

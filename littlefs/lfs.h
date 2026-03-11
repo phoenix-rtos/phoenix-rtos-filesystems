@@ -14,6 +14,8 @@
 
 #include "lfs_util.h"
 
+#include <sys/rb.h>
+
 #ifdef __cplusplus
 extern "C"
 {
@@ -223,20 +225,18 @@ typedef struct lfs_mdir {
 
 // littlefs directory type
 typedef struct lfs_dir {
-    struct lfs_dir *next;
+    struct lfs_dir *nextDir;
     uint16_t id;
-    uint8_t type;
     lfs_mdir_t m;
 
     lfs_off_t pos;
     lfs_block_t head[2];
+    int refcount;
 } lfs_dir_t;
 
 // littlefs file type
 typedef struct lfs_file {
-    struct lfs_file *next;
     uint16_t id;
-    uint8_t type;
     lfs_mdir_t m;
 
     struct lfs_ctz {
@@ -249,8 +249,7 @@ typedef struct lfs_file {
     lfs_block_t block;
     lfs_off_t off;
     lfs_cache_t cache;
-
-    const struct lfs_file_config *cfg;
+    int refcount;
 } lfs_file_t;
 
 typedef struct lfs_superblock {
@@ -276,7 +275,6 @@ typedef struct lfs {
     struct lfs_mlist {
         struct lfs_mlist *next;
         uint16_t id;
-        uint8_t type;
         lfs_mdir_t m;
     } *mlist;
     uint32_t seed;
@@ -299,12 +297,16 @@ typedef struct lfs {
     lfs_size_t file_max;
     lfs_size_t attr_max;
 
-#ifdef LFS_MIGRATE
-    struct lfs1 *lfs1;
-#endif
     struct {
         bool initialScan;         /* Flag that max file ID should be updated when scanning directories */
         id_t lastFileId;          /* Max valid file ID in the filesystem */
+        struct lfs_dir *openDirs; /* List of open directories (lfs_dir_t) */
+        void *phLfsObjects;       /* List of objects created by ph_lfs API */
+        uint32_t nPhLfsObjects;   /* Number of objects created by ph_lfs API */
+        bool largeInlineOpened;   /* Flag that an inline file larger than cache has been opened */
+        handle_t mutex;
+        rbtree_t phIdTree;
+        unsigned int port;
     } ph;
 } lfs_t;
 
@@ -321,230 +323,6 @@ typedef struct lfs {
 // Returns a negative error code on failure.
 int lfs_format(lfs_t *lfs, const struct lfs_config *config);
 #endif
-
-// Mounts a littlefs
-//
-// Requires a littlefs object and config struct. Multiple filesystems
-// may be mounted simultaneously with multiple littlefs objects. Both
-// lfs and config must be allocated while mounted. The config struct must
-// be zeroed for defaults and backwards compatibility.
-//
-// Returns a negative error code on failure.
-int lfs_mount(lfs_t *lfs, const struct lfs_config *config);
-
-// Unmounts a littlefs
-//
-// Does nothing besides releasing any allocated resources.
-// Returns a negative error code on failure.
-int lfs_unmount(lfs_t *lfs);
-
-/// General operations ///
-
-#ifndef LFS_READONLY
-// Removes a file or directory
-//
-// If removing a directory, the directory must be empty.
-// Returns a negative error code on failure.
-int lfs_remove(lfs_t *lfs, const char *path);
-#endif
-
-#ifndef LFS_READONLY
-// Rename or move a file or directory
-//
-// If the destination exists, it must match the source in type.
-// If the destination is a directory, the directory must be empty.
-//
-// Returns a negative error code on failure.
-int lfs_rename(lfs_t *lfs, const char *oldpath, const char *newpath);
-#endif
-
-// Find info about a file or directory
-//
-// Fills out the info structure, based on the specified file or directory.
-// Returns a negative error code on failure.
-int lfs_stat(lfs_t *lfs, const char *path, struct lfs_info *info);
-
-// Get a custom attribute
-//
-// Custom attributes are uniquely identified by an 8-bit type and limited
-// to LFS_ATTR_MAX bytes. When read, if the stored attribute is smaller than
-// the buffer, it will be padded with zeros. If the stored attribute is larger,
-// then it will be silently truncated. If no attribute is found, the error
-// LFS_ERR_NOATTR is returned and the buffer is filled with zeros.
-//
-// Returns the size of the attribute, or a negative error code on failure.
-// Note, the returned size is the size of the attribute on disk, irrespective
-// of the size of the buffer. This can be used to dynamically allocate a buffer
-// or check for existence.
-lfs_ssize_t lfs_getattr(lfs_t *lfs, const char *path,
-        uint8_t type, void *buffer, lfs_size_t size);
-
-#ifndef LFS_READONLY
-// Set custom attributes
-//
-// Custom attributes are uniquely identified by an 8-bit type and limited
-// to LFS_ATTR_MAX bytes. If an attribute is not found, it will be
-// implicitly created.
-//
-// Returns a negative error code on failure.
-int lfs_setattr(lfs_t *lfs, const char *path,
-        uint8_t type, const void *buffer, lfs_size_t size);
-#endif
-
-#ifndef LFS_READONLY
-// Removes a custom attribute
-//
-// If an attribute is not found, nothing happens.
-//
-// Returns a negative error code on failure.
-int lfs_removeattr(lfs_t *lfs, const char *path, uint8_t type);
-#endif
-
-
-/// File operations ///
-
-#ifndef LFS_NO_MALLOC
-// Open a file
-//
-// The mode that the file is opened in is determined by the flags, which
-// are values from the enum lfs_open_flags that are bitwise-ored together.
-//
-// Returns a negative error code on failure.
-int lfs_file_open(lfs_t *lfs, lfs_file_t *file,
-        const char *path, int flags);
-
-// if LFS_NO_MALLOC is defined, lfs_file_open() will fail with LFS_ERR_NOMEM
-// thus use lfs_file_opencfg() with config.buffer set.
-#endif
-
-// Open a file with extra configuration
-//
-// The mode that the file is opened in is determined by the flags, which
-// are values from the enum lfs_open_flags that are bitwise-ored together.
-//
-// The config struct provides additional config options per file as described
-// above. The config struct must remain allocated while the file is open, and
-// the config struct must be zeroed for defaults and backwards compatibility.
-//
-// Returns a negative error code on failure.
-int lfs_file_opencfg(lfs_t *lfs, lfs_file_t *file,
-        const char *path, int flags,
-        const struct lfs_file_config *config);
-
-// Close a file
-//
-// Any pending writes are written out to storage as though
-// sync had been called and releases any allocated resources.
-//
-// Returns a negative error code on failure.
-int lfs_file_close(lfs_t *lfs, lfs_file_t *file);
-
-// Synchronize a file on storage
-//
-// Any pending writes are written out to storage.
-// Returns a negative error code on failure.
-int lfs_file_sync(lfs_t *lfs, lfs_file_t *file);
-
-// Read data from file
-//
-// Takes a buffer and size indicating where to store the read data.
-// Returns the number of bytes read, or a negative error code on failure.
-lfs_ssize_t lfs_file_read(lfs_t *lfs, lfs_file_t *file,
-        void *buffer, lfs_size_t size);
-
-#ifndef LFS_READONLY
-// Write data to file
-//
-// Takes a buffer and size indicating the data to write. The file will not
-// actually be updated on the storage until either sync or close is called.
-//
-// Returns the number of bytes written, or a negative error code on failure.
-lfs_ssize_t lfs_file_write(lfs_t *lfs, lfs_file_t *file,
-        const void *buffer, lfs_size_t size);
-#endif
-
-// Change the position of the file
-//
-// The change in position is determined by the offset and whence flag.
-// Returns the new position of the file, or a negative error code on failure.
-lfs_soff_t lfs_file_seek(lfs_t *lfs, lfs_file_t *file,
-        lfs_soff_t off, int whence);
-
-#ifndef LFS_READONLY
-// Truncates the size of the file to the specified size
-//
-// Returns a negative error code on failure.
-int lfs_file_truncate(lfs_t *lfs, lfs_file_t *file, lfs_off_t size);
-#endif
-
-// Return the position of the file
-//
-// Equivalent to lfs_file_seek(lfs, file, 0, LFS_SEEK_CUR)
-// Returns the position of the file, or a negative error code on failure.
-lfs_soff_t lfs_file_tell(lfs_t *lfs, lfs_file_t *file);
-
-// Change the position of the file to the beginning of the file
-//
-// Equivalent to lfs_file_seek(lfs, file, 0, LFS_SEEK_SET)
-// Returns a negative error code on failure.
-int lfs_file_rewind(lfs_t *lfs, lfs_file_t *file);
-
-// Return the size of the file
-//
-// Similar to lfs_file_seek(lfs, file, 0, LFS_SEEK_END)
-// Returns the size of the file, or a negative error code on failure.
-lfs_soff_t lfs_file_size(lfs_t *lfs, lfs_file_t *file);
-
-
-/// Directory operations ///
-
-#ifndef LFS_READONLY
-// Create a directory
-//
-// Returns a negative error code on failure.
-int lfs_mkdir(lfs_t *lfs, const char *path);
-#endif
-
-// Open a directory
-//
-// Once open a directory can be used with read to iterate over files.
-// Returns a negative error code on failure.
-int lfs_dir_open(lfs_t *lfs, lfs_dir_t *dir, const char *path);
-
-// Close a directory
-//
-// Releases any allocated resources.
-// Returns a negative error code on failure.
-int lfs_dir_close(lfs_t *lfs, lfs_dir_t *dir);
-
-// Read an entry in the directory
-//
-// Fills out the info structure, based on the specified file or directory.
-// Returns a positive value on success, 0 at the end of directory,
-// or a negative error code on failure.
-int lfs_dir_read(lfs_t *lfs, lfs_dir_t *dir, struct lfs_info *info);
-
-// Change the position of the directory
-//
-// The new off must be a value previous returned from tell and specifies
-// an absolute offset in the directory seek.
-//
-// Returns a negative error code on failure.
-int lfs_dir_seek(lfs_t *lfs, lfs_dir_t *dir, lfs_off_t off);
-
-// Return the position of the directory
-//
-// The returned offset is only meant to be consumed by seek and may not make
-// sense, but does indicate the current position in the directory iteration.
-//
-// Returns the position of the directory, or a negative error code on failure.
-lfs_soff_t lfs_dir_tell(lfs_t *lfs, lfs_dir_t *dir);
-
-// Change the position of the directory to the beginning of the directory
-//
-// Returns a negative error code on failure.
-int lfs_dir_rewind(lfs_t *lfs, lfs_dir_t *dir);
-
 
 /// Filesystem-level filesystem operations
 
