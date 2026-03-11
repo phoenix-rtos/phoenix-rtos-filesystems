@@ -5049,7 +5049,9 @@ static lfs_ssize_t lfs_fs_rawsize(lfs_t *lfs) {
 #ifndef LFS_READONLY
 static int lfs_fs_rawgrow(lfs_t *lfs, lfs_size_t block_count) {
     // shrinking is not supported
-    LFS_ASSERT(block_count >= lfs->block_count);
+    if (block_count < lfs->block_count) {
+        return LFS_ERR_INVAL;
+    }
 
     if (block_count > lfs->block_count) {
         lfs->block_count = block_count;
