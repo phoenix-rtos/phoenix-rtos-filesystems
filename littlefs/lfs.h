@@ -302,6 +302,10 @@ typedef struct lfs {
 #ifdef LFS_MIGRATE
     struct lfs1 *lfs1;
 #endif
+    struct {
+        bool initialScan;         /* Flag that max file ID should be updated when scanning directories */
+        id_t lastFileId;          /* Max valid file ID in the filesystem */
+    } ph;
 } lfs_t;
 
 
