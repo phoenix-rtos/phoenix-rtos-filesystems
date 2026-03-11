@@ -10,6 +10,7 @@
 #include "lfs_bd.h"
 #include "lfs_internal.h"
 #include "lfs_util.h"
+#include "ph_lfs_types.h"
 
 
 #ifndef LFS_NO_ASSERT
@@ -585,6 +586,7 @@ lfs_stag_t lfs_dir_fetchmatch(lfs_t *lfs,
         lfs_off_t off = 0;
         lfs_tag_t ptag = 0xffffffff;
 
+        id_t temp_max_id = 0;
         uint16_t tempcount = 0;
         lfs_block_t temptail[2] = {LFS_BLOCK_NULL, LFS_BLOCK_NULL};
         bool tempsplit = false;
@@ -664,6 +666,9 @@ lfs_stag_t lfs_dir_fetchmatch(lfs_t *lfs,
                 dir->tail[0] = temptail[0];
                 dir->tail[1] = temptail[1];
                 dir->split = tempsplit;
+                if (lfs->ph.initialScan) {
+                    ph_lfs_bumpLastPhId(lfs, temp_max_id);
+                }
 
                 // reset crc, hasfcrc
                 crc = 0xffffffff;
@@ -724,6 +729,20 @@ lfs_stag_t lfs_dir_fetchmatch(lfs_t *lfs,
 
                 lfs_fcrc_fromle32(&fcrc);
                 hasfcrc = true;
+            } else if (lfs->ph.initialScan && ((lfs_tag_type3(tag) & LFS_TYPE_PHID_MASK) == LFS_TYPE_PHID_ANY)) {
+                id_t phId;
+                err = lfs_bd_read(lfs,
+                        NULL, &lfs->rcache, lfs->cfg->block_size,
+                        dir->pair[0], off+sizeof(tag),
+                        &phId, sizeof(phId));
+                phId = ph_lfs_idFromLE(phId);
+                if (err) {
+                    if (err == LFS_ERR_CORRUPT) {
+                        break;
+                    }
+                }
+
+                temp_max_id = (temp_max_id > phId) ? temp_max_id : phId;
             }
 
             // found a match for our fetcher?
@@ -3949,6 +3968,7 @@ int lfs_rawmount(lfs_t *lfs, const struct lfs_config *cfg) {
     // boots, we start the allocator at a random location
     lfs->free.off = lfs->seed % lfs->block_count;
     lfs_alloc_drop(lfs);
+    lfs->ph.initialScan = false;
 
     return 0;
 

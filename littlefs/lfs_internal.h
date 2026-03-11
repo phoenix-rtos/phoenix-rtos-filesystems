@@ -353,5 +353,7 @@ int lfs_ctz_traverse(lfs_t *lfs,
 
 lfs_ssize_t lfs_fs_rawsize(lfs_t *lfs);
 
+void ph_lfs_bumpLastPhId(lfs_t *lfs, id_t found);
+
 #endif /* _LFS_INTERNAL_H_ */
 /* clang-format on */
