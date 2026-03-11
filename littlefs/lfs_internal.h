@@ -295,10 +295,6 @@ int lfs_file_flush(lfs_t *lfs, lfs_file_t *file);
 int lfs_dir_commit(lfs_t *lfs, lfs_mdir_t *dir,
         const struct lfs_mattr *attrs, int attrcount);
 
-void lfs_mlist_remove(lfs_t *lfs, struct lfs_mlist *mlist);
-
-void lfs_mlist_append(lfs_t *lfs, struct lfs_mlist *mlist);
-
 lfs_stag_t lfs_dir_get(lfs_t *lfs, const lfs_mdir_t *dir,
         lfs_tag_t gmask, lfs_tag_t gtag, void *buffer);
 
@@ -362,5 +358,17 @@ static inline bool ph_lfs_isPhIdTag(lfs_tag_t tag)
 }
 
 void ph_lfs_bumpLastPhId(lfs_t *lfs, id_t found);
+
+/* Fixup internally stored file locations and IDs after a commit */
+int ph_lfs_updateOnCommit(lfs_t *lfs, const lfs_block_t oldpair[2], const lfs_mdir_t *dir, const struct lfs_mattr *ops, int nOps);
+
+/* Update internally stored file locations when a block relocation occurs */
+void ph_lfs_updateOnRelocate(lfs_t *lfs, const lfs_block_t oldPair[2], const lfs_block_t newPair[2]);
+
+/* Check for any inline files that aren't RAM backed and forcefully evict them before a commit */
+int ph_lfs_evictInlines(lfs_t *lfs, const lfs_block_t pair[2]);
+
+/* Traverse through open CTZ files (used for determining which storage blocks are in use) */
+int ph_lfs_traverseOpenFiles(lfs_t *lfs, int (*cb)(void *data, lfs_block_t block), void *data);
 
 #endif /* _LFS_INTERNAL_H_ */
