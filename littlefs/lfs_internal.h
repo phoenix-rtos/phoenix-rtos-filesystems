@@ -297,6 +297,11 @@ int lfs_dir_commit(lfs_t *lfs, lfs_mdir_t *dir,
 lfs_stag_t lfs_dir_get(lfs_t *lfs, const lfs_mdir_t *dir,
         lfs_tag_t gmask, lfs_tag_t gtag, void *buffer);
 
+typedef void (*lfs_dir_getMulti_cb_t)(lfs_t *lfs, lfs_tag_t tag, void *buf);
+
+lfs_stag_t lfs_dir_getMulti(lfs_t *lfs, const lfs_mdir_t *dir,
+        lfs_tag_t gmask, lfs_tag_t gtag, lfs_dir_getMulti_cb_t cb, void *buf);
+
 struct lfs_dir_find_match {
     lfs_t *lfs;
     const void *name;

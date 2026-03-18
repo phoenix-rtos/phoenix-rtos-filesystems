@@ -127,7 +127,7 @@ static int lfs_alloc(lfs_t *lfs, lfs_block_t *block) {
 /// Metadata pair and directory operations ///
 static lfs_stag_t lfs_dir_getslice(lfs_t *lfs, const lfs_mdir_t *dir,
         lfs_tag_t gmask, lfs_tag_t gtag,
-        lfs_off_t goff, void *gbuffer, lfs_size_t gsize) {
+        lfs_off_t goff, void *gbuffer, lfs_size_t gsize, lfs_dir_getMulti_cb_t cb) {
     lfs_off_t off = dir->off;
     lfs_tag_t ntag = dir->etag;
     lfs_stag_t gdiff = 0;
@@ -180,18 +180,30 @@ static lfs_stag_t lfs_dir_getslice(lfs_t *lfs, const lfs_mdir_t *dir,
 
             memset((uint8_t*)gbuffer + diff, 0, gsize - diff);
 
-            return tag + gdiff;
+            if (cb == NULL) {
+                return tag + gdiff;
+            }
+            else {
+                cb(lfs, tag + gdiff, gbuffer);
+            }
         }
     }
 
-    return LFS_ERR_NOENT;
+    return cb == NULL ? LFS_ERR_NOENT : 0;
 }
 
 lfs_stag_t lfs_dir_get(lfs_t *lfs, const lfs_mdir_t *dir,
         lfs_tag_t gmask, lfs_tag_t gtag, void *buffer) {
     return lfs_dir_getslice(lfs, dir,
             gmask, gtag,
-            0, buffer, lfs_tag_size(gtag));
+            0, buffer, lfs_tag_size(gtag), NULL);
+}
+
+lfs_stag_t lfs_dir_getMulti(lfs_t *lfs, const lfs_mdir_t *dir,
+        lfs_tag_t gmask, lfs_tag_t gtag, lfs_dir_getMulti_cb_t cb, void *buffer) {
+    return lfs_dir_getslice(lfs, dir,
+            gmask, gtag,
+            0, buffer, lfs_tag_size(gtag), cb);
 }
 
 static int lfs_dir_getread(lfs_t *lfs, const lfs_mdir_t *dir,
@@ -246,7 +258,7 @@ static int lfs_dir_getread(lfs_t *lfs, const lfs_mdir_t *dir,
         rcache->size = lfs_min(lfs_alignup(off+hint, lfs->cfg->read_size),
                 lfs->cfg->cache_size);
         int err = lfs_dir_getslice(lfs, dir, gmask, gtag,
-                rcache->off, rcache->buffer, rcache->size);
+                rcache->off, rcache->buffer, rcache->size, NULL);
         if (err < 0) {
             return err;
         }
