@@ -1678,6 +1678,37 @@ int ph_lfs_getattr(lfs_t *lfs, id_t phId, int type, long long *attr)
 }
 
 
+typedef struct {
+	uint8_t attr[8]; /* Note: this buffer must be first in this struct. lfs_dir_getMulti will read into it. */
+	struct _attrAll *attrs;
+} ph_lfs_getattrall_callback_t;
+
+
+static void ph_lfs_multi_tag_cb(lfs_t *lfs, lfs_tag_t tag, void *buf)
+{
+	ph_lfs_getattrall_callback_t *data = (ph_lfs_getattrall_callback_t *)buf;
+	struct _attr *thisAttr = NULL;
+
+	switch (lfs_tag_type3(tag)) {
+		case LFS_TYPE_PH_ATTR_MODE: thisAttr = &data->attrs->mode; break;
+		case LFS_TYPE_PH_ATTR_UID: thisAttr = &data->attrs->uid; break;
+		case LFS_TYPE_PH_ATTR_GID: thisAttr = &data->attrs->gid; break;
+		case LFS_TYPE_PH_ATTR_CTIME: thisAttr = &data->attrs->cTime; break;
+		case LFS_TYPE_PH_ATTR_MTIME: thisAttr = &data->attrs->mTime; break;
+		case LFS_TYPE_PH_ATTR_ATIME: thisAttr = &data->attrs->aTime; break;
+		default: return;
+	}
+
+	if (thisAttr->err == 0) {
+		/* This attribute was found previously; because the directory is scanned backwards, this means that
+		 * the previously read version is newer. */
+		return;
+	}
+
+	thisAttr->err = ph_lfs_attrDeserialize(data->attr, &thisAttr->val, tag);
+}
+
+
 int ph_lfs_getattrAll(lfs_t *lfs, id_t phId, struct _attrAll *attrs)
 {
 	ph_lfs_lru_t *obj;
@@ -1698,16 +1729,6 @@ int ph_lfs_getattrAll(lfs_t *lfs, id_t phId, struct _attrAll *attrs)
 	attrs->links.val = 1;
 	attrs->links.err = 0;
 
-	/* mode & type */
-	attrs->mode.err = ph_lfs_getSimpleAttr(lfs, obj, &attrs->mode.val, LFS_TYPE_PH_ATTR_MODE);
-	attrs->type.err = attrs->mode.err;
-	if (attrs->mode.err >= 0) {
-		attrs->type.val = ph_lfs_modeToType(attrs->mode.val);
-	}
-
-	attrs->uid.err = ph_lfs_getSimpleAttr(lfs, obj, &attrs->uid.val, LFS_TYPE_PH_ATTR_UID);
-	attrs->gid.err = ph_lfs_getSimpleAttr(lfs, obj, &attrs->gid.val, LFS_TYPE_PH_ATTR_GID);
-
 	/* blocksize & size & n. of blocks */
 	attrs->ioblock.val = lfs->cfg->block_size;
 	attrs->ioblock.err = 0;
@@ -1720,26 +1741,70 @@ int ph_lfs_getattrAll(lfs_t *lfs, id_t phId, struct _attrAll *attrs)
 
 	attrs->blocks.err = attrs->size.err;
 
-	/* create & modify & access times */
-	attrs->cTime.err = ph_lfs_getSimpleAttr(lfs, obj, &attrs->cTime.val, LFS_TYPE_PH_ATTR_CTIME);
-	if (attrs->cTime.err < 0) {
-		/* Return 0 timestamps */
+	lfs_mdir_t mdir;
+	const lfs_block_t *pair = (obj->phId == LFS_ROOT_PHID) ? lfs->root : obj->parentBlock;
+	err = lfs_dir_fetch(lfs, &mdir, pair);
+	if (err != 0) {
+		TRACE("fetch fail %d", err);
+		return err;
+	}
+
+	ph_lfs_getattrall_callback_t cb_data = {
+		.attrs = attrs,
+	};
+
+	lfs_stag_t tag = lfs_dir_getMulti(lfs, &mdir,
+			LFS_MKTAG(0x700, 0x3ff, 0),
+			LFS_MKTAG(LFS_TYPE_USERATTR, obj->id, sizeof(cb_data.attr)),
+			ph_lfs_multi_tag_cb, &cb_data);
+	if (tag == LFS_ERR_NOENT) {
+		/* LFS_ERR_NOENT may get returned if we find a delete tag for another file with the same ID as this file;
+		 * because getting the file object hasn't failed previously (ph_lfs_getObj returned 0) this result
+		 * must be spurious. */
+		tag = 0;
+	}
+
+	if (tag < 0) {
+		return tag;
+	}
+
+	/* Apply fallbacks to attributes which were not found */
+	if (attrs->mode.err == -ENOSYS) {
+		attrs->mode.val = (ph_lfs_objIsDir(obj) ? S_IFDIR : S_IFREG) | ALLPERMS;
+		attrs->mode.err = 0;
+	}
+
+	if (attrs->uid.err == -ENOSYS) {
+		attrs->uid.val = 0;
+		attrs->uid.err = 0;
+	}
+
+	if (attrs->gid.err == -ENOSYS) {
+		attrs->gid.val = 0;
+		attrs->gid.err = 0;
+	}
+
+	if (attrs->cTime.err == -ENOSYS) {
 		attrs->cTime.val = 0;
 		attrs->cTime.err = 0;
 	}
 
-	attrs->mTime.err = ph_lfs_getSimpleAttr(lfs, obj, &attrs->mTime.val, LFS_TYPE_PH_ATTR_MTIME);
-	if (attrs->mTime.err < 0) {
+	if (attrs->mTime.err == -ENOSYS) {
 		/* Use create time as fallback */
 		attrs->mTime.val = attrs->cTime.val;
 		attrs->mTime.err = attrs->cTime.err;
 	}
 
-	attrs->aTime.err = ph_lfs_getSimpleAttr(lfs, obj, &attrs->aTime.val, LFS_TYPE_PH_ATTR_ATIME);
-	if (attrs->aTime.err < 0) {
+	if (attrs->aTime.err == -ENOSYS) {
 		/* Use modify time as fallback */
 		attrs->aTime.val = attrs->mTime.val;
 		attrs->aTime.err = attrs->mTime.err;
+	}
+
+	/* Convert mode to type attribute */
+	if (attrs->mode.err >= 0) {
+		attrs->type.val = ph_lfs_modeToType(attrs->mode.val);
+		attrs->type.err = 0;
 	}
 
 	return 0;
