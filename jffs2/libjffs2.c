@@ -793,6 +793,10 @@ static int libjffs2_readdir(void *info, oid_t *dir, off_t offs, struct dirent *d
 
 	dent->d_reclen = dctx.pos - offs;
 
+	if (dctx.emit == -1) {
+		return -ENOENT;
+	}
+
 	return dctx.emit;
 }
 
