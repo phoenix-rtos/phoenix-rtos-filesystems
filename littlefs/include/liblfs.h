@@ -24,47 +24,33 @@
 #include <liblfs_config.h>
 
 
-#ifndef LIBLFS_CACHESIZE_DEFAULT
 /* NOTE: cache size also determines max size of file that can be inlined in directory structure
  * Any file not inlined WILL take at least 1 full block of storage.
  * See `cache_size` in `struct lfs_config`. */
-#define LIBLFS_CACHESIZE_DEFAULT 256
-#endif
+#define LIBLFS_DEF_CACHESIZE 256
 
-#ifndef LIBLFS_CYCLES_THRESHOLD
 /* Threshold number of erase cycles that trigger wear leveling algorithm. See `block_cycles` in `struct lfs_config`. */
-#define LIBLFS_CYCLES_THRESHOLD 500
-#endif
+#define LIBLFS_DEF_CYCLES_THRESHOLD 500
 
-#ifndef LIBLFS_N_CACHED_OBJECTS
 /* Threshold after which LFS driver will attempt to evict LFS stub objects from memory.
  * Open files/directories are always kept in memory and count towards this limit. */
-#define LIBLFS_N_CACHED_OBJECTS 10
-#endif
+#define LIBLFS_DEF_N_CACHED_OBJECTS 10
 
-#ifndef LIBLFS_LOOKAHEAD_SIZE
 /* Number of blocks to scan ahead when looking for unused blocks. See `lookahead_size` in `struct lfs_config`.*/
-#define LIBLFS_LOOKAHEAD_SIZE 16
-#endif
+#define LIBLFS_DEF_LOOKAHEAD_SIZE 16
 
-#ifndef LIBLFS_LINK_IS_RENAME
 /* If set to 1, "link" filesystem operation works as "rename" - otherwise it returns -ENOSYS.
  * This is a workaround to make it possible to rename files, though with some glitches.
  * TODO: if Phoenix RTOS ever gains support for a proper "rename" operation, fix this. */
-#define LIBLFS_LINK_IS_RENAME 0
-#endif
+#define LIBLFS_DEF_LINK_IS_RENAME 0
 
-#ifndef LIBLFS_MOUNT_FORMAT_OPTION
 /* If set to 1, passing `format` as data to the `mount` command will format the partition with LFS file system.
  * To save some code size, this can be set to 0. */
-#define LIBLFS_MOUNT_FORMAT_OPTION 0
-#endif
+#define LIBLFS_DEF_MOUNT_FORMAT_OPTION 0
 
-#ifndef LIBLFS_FORMAT_ON_MOUNT_FAILURE
 /* If set to 1, a failure to mount the filesystem will result in the driver attempting to format the drive.
  * This is intended for testing, in production it could result in unwanted behavior. */
-#define LIBLFS_FORMAT_ON_MOUNT_FAILURE 0
-#endif
+#define LIBLFS_DEF_FORMAT_ON_MOUNT_FAILURE 0
 
 /* Mount mode flags (`mode` argument to `mount` command)*/
 #define LIBLFS_READ_ONLY_FLAG (1UL << 0) /* Mount in read-only mode */
