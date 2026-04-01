@@ -21,11 +21,43 @@
 #include <sys/threads.h>
 
 #include <liblfs.h>
+#include <board_config.h>
 
 #include "ph_lfs_api.h"
 #include "ph_lfs_types.h"
 
 #define TRACE_CALLS(x)
+
+/* Set compile-time config values to defaults */
+
+#ifndef LIBLFS_CACHESIZE
+#define LIBLFS_CACHESIZE LIBLFS_DEF_CACHESIZE
+#endif
+
+#ifndef LIBLFS_CYCLES_THRESHOLD
+#define LIBLFS_CYCLES_THRESHOLD LIBLFS_DEF_CYCLES_THRESHOLD
+#endif
+
+#ifndef LIBLFS_N_CACHED_OBJECTS
+#define LIBLFS_N_CACHED_OBJECTS LIBLFS_DEF_N_CACHED_OBJECTS
+#endif
+
+#ifndef LIBLFS_LOOKAHEAD_SIZE
+#define LIBLFS_LOOKAHEAD_SIZE LIBLFS_DEF_LOOKAHEAD_SIZE
+#endif
+
+#ifndef LIBLFS_LINK_IS_RENAME
+#define LIBLFS_LINK_IS_RENAME LIBLFS_DEF_LINK_IS_RENAME
+#endif
+
+#ifndef LIBLFS_MOUNT_FORMAT_OPTION
+#define LIBLFS_MOUNT_FORMAT_OPTION LIBLFS_DEF_MOUNT_FORMAT_OPTION
+#endif
+
+#ifndef LIBLFS_FORMAT_ON_MOUNT_FAILURE
+#define LIBLFS_FORMAT_ON_MOUNT_FAILURE LIBLFS_DEF_FORMAT_ON_MOUNT_FAILURE
+#endif
+
 
 static int liblfs_create(void *info, oid_t *dir, const char *name, oid_t *oid, unsigned mode, int type, oid_t *dev)
 {
@@ -451,7 +483,7 @@ static int liblfs_setConfig(struct lfs_config *cfg, const char *args, size_t sto
 	cfg->block_count = storageSize / cfg->block_size;
 
 	/* Runtime configuration */
-	cfg->cache_size = LIBLFS_CACHESIZE_DEFAULT;
+	cfg->cache_size = LIBLFS_CACHESIZE;
 	cfg->lookahead_size = LIBLFS_LOOKAHEAD_SIZE;
 	cfg->block_cycles = LIBLFS_CYCLES_THRESHOLD;
 	cfg->ph.objectEvictThreshold = LIBLFS_N_CACHED_OBJECTS;
