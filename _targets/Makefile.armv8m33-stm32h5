@@ -1,0 +1,9 @@
+#
+# Makefile for Phoenix-RTOS 3 filesystems
+#
+# STM32H5 drivers
+#
+# Copyright 2026 Phoenix Systems
+#
+
+DEFAULT_COMPONENTS := libdummyfs dummyfs liblfs
