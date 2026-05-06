@@ -73,6 +73,16 @@ static struct {
 #endif
 
 
+#ifndef METERFS_TWO_STAGE_FW_UPGR
+#define METERFS_TWO_STAGE_FW_UPGR 0
+#endif
+
+
+#ifndef METERFS_IO_RETRIES
+#define METERFS_IO_RETRIES 5
+#endif
+
+
 /* pre-v1 magic - used for migration */
 static const unsigned char magicConstOld[4] = { 0x66, 0x41, 0x4b, 0xbb };
 
@@ -316,7 +326,15 @@ static int meterfs_eraseFileTable(unsigned int n, meterfs_ctx_t *ctx)
 }
 
 
-static int meterfs_isHeaderValid(unsigned int headerIdx, index_t *id, unsigned int *filecnt, bool *mustMigrate, meterfs_ctx_t *ctx)
+typedef struct {
+	bool valid;
+	bool migrate;
+	index_t id;
+	unsigned int filecnt;
+} meterfs_partCondition_t;
+
+
+static int meterfs_isHeaderValid(unsigned int headerIdx, meterfs_partCondition_t *partCond, meterfs_ctx_t *ctx)
 {
 	ssize_t err;
 	union {
@@ -358,16 +376,10 @@ static int meterfs_isHeaderValid(unsigned int headerIdx, index_t *id, unsigned i
 	uint32_t checksum = meterfs_calcChecksum(&u.h, headerSize);
 	uint32_t savedFilecnt = u.h.filecnt;
 
-	if (id != NULL) {
-		*id = u.h.id;
-	}
-
-	if (filecnt != NULL) {
-		*filecnt = u.h.filecnt;
-	}
-
-	if (mustMigrate != NULL) {
-		*mustMigrate = migrate;
+	if (partCond) {
+		partCond[headerIdx].id = u.h.id;
+		partCond[headerIdx].filecnt = u.h.filecnt;
+		partCond[headerIdx].migrate = migrate;
 	}
 
 	for (uint32_t i = 0; i < savedFilecnt; ++i) {
@@ -387,7 +399,7 @@ static int meterfs_isHeaderValid(unsigned int headerIdx, index_t *id, unsigned i
 		LOG_INFO("meterfs: header bad checksum 0x%04x", checksum);
 	}
 
-	return (checksum == 0);
+	return (checksum == 0) ? 1 : 0;
 }
 
 
@@ -418,7 +430,7 @@ static int meterfs_fixFileTable(unsigned int fixIdx, unsigned int backupFilecnt,
 }
 
 
-static int meterfs_migrateFileTable(unsigned int srcIdx, unsigned int srcFilecnt, unsigned int writeAttempts, meterfs_ctx_t *ctx)
+static int meterfs_migrateFileTable(unsigned int srcIdx, meterfs_partCondition_t *pc, meterfs_ctx_t *ctx)
 {
 	ssize_t err;
 	union {
@@ -444,7 +456,7 @@ static int meterfs_migrateFileTable(unsigned int srcIdx, unsigned int srcFilecnt
 
 	uint32_t checksum = 0;
 
-	for (uint32_t i = 0; i < srcFilecnt; ++i) {
+	for (uint32_t i = 0; i < pc[srcIdx].filecnt; ++i) {
 		off_t fileheaderAddrOfs = ctx->offset + HGRAIN + (i * HGRAIN);
 
 		err = ctx->read(ctx->devCtx, fileheaderAddrOfs + src, &u.fOld, sizeof(u.fOld));
@@ -470,7 +482,7 @@ static int meterfs_migrateFileTable(unsigned int srcIdx, unsigned int srcFilecnt
 		do {
 			err = meterfs_writeVerify(fileheaderAddrOfs + dst, &new, sizeof(new), ctx);
 			retry++;
-		} while (err < 0 && retry < writeAttempts);
+		} while (err < 0 && retry < METERFS_IO_RETRIES);
 		if (err < 0) {
 			return err;
 		}
@@ -499,205 +511,200 @@ static int meterfs_migrateFileTable(unsigned int srcIdx, unsigned int srcFilecnt
 	do {
 		err = meterfs_writeVerify(ctx->offset + dst, &u.h, sizeof(u.h), ctx);
 		retry++;
-	} while (err < 0 && retry < writeAttempts);
+	} while (err < 0 && retry < METERFS_IO_RETRIES);
 	if (err < 0) {
 		return err;
 	}
 
-	LOG_INFO("meterfs: Migrated header to #%u", dstIdx);
-
-	bool migrate = false;
-	if (!meterfs_isHeaderValid(dstIdx, NULL, NULL, &migrate, ctx)) {
+	if (meterfs_isHeaderValid(dstIdx, pc, ctx) <= 0) {
 		LOG_INFO("meterfs: Header #%u invalid after migration", dstIdx);
 		return -1;
 	}
 
-	if (migrate) {
+	if (pc[dstIdx].migrate) {
 		LOG_INFO("meterfs: Migration had no effect!");
 		return -1;
 	}
 
+	LOG_INFO("meterfs: Migrated header to #%u", dstIdx);
+
+	return 0;
+}
+
+
+static int meterfs_copyMigratedFileTable(unsigned int srcIdx, unsigned int srcFilecnt, meterfs_ctx_t *ctx)
+{
+	int err;
+	unsigned int dstIdx = 1 - srcIdx;
+	unsigned int retry = 0;
+
+	unsigned int src = srcIdx * ctx->h1Addr;
+	unsigned int dst = dstIdx * ctx->h1Addr;
+
 	DEBUG_REBOOT_TRIGGER("before erasing copy dest filetable");
 
-	LOG_INFO("meterfs: Copying migrated header #%u to #%u", dstIdx, srcIdx);
-	err = meterfs_eraseFileTable(srcIdx, ctx);
+	err = meterfs_eraseFileTable(dstIdx, ctx);
 	if (err < 0) {
 		return err;
 	}
 
-	ctx->hcurrAddr = dst;
+	ctx->hcurrAddr = src;
 	ctx->filecnt = srcFilecnt;
 
 	DEBUG_REBOOT_TRIGGER("before copying migrated filetable");
 
 	retry = 0;
 	do {
-		err = meterfs_copyData(ctx->offset + src, ctx->offset + dst, HGRAIN * (ctx->filecnt + 1), ctx);
+		err = meterfs_copyData(ctx->offset + dst, ctx->offset + src, HGRAIN * (ctx->filecnt + 1), ctx);
 		retry++;
-	} while (err < 0 && retry < writeAttempts);
+	} while (err < 0 && retry < METERFS_IO_RETRIES);
 	if (err < 0) {
 		return err;
 	}
 
-	if (!meterfs_isHeaderValid(srcIdx, NULL, NULL, NULL, ctx)) {
-		LOG_INFO("meterfs: Header #%u invalid after copying", srcIdx);
+	if (!meterfs_isHeaderValid(dstIdx, NULL, ctx)) {
+		LOG_INFO("meterfs: Header #%u invalid after copying", dstIdx);
 		return -1;
 	}
 
-	LOG_INFO("meterfs: Migrated successfully");
+	LOG_INFO("meterfs: Copied migrated header #%u to #%u", srcIdx, dstIdx);
 
 	return 0;
 }
 
 
-static int meterfs_checkfs(meterfs_ctx_t *ctx)
+static int meterfs_fixInvalidHeader(meterfs_ctx_t *ctx, meterfs_partCondition_t *pc)
 {
-	bool valid[2] = { false, false };
-	bool migrate[2] = { false, false };
-	index_t id[2];
-	unsigned int filecnt[2];
-	const unsigned int attempts = 3;
+	unsigned int fixIdx = pc[0].valid ? 1 : 0;
+	return meterfs_fixFileTable(fixIdx, pc[(fixIdx == 0) ? 1 : 0].filecnt, ctx);
+}
+
+
+static int meterfs_migrate(meterfs_ctx_t *ctx, meterfs_partCondition_t *pc, bool *deferred)
+{
+	ssize_t err;
+	LOG_INFO("meterfs: Valid old partition detected. Migrating.");
+
+	unsigned int src;
+	if (pc[0].migrate && pc[1].migrate) {
+		/* pick the newer header as src */
+		src = pc[0].id.no + 1 == pc[1].id.no ? 1 : 0;
+	}
+	else {
+		/* continue interrupted migration */
+		src = pc[0].migrate ? 0 : 1;
+	}
+
+	for (unsigned int retry = 0; retry < METERFS_IO_RETRIES; ++retry) {
+		err = meterfs_migrateFileTable(src, pc, ctx);
+		if (err < 0) {
+			LOG_INFO("meterfs: Migration attempt %u failed (%zu)", retry, err);
+		}
+
+#if METERFS_TWO_STAGE_FW_UPGR
+		/*
+		 * Intentionally interrupt the migration to support 2-stage firmware upgrades.
+		 * This way,
+		 */
+		LOG_INFO("meterfs: Deferring copy of header #%u to #%u after reboot", 1 - src, src);
+		*deferred = true;
+		return 0;
+#else
+		err = meterfs_copyMigratedFileTable(1 - src, pc[1 - src].filecnt, ctx);
+		LOG_INFO("meterfs: Migrated successfully");
+		if (err == 0) {
+			break;
+		}
+#endif
+	}
+
+	if (err < 0) {
+		LOG_INFO("meterfs: Migration failed despite %u attempts", METERFS_IO_RETRIES);
+	}
+
+	return err;
+}
+
+
+static int meterfs_checkFs(meterfs_ctx_t *ctx, meterfs_partCondition_t *pc)
+{
+	ssize_t err;
+
+	for (unsigned int headerIdx = 0; headerIdx < 2; ++headerIdx) {
+		err = meterfs_isHeaderValid(headerIdx, pc, ctx);
+		if (err < 0) {
+			return err;
+		}
+	}
+
+	return err;
+}
+
+
+static int meterfs_formatFs(meterfs_ctx_t *ctx, meterfs_partCondition_t *pc)
+{
 	ssize_t err;
 	union {
 		header_t h;
 		fileheader_t f;
 	} u;
 
-	ctx->h1Addr = HEADER_SIZE(ctx->sectorsz);
-
-	meterfs_powerCtrl(1, ctx);
-
-	for (unsigned int retry = 0; retry < attempts; ++retry) {
-		for (unsigned int headerIdx = 0; headerIdx < 2; ++headerIdx) {
-			err = meterfs_isHeaderValid(headerIdx, &id[headerIdx], &filecnt[headerIdx], &migrate[headerIdx], ctx);
-			if (err < 0) {
-				meterfs_powerCtrl(0, ctx);
-				return err;
-			}
-			valid[headerIdx] = err;
-		}
-
-		bool both_valid = valid[0] && valid[1];
-
-		if (both_valid && !migrate[0] && !migrate[1]) {
-			break;
-		}
-
-		if (migrate[0] || migrate[1]) {
-			if (both_valid) {
-				LOG_INFO("meterfs: Valid old partition detected. Migrating.");
-
-				unsigned int src;
-				if (migrate[0] && migrate[1]) {
-					/* pick the newer header as src */
-					src = id[0].no + 1 == id[1].no ? 1 : 0;
-				}
-				else {
-					/* continue interrupted migration */
-					src = migrate[0] ? 0 : 1;
-				}
-
-				for (unsigned int retry = 0; retry < attempts; ++retry) {
-					err = meterfs_migrateFileTable(src, filecnt[src], attempts, ctx);
-					if (err < 0) {
-						LOG_INFO("meterfs: Migration attempt %u failed (%zu)", retry, err);
-					}
-					else {
-						break;
-					}
-				}
-
-				if (err < 0) {
-					LOG_INFO("meterfs: Migration failed despite %u attempts", attempts);
-					meterfs_powerCtrl(0, ctx);
-					return err;
-				}
-
-				break;
-			}
-			else {
-				/* One of the headers got damaged, potentially during migration */
-				unsigned int fixIdx = valid[0] ? 1 : 0;
-				err = meterfs_fixFileTable(fixIdx, filecnt[(fixIdx == 0) ? 1 : 0], ctx);
-				if (err < 0) {
-					meterfs_powerCtrl(0, ctx);
-					return err;
-				}
-			}
-		}
-	}
-
-	if (!valid[0] && !valid[1]) {
-		LOG_INFO("meterfs: No valid filesystem detected. Formating.");
+	LOG_INFO("meterfs: No valid filesystem detected. Formating.");
 
 #if METERFS_DEBUG_UTILS
-		if (debug_common.ctx.dryErase) {
-			LOG_INFO("metefs debug: Would erase partition. Exiting.");
-			exit(1);
-		}
+	if (debug_common.ctx.dryErase) {
+		LOG_INFO("metefs debug: Would erase partition. Exiting.");
+		exit(1);
+	}
 #endif
 
-		/* Not essential, ignore errors */
-		(void)ctx->eraseSector(ctx->devCtx, ctx->offset + JOURNAL_OFFSET(ctx->sectorsz));
+	/* Not essential, ignore errors */
+	(void)ctx->eraseSector(ctx->devCtx, ctx->offset + JOURNAL_OFFSET(ctx->sectorsz));
 
-		ctx->filecnt = 0;
-		ctx->hcurrAddr = 0;
+	ctx->filecnt = 0;
+	ctx->hcurrAddr = 0;
 
-		u.h.filecnt = 0;
-		u.h.id.no = 0;
-		u.h.id.nvalid = 0;
-		u.h.checksum = 0;
-		memcpy(u.h.magic, magicConst, 4);
-		u.h.version = meterfsVersion;
+	u.h.filecnt = 0;
+	u.h.id.no = 0;
+	u.h.id.nvalid = 0;
+	u.h.checksum = 0;
+	memcpy(u.h.magic, magicConst, 4);
+	u.h.version = meterfsVersion;
 
-		uint32_t checksum = meterfs_calcChecksum(&u.h, sizeof(u.h));
-		u.h.checksum = checksum;
+	uint32_t checksum = meterfs_calcChecksum(&u.h, sizeof(u.h));
+	u.h.checksum = checksum;
 
-		for (unsigned int headerIdx = 0; headerIdx < 2; ++headerIdx) {
-			err = meterfs_eraseFileTable(headerIdx, ctx);
-			if (err < 0) {
-				LOG_DEBUG("meterfs: Failed to erase file table.");
-				meterfs_powerCtrl(0, ctx);
-				return err;
-			}
-
-			err = meterfs_writeVerify(ctx->offset + (ctx->h1Addr * headerIdx), &u.h, sizeof(u.h), ctx);
-			if (err < 0) {
-				LOG_DEBUG("meterfs: Failed to write.");
-				meterfs_powerCtrl(0, ctx);
-				return err;
-			}
-		}
-
-		meterfs_powerCtrl(0, ctx);
-		return 0;
-	}
-
-	/* Select active header and files table */
-	if (valid[0] && valid[1]) {
-		if (id[0].no + 1 == id[1].no) {
-			ctx->hcurrAddr = ctx->h1Addr;
-			ctx->filecnt = filecnt[1];
-		}
-		else {
-			ctx->hcurrAddr = 0;
-			ctx->filecnt = filecnt[0];
-		}
-	}
-	else {
-		unsigned int fixIdx = valid[0] ? 1 : 0;
-		err = meterfs_fixFileTable(fixIdx, filecnt[(fixIdx == 0) ? 1 : 0], ctx);
+	for (unsigned int headerIdx = 0; headerIdx < 2; ++headerIdx) {
+		err = meterfs_eraseFileTable(headerIdx, ctx);
 		if (err < 0) {
+			LOG_DEBUG("meterfs: Failed to erase file table.");
+			meterfs_powerCtrl(0, ctx);
+			return err;
+		}
+
+		err = meterfs_writeVerify(ctx->offset + (ctx->h1Addr * headerIdx), &u.h, sizeof(u.h), ctx);
+		if (err < 0) {
+			LOG_DEBUG("meterfs: Failed to write.");
 			meterfs_powerCtrl(0, ctx);
 			return err;
 		}
 	}
 
-	/* Finish pending partial erase operation (if any) */
-	err = meterfs_doPartialErase(ctx);
+	return 0;
+}
 
-	meterfs_powerCtrl(0, ctx);
-	return err;
+
+/* Select active header and files table */
+static void meterfs_selectActiveHeader(meterfs_ctx_t *ctx, meterfs_partCondition_t *pc)
+{
+	if (pc[0].id.no + 1 == pc[1].id.no) {
+		ctx->hcurrAddr = ctx->h1Addr;
+		ctx->filecnt = pc[1].filecnt;
+	}
+	else {
+		ctx->hcurrAddr = 0;
+		ctx->filecnt = pc[0].filecnt;
+	}
 }
 
 
@@ -1551,6 +1558,67 @@ int meterfs_writeFile(id_t id, const char *buff, size_t bufflen, meterfs_ctx_t *
 }
 
 
+static int meterfs_initFs(meterfs_ctx_t *ctx)
+{
+	meterfs_partCondition_t pc[2] = { 0 };
+	ssize_t err;
+	bool deferred = false;
+
+	ctx->h1Addr = HEADER_SIZE(ctx->sectorsz);
+
+	meterfs_powerCtrl(1, ctx);
+	do {
+		for (unsigned int retry = 0; retry < METERFS_IO_RETRIES; ++retry) {
+			err = meterfs_checkFs(ctx, pc);
+			if (err < 0) {
+				continue;
+			}
+
+			if (!pc[0].valid && !pc[1].valid) {
+				err = -1;
+				continue;
+			}
+
+			if (!pc[0].valid || !pc[1].valid) {
+				(void)meterfs_fixInvalidHeader(ctx, pc);
+				continue;
+			}
+
+			if (pc[0].migrate || pc[1].migrate) {
+				err = meterfs_migrate(ctx, pc, &deferred);
+			}
+		}
+
+		if (err < 0) {
+			break;
+		}
+
+		if (!pc[0].valid && !pc[1].valid) {
+			err = meterfs_formatFs(ctx, pc);
+			if (err < 0) {
+				break;
+			}
+		}
+
+		meterfs_selectActiveHeader(ctx, pc);
+
+		/*
+		 * TODO: in case METERFS_TWO_STAGE_FW_UPGR is enabled and we are in deferred
+		 * state, disallow I/O operations as they can overwrite the second header.
+		 * the second header MUST stay old to allow the old meterfs to rollback to
+		 * it.
+		 */
+
+		/* Finish pending partial erase operation (if any) */
+		err = meterfs_doPartialErase(ctx);
+	} while (0);
+
+	meterfs_powerCtrl(0, ctx);
+
+	return err;
+}
+
+
 int meterfs_devctl(const meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_ctx_t *ctx)
 {
 	fileheader_t h;
@@ -1647,7 +1715,7 @@ int meterfs_devctl(const meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_c
 			}
 			meterfs_powerCtrl(0, ctx);
 			node_cleanAll(&ctx->nodesTree);
-			err = meterfs_checkfs(ctx);
+			err = meterfs_initFs(ctx);
 			if (err < 0) {
 				return err;
 			}
@@ -1716,7 +1784,6 @@ int meterfs_devctl(const meterfs_i_devctl_t *i, meterfs_o_devctl_t *o, meterfs_c
 	return err;
 }
 
-
 int meterfs_init(meterfs_ctx_t *ctx)
 {
 	int err;
@@ -1742,7 +1809,7 @@ int meterfs_init(meterfs_ctx_t *ctx)
 
 	node_init(&ctx->nodesTree);
 
-	err = meterfs_checkfs(ctx);
+	err = meterfs_initFs(ctx);
 	if (err < 0) {
 		return err;
 	}
