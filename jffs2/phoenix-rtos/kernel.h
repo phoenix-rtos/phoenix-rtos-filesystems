@@ -18,6 +18,8 @@
 #define _OS_PHOENIX_KERNEL_H_
 
 #include <unistd.h>
+#include <arch.h>   /* for _PAGE_SHIFT */
+#include <limits.h> /* for PAGE_SIZE */
 
 #define __init
 #define __exit
@@ -26,9 +28,7 @@
 #define likely(x) (x)
 #define unlikely(x) (x)
 
-#define PAGE_SHIFT 	12
-#define PAGE_SIZE	(1 << PAGE_SHIFT)
-
+#define PAGE_SHIFT _PAGE_SHIFT
 
 #define cond_resched()
 
