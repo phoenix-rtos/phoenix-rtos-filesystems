@@ -329,6 +329,7 @@ struct inode *jffs2_iget(struct super_block *sb, unsigned long ino)
 		else
 			rdev = new_decode_dev(je32_to_cpu(jdev.new_id));
 
+		/* fallthrough */
 	case S_IFSOCK:
 	case S_IFIFO:
 		inode->i_op = &jffs2_file_inode_operations;
