@@ -37,6 +37,7 @@
 
 /* higher two bytes used as magic number */
 #define OBJECT_MODE_MEM (0xabad0000 | S_IFREG | S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)
+#define DUMMYFS_ISDEV(mode) (S_ISCHR(mode) || S_ISBLK(mode) || S_ISFIFO(mode) || S_ISSOCK(mode))
 #define DUMMYFS_ROOTID  0
 
 
@@ -409,7 +410,7 @@ int dummyfs_getattr(void *ctx, oid_t *oid, int type, long long *attr)
 				else if (S_ISREG(o->mode)) {
 					*attr = otFile;
 				}
-				else if (S_ISCHR(o->mode) || S_ISBLK(o->mode) || S_ISFIFO(o->mode)) {
+				else if (DUMMYFS_ISDEV(o->mode)) {
 					*attr = otDev;
 				}
 				else if (S_ISLNK(o->mode)) {
@@ -486,7 +487,7 @@ int dummyfs_getattrAll(void *ctx, oid_t *oid, struct _attrAll *attrs)
 		else if (S_ISREG(o->mode)) {
 			attrs->type.val = otFile;
 		}
-		else if (S_ISCHR(o->mode) || S_ISBLK(o->mode) || S_ISFIFO(o->mode)) {
+		else if (DUMMYFS_ISDEV(o->mode)) {
 			attrs->type.val = otDev;
 		}
 		else if (S_ISLNK(o->mode)) {
@@ -712,7 +713,7 @@ static int _dummyfs_create(dummyfs_t *fs, oid_t *dir, const char *name, oid_t *o
 			break;
 
 		case otDev:
-			if (!(S_ISCHR(mode) || S_ISBLK(mode) || S_ISFIFO(mode))) {
+			if (!DUMMYFS_ISDEV(mode)) {
 				mode &= 0x1ff;
 				mode |= S_IFCHR;
 			}
@@ -749,7 +750,7 @@ static int _dummyfs_create(dummyfs_t *fs, oid_t *dir, const char *name, oid_t *o
 	o->atime = time(NULL);
 	o->mtime = o->atime;
 	o->ctime = o->atime;
-	o->dev = (S_ISCHR(mode) || S_ISBLK(mode) || S_ISFIFO(mode)) ? *dev : o->oid;
+	o->dev = (DUMMYFS_ISDEV(mode)) ? *dev : o->oid;
 
 	*oid = o->oid;
 
