@@ -170,6 +170,12 @@ int dummyfs_dir_add(dummyfs_t *ctx, dummyfs_object_t *dir, const char *name, uin
 	else if (S_ISLNK(mode)) {
 		n->type = DT_LNK;
 	}
+	else if (S_ISSOCK(mode)) {
+		n->type = DT_SOCK;
+	}
+	else if (S_ISFIFO(mode)) {
+		n->type = DT_FIFO;
+	}
 	else {
 		n->type = DT_UNKNOWN;
 	}
