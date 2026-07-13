@@ -29,6 +29,10 @@
 #define DUMMYFS_SIZE_MAX (32 * 1024 * 1024)
 #endif
 
+#ifndef DUMMYFS_NAME_MAX
+#define DUMMYFS_NAME_MAX 255U
+#endif
+
 #if 0
 #define TRACE() printf("%s\n", __FUNCTION__)
 #else

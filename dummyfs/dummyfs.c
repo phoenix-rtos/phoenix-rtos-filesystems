@@ -1156,7 +1156,7 @@ int dummyfs_statfs(void *ctx, void *buf, size_t len)
 	st->f_favail = 0;
 	st->f_fsid = (unsigned long)fs; /* TODO: filesystem ID should be generated at mount time */
 	st->f_flag = fs->mode;
-	st->f_namemax = 255; /* TODO: define max filename limit, use 255 limit for now */
+	st->f_namemax = DUMMYFS_NAME_MAX;
 	mutexUnlock(fs->mutex);
 
 	return 0;
