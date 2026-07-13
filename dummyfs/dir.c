@@ -111,7 +111,13 @@ int dummyfs_dir_add(dummyfs_t *ctx, dummyfs_object_t *dir, const char *name, uin
 {
 	TRACE();
 	size_t len;
-	char *dname = dummyfs_strdup(ctx, name, &len);
+	char *dname;
+
+	if (strlen(name) > DUMMYFS_NAME_MAX) {
+		return -ENAMETOOLONG;
+	}
+
+	dname = dummyfs_strdup(ctx, name, &len);
 	if (dname == NULL) {
 		return -ENOMEM;
 	}
