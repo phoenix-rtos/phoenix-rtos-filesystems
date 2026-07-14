@@ -37,8 +37,10 @@ int ext2_create(ext2_t *fs, id_t id, const char *name, size_t len, oid_t *dev, u
 	if ((err = ext2_obj_create(fs, (uint32_t)id, NULL, mode, &obj)) < 0)
 		return err;
 
-	if (ext2_link(fs, id, name, len, obj->id) < 0)
-		return ext2_obj_destroy(fs, obj);
+	if ((err = ext2_link(fs, id, name, len, obj->id)) < 0) {
+		(void)ext2_obj_destroy(fs, obj);
+		return err;
+	}
 
 	if (EXT2_ISDEV(obj->inode->mode)) {
 		memcpy(&obj->dev, dev, sizeof(oid_t));
