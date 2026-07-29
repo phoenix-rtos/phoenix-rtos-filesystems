@@ -18,14 +18,10 @@
 #define _OS_PHOENIX_TYPES_H_
 
 #include <sys/types.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 #define pgoff_t unsigned long
-
-typedef uint8_t bool;
-
-#define true 1
-#define false 0
 
 typedef uint32_t u32;
 typedef uint16_t u16;
