@@ -28,6 +28,10 @@ void jffs2_garbage_collect_trigger(struct jffs2_sb_info *c)
 /* This must only ever be called when no GC thread is currently running */
 int jffs2_start_garbage_collect_thread(struct jffs2_sb_info *c)
 {
+#if 1
+	/* disable GC */
+	return 0;
+#else
 	struct task_struct *tsk;
 	int ret = 0;
 
@@ -50,6 +54,7 @@ int jffs2_start_garbage_collect_thread(struct jffs2_sb_info *c)
 	}
 
 	return ret;
+#endif
 }
 
 void jffs2_stop_garbage_collect_thread(struct jffs2_sb_info *c)
@@ -68,7 +73,7 @@ void jffs2_stop_garbage_collect_thread(struct jffs2_sb_info *c)
 		wait_for_completion(&c->gc_thread_exit);
 }
 
-static void jffs2_garbage_collect_thread(void *_c)
+__attribute__((unused)) static void jffs2_garbage_collect_thread(void *_c)
 {
 	struct jffs2_sb_info *c = _c;
 	jffs2_partition_t *part = (jffs2_partition_t *)(OFNI_BS_2SFFJ(c)->s_part);
