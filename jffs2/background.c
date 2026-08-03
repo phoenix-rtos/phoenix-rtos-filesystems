@@ -28,7 +28,7 @@ void jffs2_garbage_collect_trigger(struct jffs2_sb_info *c)
 /* This must only ever be called when no GC thread is currently running */
 int jffs2_start_garbage_collect_thread(struct jffs2_sb_info *c)
 {
-#if 1
+#if 0
 	/* disable GC */
 	return 0;
 #else

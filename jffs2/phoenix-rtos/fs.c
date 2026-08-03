@@ -59,9 +59,11 @@ void drop_nlink(struct inode *inode)
 
 void ihold(struct inode * inode)
 {
+	mutexLock(inode->i_lock);
 	inode->i_count++;
 	if (inode->i_count < 2)
 		printf("jffs2: ihold #%lu refs < 2\n", inode->i_ino);
+	mutexUnlock(inode->i_lock);
 }
 
 struct inode *new_inode(struct super_block *sb)

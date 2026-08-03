@@ -54,7 +54,12 @@ struct dentry * d_make_root(struct inode *inode)
 		memset(res, 0, sizeof(struct dentry));
 		res->d_inode = inode;
 		res->d_sb = inode->i_sb;
+		mutexLock(inode->i_lock);
+		if (inode->i_count > 1) {
+			printf("jffs2: cutting a reference! %d\n", inode->i_count);
+		}
 		inode->i_count = 1;
+		mutexUnlock(inode->i_lock);
 	}
 
 	return res;
