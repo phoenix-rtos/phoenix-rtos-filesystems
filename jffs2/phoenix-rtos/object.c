@@ -143,6 +143,7 @@ jffs2_object_t *object_get(void *part, unsigned int id, int create)
 
 void object_put(void *part, unsigned int id)
 {
+#if 0
 	jffs2_objects_t *jffs2_objects = ((jffs2_partition_t *)part)->objects;
 	jffs2_object_t *o, t;
 	int evict = 0;
@@ -183,6 +184,7 @@ void object_put(void *part, unsigned int id)
 	}
 
 	mutexUnlock(jffs2_objects->lock);
+#endif
 }
 
 
