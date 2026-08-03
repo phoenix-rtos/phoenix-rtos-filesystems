@@ -15,6 +15,7 @@
 
 #include "../phoenix-rtos.h"
 #include <time.h>
+#include <stdatomic.h>
 #include "fs.h"
 
 
@@ -38,32 +39,35 @@ void init_special_inode(struct inode *inode, umode_t mode, dev_t dev)
 
 void inc_nlink(struct inode *inode)
 {
-	inode->i_nlink++;
+	atomic_fetch_add(&inode->i_nlink, 1);
 }
 
 void clear_nlink(struct inode *inode)
 {
-	inode->i_nlink = 0;
+	atomic_store(&inode->i_nlink, 0);
 }
 
 void set_nlink(struct inode *inode, unsigned int nlink)
 {
-	inode->i_nlink = nlink;
+	atomic_store(&inode->i_nlink, nlink);
 }
 
 void drop_nlink(struct inode *inode)
 {
-	if (inode->i_nlink)
-		inode->i_nlink--;
+	unsigned int c = atomic_load(&inode->i_nlink);
+
+	while (c > 0) {
+		if (atomic_compare_exchange_weak(&inode->i_nlink, &c, c - 1)) {
+			break;
+		}
+	}
 }
 
-void ihold(struct inode * inode)
+void ihold(struct inode *inode)
 {
-	mutexLock(inode->i_lock);
-	inode->i_count++;
-	if (inode->i_count < 2)
+	unsigned int old_count = atomic_fetch_add(&inode->i_count, 1);
+	if ((old_count + 1) < 2)
 		printf("jffs2: ihold #%lu refs < 2\n", inode->i_ino);
-	mutexUnlock(inode->i_lock);
 }
 
 struct inode *new_inode(struct super_block *sb)

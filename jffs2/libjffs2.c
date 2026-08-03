@@ -12,6 +12,7 @@
  * %LICENSE%
  */
 
+#include <stdatomic.h>
 #include <poll.h>
 #include <sys/statvfs.h>
 #include <phoenix/attribute.h>
@@ -361,7 +362,7 @@ static int libjffs2_getattr(void *info, oid_t *oid, int type, long long *attr)
 			break;
 
 		case (atLinks):
-			*attr = inode->i_nlink;
+			*attr = atomic_load(&inode->i_nlink);
 			break;
 		case (atPollStatus):
 			// trivial implementation: assume read/write is always possible

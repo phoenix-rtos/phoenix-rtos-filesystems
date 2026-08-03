@@ -13,6 +13,7 @@
  * %LICENSE%
  */
 
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
@@ -118,9 +119,7 @@ jffs2_object_t *object_get(void *part, unsigned int id, int create)
 	mutexLock(jffs2_objects->lock);
 
 	if ((o = lib_treeof(jffs2_object_t, node, lib_rbFind(&jffs2_objects->tree, &t.node))) != NULL) {
-		mutexLock(o->inode->i_lock);
-		o->inode->i_count++;
-		mutexUnlock(o->inode->i_lock);
+		atomic_fetch_add(&o->inode->i_count, 1);
 	}
 
 	if (o == NULL && create) {
@@ -154,15 +153,19 @@ void object_put(void *part, unsigned int id)
 	if ((o = lib_treeof(jffs2_object_t, node, lib_rbFind(&jffs2_objects->tree, &t.node))) != NULL) {
 		mutexLock(o->inode->i_lock);
 
-		if (o->inode->i_count > 0) {
-			o->inode->i_count--;
+		unsigned int c = atomic_load(&o->inode->i_count);
+		while (c > 0) {
+			if (atomic_compare_exchange_weak(&o->inode->i_count, &c, c - 1)) {
+				c--;
+				break;
+			}
 		}
 
 		/* The inode has no in-memory references */
-		if (o->inode->i_count == 0) {
+		if (c == 0) {
 			/* There is no directory entry pointing to the inode */
 			/* It shall be evicted and destroyed */
-			if (o->inode->i_nlink == 0) {
+			if (atomic_load(&o->inode->i_nlink) == 0) {
 				evict = 1;
 			}
 			/* Keep the inode in lru_list */

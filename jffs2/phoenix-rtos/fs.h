@@ -122,8 +122,8 @@ struct inode {
 	struct file_operations		*i_fop;
 	struct address_space		*i_mapping;
 	char						*i_link;
-	unsigned int				i_nlink;
-	unsigned int				i_count;
+	_Atomic unsigned int i_nlink;
+	_Atomic unsigned int i_count;
 	blkcnt_t					i_blocks;
 	dev_t						i_rdev;
 	unsigned long				i_state;
