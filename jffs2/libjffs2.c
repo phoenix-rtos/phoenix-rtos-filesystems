@@ -21,6 +21,7 @@
 #include "include/libjffs2.h"
 
 #define TRACE(x, ...) printf("jffs trace: " x "\n", ##__VA_ARGS__)
+#define JFFS2_ISDEV(mode) (S_ISCHR(mode) || S_ISBLK(mode) || S_ISFIFO(mode) || S_ISSOCK(mode))
 
 
 jffs2_common_t jffs2_common;
@@ -340,7 +341,7 @@ static int libjffs2_getattr(void *info, oid_t *oid, int type, long long *attr)
 				*attr = otDir;
 			else if (S_ISREG(inode->i_mode))
 				*attr = otFile;
-			else if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode) || S_ISFIFO(inode->i_mode))
+			else if (JFFS2_ISDEV(inode->i_mode))
 				*attr = otDev;
 			else if (S_ISLNK(inode->i_mode))
 				*attr = otSymlink;
@@ -421,7 +422,7 @@ static int libjffs2_getattrAll(void *info, oid_t *oid, struct _attrAll *attrs)
 	else if (S_ISREG(inode->i_mode)) {
 		attrs->type.val = otFile;
 	}
-	else if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode) || S_ISFIFO(inode->i_mode)) {
+	else if (JFFS2_ISDEV(inode->i_mode)) {
 		attrs->type.val = otDev;
 	}
 	else if (S_ISLNK(inode->i_mode)) {
@@ -716,7 +717,7 @@ static int libjffs2_create(void *info, oid_t *dir, const char *name, oid_t *oid,
 			ret = idir->i_op->mkdir(idir, dentry, mode);
 			break;
 		case otDev:
-			if (!(S_ISCHR(mode) || S_ISBLK(mode) || S_ISFIFO(mode))) {
+			if (!JFFS2_ISDEV(mode)) {
 				mode &= ALLPERMS;
 				mode |= S_IFCHR;
 			}
