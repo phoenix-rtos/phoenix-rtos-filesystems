@@ -229,6 +229,11 @@ static int libjffs2_setattr(void *info, oid_t *oid, int type, long long attr, co
 			break;
 
 		case (atSize): /* size */
+			if (S_ISDIR(inode->i_mode)) {
+				ret = -EISDIR;
+				done = 1;
+				break;
+			}
 			iattr.ia_valid = ATTR_SIZE;
 			iattr.ia_size = attr;
 			break;
