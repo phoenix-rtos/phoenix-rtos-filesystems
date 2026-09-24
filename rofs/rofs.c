@@ -23,48 +23,30 @@
 #include <sys/mman.h>
 #include <phoenix/attribute.h>
 
+#include <tinyaes/aes.h>
+#include <tinyaes/cmac.h>
+
+#include "rofs_layout.h"
 #include "rofs.h"
+
+_Static_assert(ROFS_BUFSZ >= sizeof(struct rofs_node), "buffer must fit rofs_node");
 
 #define LOG_PREFIX    "rofs: "
 #define LOG(fmt, ...) printf(LOG_PREFIX fmt "\n", ##__VA_ARGS__)
 
-#if 0
+#ifndef ROFS_DEBUG
+#define ROFS_DEBUG 0
+#endif
+
+#if ROFS_DEBUG
 #define TRACE(fmt, ...) printf(LOG_PREFIX fmt "\n", ##__VA_ARGS__)
 #else
 #define TRACE(fmt, ...)
 #endif
 
-
 /*
  * NOTE: Implementation assumes filesystem is prepared for target native endianness
  */
-
-
-#define ROFS_SIGNATURE     "ROFS"
-#define ROFS_HDR_SIGNATURE 0
-#define ROFS_HDR_CHECKSUM  4
-#define ROFS_HDR_IMAGESIZE 8
-#define ROFS_HDR_INDEXOFFS 16
-#define ROFS_HDR_NODECOUNT 24
-#define ROFS_HDRSIZE       32
-
-
-struct rofs_node {
-	uint64_t timestamp;
-	uint32_t parent_id;
-	uint32_t id;
-	uint32_t mode;
-	uint32_t reserved0;
-	int32_t uid;
-	int32_t gid;
-	uint32_t offset;
-	uint32_t reserved1;
-	uint32_t size;
-	uint32_t reserved2;
-	char name[207];
-	uint8_t zero;
-} __attribute__((packed)); /* 256 bytes */
-
 
 static uint32_t calc_crc32(const uint8_t *buf, uint32_t len, uint32_t base)
 {
@@ -86,6 +68,65 @@ static uint32_t calc_crc32(const uint8_t *buf, uint32_t len, uint32_t base)
 		}
 	}
 	return crc;
+}
+
+
+static int calc_AESCMAC(struct rofs_ctx *ctx, uint32_t ofs, uint32_t len, uint8_t mac[AES_BLOCKLEN])
+{
+	size_t todo = len;
+	struct CMAC_ctx cmacCtx;
+
+	CMAC_init_ctx(&cmacCtx, ctx->key);
+
+	while (todo > 0) {
+		size_t chunksz = (todo > sizeof(ctx->buf)) ? sizeof(ctx->buf) : todo;
+		ssize_t rlen = ctx->devRead(ctx, ctx->buf, chunksz, ofs + len - todo);
+
+		if (chunksz != rlen) {
+			LOG("devRead failed: %zd", rlen);
+			return -1;
+		}
+
+		CMAC_append(&cmacCtx, ctx->buf, rlen);
+		todo -= rlen;
+	}
+
+	CMAC_calculate(&cmacCtx, mac);
+
+	return 0;
+}
+
+
+static uint8_t *ivSerializeU32(uint8_t *buff, uint32_t d)
+{
+	buff[0] = (d >> 0) & 0xff;
+	buff[1] = (d >> 8) & 0xff;
+	buff[2] = (d >> 16) & 0xff;
+	buff[3] = (d >> 24) & 0xff;
+
+	return &buff[4];
+}
+
+
+static inline void constructIV(uint8_t *iv, const struct rofs_node *node)
+{
+	/* TODO: ESSIV? */
+	uint8_t *tbuff = ivSerializeU32(iv, node->id);
+	tbuff = ivSerializeU32(tbuff, node->offset);
+	tbuff = ivSerializeU32(tbuff, node->uid);
+	uint32_t t = 0;
+	ivSerializeU32(tbuff, t);
+}
+
+
+static void xcrypt(void *buff, size_t bufflen, const uint8_t *key, const struct rofs_node *node)
+{
+	struct AES_ctx ctx;
+	uint8_t iv[AES_BLOCKLEN];
+
+	constructIV(iv, node);
+	AES_init_ctx_iv(&ctx, key, iv);
+	AES_CTR_xcrypt_buffer(&ctx, buff, bufflen);
 }
 
 
@@ -146,10 +187,8 @@ static int getNode(struct rofs_ctx *ctx, oid_t *oid, struct rofs_node **retNode)
 }
 
 
-int rofs_init(struct rofs_ctx *ctx, rofs_devRead_t devRead, unsigned long imageAddr)
+int rofs_init(struct rofs_ctx *ctx, rofs_devRead_t devRead, unsigned long imageAddr, const uint8_t *key)
 {
-	_Static_assert(ROFS_BUFSZ >= sizeof(struct rofs_node), "buffer must fit rofs_node");
-
 	uint8_t *imagePtr = NULL;
 	uint32_t crc = ~0;
 	int ret;
@@ -173,8 +212,8 @@ int rofs_init(struct rofs_ctx *ctx, rofs_devRead_t devRead, unsigned long imageA
 		ctx->imgPtr = imagePtr;
 	}
 
-	ret = ctx->devRead(ctx, ctx->buf, ROFS_HDRSIZE, 0);
-	if (ret != ROFS_HDRSIZE) {
+	ret = ctx->devRead(ctx, ctx->buf, ROFS_HEADER_SIZE, 0);
+	if (ret != ROFS_HEADER_SIZE) {
 		ret = -EIO;
 		/* defer return on failure to after munmap in case imageAddr != 0 */
 	}
@@ -200,11 +239,25 @@ int rofs_init(struct rofs_ctx *ctx, rofs_devRead_t devRead, unsigned long imageA
 	ctx->imgSize = *(uint32_t *)(ctx->buf + ROFS_HDR_IMAGESIZE);
 	ctx->nodeCount = *(uint32_t *)(ctx->buf + ROFS_HDR_NODECOUNT);
 	ctx->indexOffs = *(uint32_t *)(ctx->buf + ROFS_HDR_INDEXOFFS);
+	ctx->encryption = *(uint16_t *)(ctx->buf + ROFS_HDR_ENCRYPTION);
+
+	uint8_t target_mac[AES_BLOCKLEN];
+	memcpy(target_mac, ctx->buf + ROFS_HDR_CRYPT_SIG, AES_BLOCKLEN);
 
 	if ((ctx->indexOffs & (sizeof(uint64_t) - 1)) != 0) {
 		LOG("Image index offset is invalid");
 		return -EINVAL;
 	}
+
+#if ROFS_DEBUG
+	char buf[2 * AES_BLOCKLEN + 1];
+	size_t ofs = 0;
+	for (int i = 0; i < AES_BLOCKLEN; i++) {
+		ofs += snprintf(buf + ofs, 2 * AES_BLOCKLEN - ofs, "%.2x", target_mac[i]);
+	}
+	buf[ofs] = '\0';
+	TRACE("target AES-CMAC: %s", buf);
+#endif
 
 	if (imageAddr != 0) {
 		/* Map whole image */
@@ -235,18 +288,48 @@ int rofs_init(struct rofs_ctx *ctx, rofs_devRead_t devRead, unsigned long imageA
 		crc = ~crc;
 	}
 
-	if (crc != ctx->checksum) {
-		LOG("invalid crc %08X vs %08X", crc, ctx->checksum);
+	do {
+		if (crc != ctx->checksum) {
+			LOG("invalid crc %08X vs %08X", crc, ctx->checksum);
+			ret = -EINVAL;
+			break;
+		}
+
+		TRACE("SIG OK: crc32=%08X imgSize=%zu nodes=%d", crc, ctx->imgSize, ctx->nodeCount);
+
+		if (ctx->imgPtr != NULL) {
+			ctx->tree = (struct rofs_node *)(ctx->imgPtr + ctx->indexOffs);
+		}
+
+		if (key != NULL) {
+			if (ctx->encryption != rofs_encryption_aes) {
+				LOG("image encryption type mismatch: %d != %d", ctx->encryption, rofs_encryption_aes);
+				ret = -EINVAL;
+				break;
+			}
+
+			ctx->key = key;
+			uint8_t actual_mac[AES_BLOCKLEN];
+			ret = calc_AESCMAC(ctx, ROFS_HEADER_SIZE, ctx->imgSize - ROFS_HEADER_SIZE, actual_mac);
+			if (ret < 0) {
+				LOG("failed to calculate AES-CMAC: %d", ret);
+				ret = -EIO;
+				break;
+			}
+
+			if (memcmp(actual_mac, target_mac, AES_BLOCKLEN) != 0) {
+				LOG("AES-CMAC mismatch");
+				ret = -EINVAL;
+				break;
+			}
+		}
+	} while (0);
+
+	if (ret < 0) {
 		if (ctx->imgPtr != NULL) {
 			munmap(ctx->imgPtr, ctx->imgAlignedSize);
 		}
-		return -EINVAL;
-	}
-
-	TRACE("SIG OK: crc32=%08X imgSize=%zu nodes=%d", crc, ctx->imgSize, ctx->nodeCount);
-
-	if (ctx->imgPtr != NULL) {
-		ctx->tree = (struct rofs_node *)(ctx->imgPtr + ctx->indexOffs);
+		return ret;
 	}
 
 	return 0;
@@ -302,7 +385,16 @@ int rofs_read(struct rofs_ctx *ctx, oid_t *oid, off_t offs, char *buff, size_t l
 		len = (size_t)node->size - offs;
 	}
 
-	return ctx->devRead(ctx, buff, len, node->offset + offs);
+	ret = ctx->devRead(ctx, buff, len, node->offset + offs);
+	if (ret < 0) {
+		return ret;
+	}
+
+	if (ctx->key != NULL) {
+		xcrypt(buff, (size_t)ret, ctx->key, node);
+	}
+
+	return ret;
 }
 
 
@@ -493,7 +585,7 @@ int rofs_getattrall(struct rofs_ctx *ctx, oid_t *oid, struct _attrAll *attrs, si
 }
 
 
-static int dirfind(struct rofs_ctx *ctx, struct rofs_node **pNode, int parent_id, const char *name, oid_t *o)
+static int dirfind(struct rofs_ctx *ctx, struct rofs_node **pNode, int parentId, const char *name, oid_t *o)
 {
 	struct rofs_node *node;
 	uint32_t i;
@@ -514,7 +606,7 @@ static int dirfind(struct rofs_ctx *ctx, struct rofs_node **pNode, int parent_id
 			return -EIO;
 		}
 
-		if ((node->parent_id == parent_id) && (strnlen(node->name, len + 1) == len) && (strncmp(name, node->name, len) == 0)) {
+		if ((node->parentId == parentId) && (strnlen(node->name, len + 1) == len) && (strncmp(name, node->name, len) == 0)) {
 			o->id = node->id;
 			o->port = ctx->oid.port;
 			*pNode = node;
@@ -531,7 +623,7 @@ int rofs_lookup(struct rofs_ctx *ctx, oid_t *dir, const char *name, oid_t *fil, 
 	TRACE("lookup name='%s' oid=%u.%ju port=%d", name, dir->port, (uintmax_t)dir->id, ctx->oid.port);
 
 	struct rofs_node *node = NULL;
-	int parent_id = 0;
+	int parentId = 0;
 	int len = 0;
 	int res = -ENOENT;
 
@@ -541,7 +633,7 @@ int rofs_lookup(struct rofs_ctx *ctx, oid_t *dir, const char *name, oid_t *fil, 
 	}
 
 	if ((dir != NULL) && (dir->port == ctx->oid.port)) {
-		parent_id = dir->id;
+		parentId = dir->id;
 	}
 
 	while (name[len] != '\0') {
@@ -549,14 +641,14 @@ int rofs_lookup(struct rofs_ctx *ctx, oid_t *dir, const char *name, oid_t *fil, 
 			len++;
 		}
 
-		res = dirfind(ctx, &node, parent_id, &name[len], fil);
+		res = dirfind(ctx, &node, parentId, &name[len], fil);
 		if (res <= 0) {
 			break;
 		}
 		else {
 			len += res;
 		}
-		parent_id = node->id;
+		parentId = node->id;
 	}
 
 	if (res < 0) {
@@ -599,7 +691,7 @@ int rofs_readdir(struct rofs_ctx *ctx, oid_t *dir, off_t offs, struct dirent *de
 
 	if (count > offs) {
 		strcpy(dent->d_name, (offs == 0) ? "." : "..");
-		dent->d_ino = (offs == 0) ? node->id : node->parent_id;
+		dent->d_ino = (offs == 0) ? node->id : node->parentId;
 		dent->d_namlen = (offs == 0) ? 1 : 2;
 		dent->d_reclen = 1;
 		dent->d_type = DT_DIR;
@@ -612,7 +704,7 @@ int rofs_readdir(struct rofs_ctx *ctx, oid_t *dir, off_t offs, struct dirent *de
 			return -EIO;
 		}
 
-		if (node->parent_id == dir->id) {
+		if (node->parentId == dir->id) {
 			if (count++ < offs) {
 				continue;
 			}
