@@ -80,7 +80,9 @@ ssize_t _ext2_file_read(ext2_t *fs, ext2_obj_t *obj, off_t offs, char *buff, siz
 		free(data);
 	}
 
-	obj->inode->atime = time(NULL);
+	if (!S_ISDIR(obj->inode->mode)) {
+		obj->inode->atime = time(NULL);
+	}
 
 	return len;
 }
