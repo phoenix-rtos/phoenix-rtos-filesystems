@@ -37,7 +37,7 @@ int ph_lfs_open(lfs_t *lfs, id_t phId);
 int ph_lfs_close(lfs_t *lfs, id_t phId);
 
 
-ssize_t ph_lfs_write(lfs_t *lfs, id_t phId, size_t offs, const void *data, size_t len);
+ssize_t ph_lfs_write(lfs_t *lfs, id_t phId, size_t offs, const void *data, size_t len, unsigned int mode);
 
 
 ssize_t ph_lfs_read(lfs_t *lfs, id_t phId, size_t offs, void *data, size_t len);

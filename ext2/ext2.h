@@ -100,7 +100,7 @@ extern ssize_t ext2_read(ext2_t *fs, id_t id, off_t offs, char *buff, size_t len
 
 
 /* Writes to a file */
-extern ssize_t ext2_write(ext2_t *fs, id_t id, off_t offs, const char *buff, size_t len);
+extern ssize_t ext2_write(ext2_t *fs, id_t id, off_t offs, const char *buff, size_t len, unsigned int mode);
 
 
 /* Truncates a file */

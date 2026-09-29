@@ -84,12 +84,13 @@ static ssize_t fsOpAdapter_read(void *info, oid_t *oid, off_t offs, void *data, 
 }
 
 
-static ssize_t fsOpAdapter_write(void *info, oid_t *oid, off_t offs, const void *data, size_t len)
+static ssize_t fsOpAdapter_write(void *info, oid_t *oid, off_t offs, const void *data, size_t len, unsigned int mode)
 {
 	int err;
 	meterfs_partition_t *ctx = (meterfs_partition_t *)info;
 
 	(void)offs;
+	(void)mode;
 
 	(void)mutexLock(ctx->lock);
 

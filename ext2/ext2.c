@@ -14,6 +14,7 @@
  */
 
 #include <errno.h>
+#include <fcntl.h>
 #include <poll.h>
 #include <string.h>
 #include <time.h>
@@ -212,7 +213,7 @@ ssize_t ext2_read(ext2_t *fs, id_t id, off_t offs, char *buff, size_t len)
 }
 
 
-ssize_t ext2_write(ext2_t *fs, id_t id, off_t offs, const char *buff, size_t len)
+ssize_t ext2_write(ext2_t *fs, id_t id, off_t offs, const char *buff, size_t len, unsigned int mode)
 {
 	ext2_obj_t *obj;
 	ssize_t ret;
@@ -226,6 +227,9 @@ ssize_t ext2_write(ext2_t *fs, id_t id, off_t offs, const char *buff, size_t len
 		ret = -EINVAL;
 	}
 	else {
+		if ((mode & O_APPEND) != 0) {
+			offs = obj->inode->size;
+		}
 		ret = _ext2_file_write(fs, obj, offs, buff, len);
 	}
 
