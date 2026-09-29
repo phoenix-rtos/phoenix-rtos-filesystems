@@ -12,6 +12,7 @@
  * %LICENSE%
  */
 
+#include <fcntl.h>
 #include <poll.h>
 #include <sys/statvfs.h>
 #include <phoenix/attribute.h>
@@ -988,7 +989,7 @@ static int libjffs2_prepareWrite(struct inode *inode, loff_t offs, size_t len)
 }
 
 
-static ssize_t libjffs2_write(void *info, oid_t *oid, off_t offs, const void *data, size_t len)
+static ssize_t libjffs2_write(void *info, oid_t *oid, off_t offs, const void *data, size_t len, unsigned int mode)
 {
 	struct inode *inode;
 	struct jffs2_inode_info *f;
@@ -1031,6 +1032,10 @@ static ssize_t libjffs2_write(void *info, oid_t *oid, off_t offs, const void *da
 		inode_unlock(inode);
 		iput(inode);
 		return -EINVAL;
+	}
+
+	if ((mode & O_APPEND) != 0) {
+		offs = inode->i_size;
 	}
 
 	ri = jffs2_alloc_raw_inode();

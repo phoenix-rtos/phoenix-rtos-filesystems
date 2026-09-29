@@ -157,7 +157,7 @@ int main(int argc, char **argv)
 				break;
 
 			case mtWrite:
-				msg.o.err = rofs_write(&ctx, &msg.oid, msg.i.io.offs, msg.i.data, msg.i.size);
+				msg.o.err = rofs_write(&ctx, &msg.oid, msg.i.io.offs, msg.i.data, msg.i.size, msg.i.io.mode);
 				break;
 
 			case mtTruncate:

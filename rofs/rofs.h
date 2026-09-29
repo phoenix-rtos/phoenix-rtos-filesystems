@@ -61,7 +61,7 @@ int rofs_close(struct rofs_ctx *ctx, oid_t *oid);
 int rofs_read(struct rofs_ctx *ctx, oid_t *oid, off_t offs, char *buff, size_t len);
 
 
-int rofs_write(struct rofs_ctx *ctx, oid_t *oid, off_t offs, const char *buff, size_t len);
+int rofs_write(struct rofs_ctx *ctx, oid_t *oid, off_t offs, const char *buff, size_t len, unsigned int mode);
 
 
 int rofs_truncate(struct rofs_ctx *ctx, oid_t *oid, size_t size);
