@@ -306,10 +306,10 @@ int rofs_read(struct rofs_ctx *ctx, oid_t *oid, off_t offs, char *buff, size_t l
 }
 
 
-int rofs_write(struct rofs_ctx *ctx, oid_t *oid, off_t offs, const char *buff, size_t len, unsigned int mode)
+int rofs_write(struct rofs_ctx *ctx, oid_t *oid, off_t *offs, const char *buff, size_t len, unsigned int mode)
 {
 	(void)ctx;
-	TRACE("write id=%ju, of=%jd, buf=0x%p, len=%zu", (uintmax_t)oid->id, (intmax_t)offs, buff, len);
+	TRACE("write id=%ju, of=%jd, buf=0x%p, len=%zu", (uintmax_t)oid->id, (intmax_t)*offs, buff, len);
 	return -ENOSYS;
 }
 

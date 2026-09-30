@@ -24,7 +24,7 @@ int dummyfs_close(void *ctx, oid_t *oid);
 int dummyfs_read(void *ctx, oid_t *oid, off_t offs, char *buff, size_t len);
 
 
-int dummyfs_write(void *ctx, oid_t *oid, off_t offs, const char *buff, size_t len, unsigned int mode);
+int dummyfs_write(void *ctx, oid_t *oid, off_t *offs, const char *buff, size_t len, unsigned int mode);
 
 
 int dummyfs_truncate(void *ctx, oid_t *oid, size_t size);
