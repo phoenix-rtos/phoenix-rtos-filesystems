@@ -1187,7 +1187,7 @@ int ph_lfs_create(lfs_t *lfs, id_t parentPhId, const char *name, uint16_t mode, 
 }
 
 
-ssize_t ph_lfs_write(lfs_t *lfs, id_t phId, size_t offs, const void *data, size_t len, unsigned int mode)
+ssize_t ph_lfs_write(lfs_t *lfs, id_t phId, size_t *offs, const void *data, size_t len, unsigned int mode)
 {
 	ph_lfs_lru_t *obj;
 	int err = ph_lfs_getObj(lfs, phId, false, &obj);
@@ -1203,16 +1203,23 @@ ssize_t ph_lfs_write(lfs_t *lfs, id_t phId, size_t offs, const void *data, size_
 
 	lfs_file_t *file = (lfs_file_t *)obj->extras;
 	if ((mode & O_APPEND) != 0) {
-		offs = lfs_file_rawsize(lfs, file);
+		*offs = lfs_file_rawsize(lfs, file);
 	}
 
-	lfs_soff_t seekRes = lfs_file_rawseek(lfs, file, offs, LFS_SEEK_SET);
+	lfs_soff_t seekRes = lfs_file_rawseek(lfs, file, *offs, LFS_SEEK_SET);
 	if (seekRes < 0) {
 		return seekRes;
 	}
 
-	LFS_ASSERT((size_t)seekRes == offs);
-	return lfs_file_rawwrite(lfs, file, data, len);
+	LFS_ASSERT((size_t)seekRes == *offs);
+
+	lfs_ssize_t ret = lfs_file_rawwrite(lfs, file, data, len);
+
+	if (ret > 0) {
+		*offs += ret;
+	}
+
+	return ret;
 }
 
 

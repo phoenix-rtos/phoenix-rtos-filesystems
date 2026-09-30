@@ -105,9 +105,10 @@ static int liblfs_create(void *info, oid_t *dir, const char *name, oid_t *oid, u
 	if ((ret >= 0) && (type == otSymlink)) {
 		const char *target = name + strlen(name) + 1;
 		size_t targetlen = strlen(target);
+		size_t offs = 0;
 		int err = ph_lfs_open(lfs, oid->id);
 		if (err >= 0) {
-			err = ph_lfs_write(lfs, oid->id, 0, target, targetlen, 0);
+			err = ph_lfs_write(lfs, oid->id, &offs, target, targetlen, 0);
 		}
 
 		if (err >= 0) {
@@ -159,7 +160,7 @@ static ssize_t liblfs_read(void *info, oid_t *oid, off_t offs, void *data, size_
 }
 
 
-static ssize_t liblfs_write(void *info, oid_t *oid, off_t offs, const void *data, size_t len, unsigned int mode)
+static ssize_t liblfs_write(void *info, oid_t *oid, off_t *offs, const void *data, size_t len, unsigned int mode)
 {
 	TRACE_CALLS(puts(__FUNCTION__));
 	lfs_t *lfs = (lfs_t *)info;
@@ -168,7 +169,11 @@ static ssize_t liblfs_write(void *info, oid_t *oid, off_t offs, const void *data
 	}
 
 	mutexLock(lfs->ph.mutex);
-	int ret = ph_lfs_write(lfs, oid->id, offs, data, len, mode);
+	size_t offset = *offs;
+	int ret = ph_lfs_write(lfs, oid->id, &offset, data, len, mode);
+	if (ret > 0) {
+		*offs = offset;
+	}
 	mutexUnlock(lfs->ph.mutex);
 	return ret;
 }
@@ -389,7 +394,8 @@ int liblfs_handler(void *fdata, msg_t *msg)
 			break;
 
 		case mtWrite:
-			msg->o.err = liblfs_write(fdata, &msg->oid, msg->i.io.offs, msg->i.data, msg->i.size, msg->i.io.mode);
+			msg->o.io.offs = msg->i.io.offs;
+			msg->o.err = liblfs_write(fdata, &msg->oid, &msg->o.io.offs, msg->i.data, msg->i.size, msg->i.io.mode);
 			break;
 
 		case mtTruncate:

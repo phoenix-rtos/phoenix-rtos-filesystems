@@ -989,7 +989,7 @@ static int libjffs2_prepareWrite(struct inode *inode, loff_t offs, size_t len)
 }
 
 
-static ssize_t libjffs2_write(void *info, oid_t *oid, off_t offs, const void *data, size_t len, unsigned int mode)
+static ssize_t libjffs2_write(void *info, oid_t *oid, off_t *offs, const void *data, size_t len, unsigned int mode)
 {
 	struct inode *inode;
 	struct jffs2_inode_info *f;
@@ -1035,7 +1035,7 @@ static ssize_t libjffs2_write(void *info, oid_t *oid, off_t offs, const void *da
 	}
 
 	if ((mode & O_APPEND) != 0) {
-		offs = inode->i_size;
+		*offs = inode->i_size;
 	}
 
 	ri = jffs2_alloc_raw_inode();
@@ -1046,7 +1046,7 @@ static ssize_t libjffs2_write(void *info, oid_t *oid, off_t offs, const void *da
 		return -ENOMEM;
 	}
 
-	if ((ret = libjffs2_prepareWrite(inode, offs, len))) {
+	if ((ret = libjffs2_prepareWrite(inode, *offs, len))) {
 		jffs2_free_raw_inode(ri);
 		inode_unlock(inode);
 		iput(inode);
@@ -1063,11 +1063,12 @@ static ssize_t libjffs2_write(void *info, oid_t *oid, off_t offs, const void *da
 	ri->isize = cpu_to_je32((uint32_t)inode->i_size);
 	ri->atime = ri->ctime = ri->mtime = cpu_to_je32(get_seconds());
 
-	ret = jffs2_write_inode_range(c, f, ri, data, offs, len, &writelen);
+	ret = jffs2_write_inode_range(c, f, ri, data, *offs, len, &writelen);
 
 	if (!ret) {
-		if (offs + writelen > inode->i_size) {
-			inode->i_size = offs + writelen;
+		*offs += writelen;
+		if (*offs > inode->i_size) {
+			inode->i_size = *offs;
 			inode->i_blocks = (inode->i_size + 511) >> 9;
 			inode->i_ctime = inode->i_mtime = ITIME(je32_to_cpu(ri->ctime));
 		}

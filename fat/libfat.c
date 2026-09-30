@@ -92,7 +92,7 @@ static fat_obj_t *libfat_findObj(fat_info_t *info, id_t id)
 }
 
 
-ssize_t libfat_write(void *info, oid_t *oid, off_t offs, const void *data, size_t len, unsigned int mode)
+ssize_t libfat_write(void *info, oid_t *oid, off_t *offs, const void *data, size_t len, unsigned int mode)
 {
 	return -EROFS;
 }
