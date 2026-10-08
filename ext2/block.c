@@ -458,9 +458,9 @@ int ext2_block_sync(ext2_t *fs, ext2_obj_t *obj, uint32_t block, const void *buf
 		if ((err = ext2_block_get(fs, obj, block + j, &bno)) < 0)
 			return err;
 
-		if (!(*bno)) {
+		if (*bno == 0) {
 			if (i < j) {
-				if ((err = ext2_block_get(fs, obj, i, &bno)) < 0)
+				if ((err = ext2_block_get(fs, obj, block + i, &bno)) < 0)
 					return err;
 
 				if ((err = ext2_block_write(fs, *bno, buff + i * fs->blocksz, j - i)) < 0)
@@ -488,7 +488,7 @@ int ext2_block_sync(ext2_t *fs, ext2_obj_t *obj, uint32_t block, const void *buf
 
 			lbno = 0;
 		}
-		else if (!lbno || (*bno == lbno + 1)) {
+		else if (lbno == 0 || (*bno == lbno + 1)) {
 			lbno = *bno;
 			j++;
 		}
