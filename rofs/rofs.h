@@ -1,10 +1,10 @@
 /*
  * Phoenix-RTOS
  *
- * ROFS - Read Only File System in AHB address space
+ * ROFS - Read Only File System
  *
- * Copyright 2024 Phoenix Systems
- * Author: Gerard Swiderski
+ * Copyright 2024, 2025 Phoenix Systems
+ * Author: Gerard Swiderski, Adam Greloch
  *
  * This file is part of Phoenix-RTOS.
  *
@@ -34,16 +34,19 @@ struct rofs_ctx {
 	struct rofs_node *tree;
 	uint32_t nodeCount;
 	uint32_t indexOffs;
+	uint16_t encryption;
 	oid_t oid;
 
 	rofs_devRead_t devRead;
 
 	uint8_t buf[ROFS_BUFSZ];
+
+	const uint8_t *key;
 };
 
 
 /* if imageAddr != 0, maps partition directly; assumes indirect access otherwise */
-int rofs_init(struct rofs_ctx *ctx, rofs_devRead_t devRead, unsigned long imageAddr);
+int rofs_init(struct rofs_ctx *ctx, rofs_devRead_t devRead, unsigned long imageAddr, const uint8_t *key);
 
 
 void rofs_setdev(struct rofs_ctx *ctx, oid_t *oid);
