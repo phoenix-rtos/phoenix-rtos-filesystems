@@ -793,6 +793,12 @@ static int libjffs2_readdir(void *info, oid_t *dir, off_t offs, struct dirent *d
 	file.f_inode = inode;
 	mutex_unlock(&JFFS2_INODE_INFO(inode)->sem);
 
+	if (file.f_pino == 0) {
+		inode_unlock_shared(inode);
+		iput(inode);
+		return -ENOENT;
+	}
+
 	inode->i_fop->iterate_shared(&file, &dctx);
 	inode_unlock_shared(inode);
 
