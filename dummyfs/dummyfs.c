@@ -846,6 +846,12 @@ int dummyfs_readdir(void *ctx, oid_t *dir, off_t offs, struct dirent *dent, unsi
 		return -EINVAL;
 	}
 
+	if (d->size == 0 || d->nlink == 0) {
+		dummyfs_object_put(fs, d);
+		mutexUnlock(fs->mutex);
+		return -ENOENT;
+	}
+
 	dummyfs_dirent_t *ei;
 	dummyfs_dirent_t *etree;
 	off_t diroffs = 0;

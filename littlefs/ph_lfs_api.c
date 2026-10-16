@@ -2074,6 +2074,11 @@ int ph_lfs_readdir(lfs_t *lfs, id_t phId, size_t offs, struct dirent *dent, size
 		return LFS_ERR_INVAL;
 	}
 
+	if (ph_lfs_objDelMarked(dirObj)) {
+		TRACE("directory was removed");
+		return -ENOENT;
+	}
+
 	lfs_dir_t *dir = (lfs_dir_t *)dirObj->extras;
 	if (dir->pos != offs) {
 		TRACE("readdir seek necessary");
