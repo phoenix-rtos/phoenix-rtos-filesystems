@@ -846,7 +846,8 @@ int dummyfs_readdir(void *ctx, oid_t *dir, off_t offs, struct dirent *dent, unsi
 		return -EINVAL;
 	}
 
-	if (d->size == 0 || d->nlink == 0) {
+	/* only rootdir is allowed to have 0 links */
+	if (d->nlink == 0 && d->oid.id != DUMMYFS_ROOTID) {
 		dummyfs_object_put(fs, d);
 		mutexUnlock(fs->mutex);
 		return -ENOENT;
