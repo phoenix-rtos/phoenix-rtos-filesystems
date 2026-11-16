@@ -333,8 +333,15 @@ int dummyfs_setattr(void *ctx, oid_t *oid, int type, long long attr, const void 
 				break;
 
 			case atDev:
-				if ((data != NULL) && (size == sizeof(oid_t)) && S_ISDIR(o->mode) && (dummyfs_isDevice(fs, &o->dev) == 0)) {
-					memcpy(&o->dev, data, sizeof(oid_t));
+				if ((data != NULL) && (size == sizeof(oid_t)) && S_ISDIR(o->mode)) {
+					oid_t dev;
+					memcpy(&dev, data, sizeof(dev));
+					if (((dev.port == o->oid.port) && (dev.id == o->oid.id)) || (dummyfs_isDevice(fs, &o->dev) == 0)) {
+						o->dev = dev;
+					}
+					else {
+						ret = -EINVAL;
+					}
 				}
 				else {
 					ret = -EINVAL;
