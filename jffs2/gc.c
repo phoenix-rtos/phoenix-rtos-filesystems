@@ -38,7 +38,7 @@ static struct jffs2_eraseblock *jffs2_find_gc_block(struct jffs2_sb_info *c)
 {
 	struct jffs2_eraseblock *ret;
 	struct list_head *nextlist = NULL;
-	int n = jiffies % 128;
+	int n = c->gc_block_seq++ % 128;
 
 	/* Pick an eraseblock to garbage collect next. This is where we'll
 	   put the clever wear-levelling algorithms. Eventually.  */
