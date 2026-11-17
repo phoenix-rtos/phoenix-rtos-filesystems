@@ -1,0 +1,25 @@
+jffs2/Makefile
+  s_aefb43ae6c4ab5::t_bfa694896f843a 16-20
+jffs2/phoenix-rtos/crc32.c
+  s_aefb43ae6c4ab5::t_bfa694896f843a 19-21,26-28,30,36-38,323-324
+  s_aefb43ae6c4ab5::t_e47eb3bb9353b0 43,74-75,106-107,138-139,170-171,202-203,234-235,266-267,298
+  s_aefb43ae6c4ab5::t_7b712ef3595838 41-42,44-73,76-105,108-137,140-169,172-201,204-233,236-265,268-297,299
+  s_aefb43ae6c4ab5::t_a09eb558104ecd 39-40,300-319
+  s_aefb43ae6c4ab5::t_0f3abf2887149e 320-322
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "73c5ee1d71e0f55beb39fc0a26cd3d37c04b9b06",
+  "prompts": {},
+  "sessions": {
+    "s_aefb43ae6c4ab5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "47024dd1-9607-45d7-a8d8-bac9bdaa5945",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": null
+    }
+  }
+}
