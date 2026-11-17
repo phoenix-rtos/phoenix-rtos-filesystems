@@ -1,0 +1,21 @@
+jffs2/background.c
+  s_aefb43ae6c4ab5::t_1f311ab9b41315 120-123
+jffs2/phoenix-rtos/phoenix-rtos.c
+  s_aefb43ae6c4ab5::t_1f311ab9b41315 128-129
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3d7cdf08862ad870e575e6de1009b64b607b242b",
+  "prompts": {},
+  "sessions": {
+    "s_aefb43ae6c4ab5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "47024dd1-9607-45d7-a8d8-bac9bdaa5945",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Marek Białowąs <marek.bialowas@phoenix-rtos.com>"
+    }
+  }
+}
