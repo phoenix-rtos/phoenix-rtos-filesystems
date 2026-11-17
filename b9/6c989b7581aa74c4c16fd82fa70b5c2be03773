@@ -1,0 +1,21 @@
+jffs2/phoenix-rtos/mtd.h
+  s_aefb43ae6c4ab5::t_1413c77ad576fd 31-41
+jffs2/scan.c
+  s_aefb43ae6c4ab5::t_89b1b9152a35f6 458-462,466,480
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b96c989b7581aa74c4c16fd82fa70b5c2be03773",
+  "prompts": {},
+  "sessions": {
+    "s_aefb43ae6c4ab5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "47024dd1-9607-45d7-a8d8-bac9bdaa5945",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Marek Białowąs <marek.bialowas@phoenix-rtos.com>"
+    }
+  }
+}
