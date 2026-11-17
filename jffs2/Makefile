@@ -13,6 +13,11 @@ LOCAL_CFLAGS := -Wno-pointer-sign -Wno-discarded-qualifiers -Wno-unused-value -W
 # enable desired functions: NAND writebuffer and summary nodes
 LOCAL_CFLAGS += -DCONFIG_JFFS2_CMODE_NONE -DCONFIG_JFFS2_FS_WRITEBUFFER -DCONFIG_JFFS2_SUMMARY
 
+# compute CRC32 bit by bit instead of with 8 KiB of lookup tables (for targets short of memory)
+ifeq ($(JFFS2_CRC32_BITWISE), 1)
+  LOCAL_CFLAGS += -DJFFS2_CRC32_BITWISE
+endif
+
 # linux base jffs2 files + writebuffer for nand support + summary for faster mount times
 LOCAL_SRCS := compr.c dir.c file.c ioctl.c nodelist.c malloc.c read.c nodemgmt.c \
 	readinode.c write.c scan.c gc.c symlink.c build.c erase.c \
