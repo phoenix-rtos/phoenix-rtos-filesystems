@@ -1,0 +1,28 @@
+jffs2/super.c
+  s_aefb43ae6c4ab5::t_76eab784fb9c92 283
+jffs2/phoenix-rtos/mtd.c
+  s_aefb43ae6c4ab5::t_76eab784fb9c92 94
+jffs2/gc.c
+  s_aefb43ae6c4ab5::t_76eab784fb9c92 224-225,238,367-368,370,431
+jffs2/readinode.c
+  s_aefb43ae6c4ab5::t_54a04f43f3701f 1328
+  s_aefb43ae6c4ab5::t_76eab784fb9c92 1326-1327,1329-1330
+jffs2/jffs2_fs_sb.h
+  s_aefb43ae6c4ab5::t_76eab784fb9c92 107-108
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6c7bb106d710a5bb576159a0729421cb117d775d",
+  "prompts": {},
+  "sessions": {
+    "s_aefb43ae6c4ab5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "47024dd1-9607-45d7-a8d8-bac9bdaa5945",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Marek Białowąs <marek.bialowas@phoenix-rtos.com>"
+    }
+  }
+}
