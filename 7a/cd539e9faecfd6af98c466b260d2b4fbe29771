@@ -1,0 +1,21 @@
+jffs2/phoenix-rtos/crc32.c
+  s_aefb43ae6c4ab5::t_e47eb3bb9353b0 23,54-55,86-87,118-119,150-151,182-183,214-215,246-247,278
+  s_aefb43ae6c4ab5::t_7b712ef3595838 21-22,24-53,56-85,88-117,120-149,152-181,184-213,216-245,248-277,279
+  s_aefb43ae6c4ab5::t_a09eb558104ecd 19-20,280-281,285-298
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7acd539e9faecfd6af98c466b260d2b4fbe29771",
+  "prompts": {},
+  "sessions": {
+    "s_aefb43ae6c4ab5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "47024dd1-9607-45d7-a8d8-bac9bdaa5945",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Marek Białowąs <marek.bialowas@phoenix-rtos.com>"
+    }
+  }
+}
