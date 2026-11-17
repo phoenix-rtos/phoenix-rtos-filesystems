@@ -586,6 +586,7 @@ out_root:
 	jffs2_free_ino_caches(c);
 	jffs2_free_raw_node_refs(c);
 	kvfree(c->blocks);
+	jffs2_sum_exit(c);
  out_inohash:
 	jffs2_clear_xattr_subsystem(c);
 	kfree(c->inocache_list);
