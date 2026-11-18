@@ -698,7 +698,7 @@ void jffs2_mark_node_obsolete(struct jffs2_sb_info *c, struct jffs2_raw_node_ref
 			jffs2_dbg(1, "...and adding to erasable_pending_wbuf_list\n");
 			list_add_tail(&jeb->list, &c->erasable_pending_wbuf_list);
 		} else {
-			if (jiffies & 127) {
+			if (c->erase_defer_seq++ & 127) {
 				/* Most of the time, we just erase it immediately. Otherwise we
 				   spend ages scanning it on mount, etc. */
 				jffs2_dbg(1, "...and adding to erase_pending_list\n");

@@ -159,7 +159,6 @@ loff_t generic_file_llseek(struct file *file, loff_t offset, int whence);
 
 #define current (pid_t)0
 #define schedule()
-#define jiffies 0
 
 unsigned long msecs_to_jiffies(const unsigned int m);
 
