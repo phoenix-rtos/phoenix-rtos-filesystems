@@ -672,9 +672,9 @@ static inline int read_direntry(struct jffs2_sb_info *c, struct jffs2_raw_node_r
 		 */
 		crc = crc32(0, fd->name, rd->nsize);
 		if (unlikely(crc != je32_to_cpu(rd->name_crc))) {
-			JFFS2_NOTICE("name CRC failed on dirent node at"
-			   "%#08x: read %#08x,calculated %#08x\n",
-			   ref_offset(ref), je32_to_cpu(rd->node_crc), crc);
+			JFFS2_NOTICE("name CRC failed on dirent node at "
+			   "%#08x: read %#08x, calculated %#08x\n",
+			   ref_offset(ref), je32_to_cpu(rd->name_crc), crc);
 			jffs2_mark_node_obsolete(c, ref);
 			jffs2_free_full_dirent(fd);
 			return 0;
