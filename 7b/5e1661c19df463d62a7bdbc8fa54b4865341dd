@@ -1,0 +1,35 @@
+jffs2/Makefile
+  s_aefb43ae6c4ab5::t_bfa694896f843a 16-20
+jffs2/phoenix-rtos/crc32.c
+  s_aefb43ae6c4ab5::t_e47eb3bb9353b0 43,74-75,106-107,138-139,170-171,202-203,234-235,266-267,298
+  s_aefb43ae6c4ab5::t_bfa694896f843a 19-21,26-28,30,36-38,335-336
+  s_aefb43ae6c4ab5::t_0f3abf2887149e 332-334
+  s_aefb43ae6c4ab5::t_7b712ef3595838 41-42,44-73,76-105,108-137,140-169,172-201,204-233,236-265,268-297,299
+  s_aefb43ae6c4ab5::t_a09eb558104ecd 39-40,300-306,313,322-331
+  s_aefb43ae6c4ab5::t_976476d05e1c77 317-321
+  s_83e9d671be5755::t_0c5d42debd15fe 307-312,314-316
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7b5e1661c19df463d62a7bdbc8fa54b4865341dd",
+  "prompts": {},
+  "sessions": {
+    "s_83e9d671be5755": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9b7f336b-eb76-453e-af60-f321df23324c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Marek Białowąs <marek.bialowas@phoenix-rtos.com>"
+    },
+    "s_aefb43ae6c4ab5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "47024dd1-9607-45d7-a8d8-bac9bdaa5945",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Marek Białowąs <marek.bialowas@phoenix-rtos.com>"
+    }
+  }
+}
