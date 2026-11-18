@@ -1,0 +1,21 @@
+jffs2/.clang-format
+  s_83e9d671be5755::t_06de65116c6c73 1-3
+jffs2/phoenix-rtos/.clang-format
+  s_83e9d671be5755::t_6ec5ae0c5f186d 1-3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "40beff76c03018bf53f834cc71dd371198648ec0",
+  "prompts": {},
+  "sessions": {
+    "s_83e9d671be5755": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9b7f336b-eb76-453e-af60-f321df23324c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Marek Białowąs <marek.bialowas@phoenix-rtos.com>"
+    }
+  }
+}
