@@ -1,0 +1,3 @@
+# Phoenix-RTOS glue code follows the repository style
+BasedOnStyle: InheritParentConfig
+DisableFormat: false
