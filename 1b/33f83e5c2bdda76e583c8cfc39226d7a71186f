@@ -1,0 +1,19 @@
+jffs2/phoenix-rtos/crc32.c
+  s_83e9d671be5755::t_0c5d42debd15fe 307-312,314-316
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1b33f83e5c2bdda76e583c8cfc39226d7a71186f",
+  "prompts": {},
+  "sessions": {
+    "s_83e9d671be5755": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9b7f336b-eb76-453e-af60-f321df23324c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Marek Białowąs <marek.bialowas@phoenix-rtos.com>"
+    }
+  }
+}
