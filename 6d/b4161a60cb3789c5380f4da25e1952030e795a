@@ -1,0 +1,19 @@
+jffs2/readinode.c
+  s_83e9d671be5755::t_b9f2533408ec92 675-677
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6db4161a60cb3789c5380f4da25e1952030e795a",
+  "prompts": {},
+  "sessions": {
+    "s_83e9d671be5755": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9b7f336b-eb76-453e-af60-f321df23324c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Marek Białowąs <marek.bialowas@phoenix-rtos.com>"
+    }
+  }
+}
