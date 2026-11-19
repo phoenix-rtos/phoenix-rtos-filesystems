@@ -148,6 +148,9 @@ int meterfs_allocateFile(const char *name, size_t sectorcnt, size_t filesz, size
 int meterfs_resizeFile(const char *name, size_t filesz, size_t recordsz, meterfs_ctx_t *ctx);
 
 
+int meterfs_resetFile(file_t *f, meterfs_ctx_t *ctx);
+
+
 int meterfs_readFile(id_t id, off_t off, char *buff, size_t bufflen, meterfs_ctx_t *ctx);
 
 
