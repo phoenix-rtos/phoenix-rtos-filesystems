@@ -86,6 +86,10 @@ struct jffs2_sb_info {
 
 	struct jffs2_eraseblock *gcblock;	/* The block we're currently garbage-collecting */
 
+	/* Phoenix-RTOS: counters used instead of jiffies, under erase_completion_lock */
+	unsigned int gc_block_seq;		/* Selects the list the next gcblock is taken from */
+	unsigned int erase_defer_seq;		/* Selects whether an obsoleted block is erased at once */
+
 	struct list_head clean_list;		/* Blocks 100% full of clean data */
 	struct list_head very_dirty_list;	/* Blocks with lots of dirty space */
 	struct list_head dirty_list;		/* Blocks with some dirty space */

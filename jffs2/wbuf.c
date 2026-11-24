@@ -100,7 +100,6 @@ static void jffs2_wbuf_dirties_inode(struct jffs2_sb_info *c, uint32_t ino)
 static inline void jffs2_refile_wbuf_blocks(struct jffs2_sb_info *c)
 {
 	struct list_head *this, *next;
-	static int n;
 
 	if (list_empty(&c->erasable_pending_wbuf_list))
 		return;
@@ -111,7 +110,7 @@ static inline void jffs2_refile_wbuf_blocks(struct jffs2_sb_info *c)
 		jffs2_dbg(1, "Removing eraseblock at 0x%08x from erasable_pending_wbuf_list...\n",
 			  jeb->offset);
 		list_del(this);
-		if ((jiffies + (n++)) & 127) {
+		if (c->erase_defer_seq++ & 127) {
 			/* Most of the time, we just erase it immediately. Otherwise we
 			   spend ages scanning it on mount, etc. */
 			jffs2_dbg(1, "...and adding to erase_pending_list\n");
